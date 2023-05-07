@@ -24,6 +24,8 @@
 #ifndef TERAKAN_WINSYS_H
 #define TERAKAN_WINSYS_H
 
+#include "terakan_gpu_info.h"
+
 struct terakan_winsys;
 
 struct terakan_winsys_fn {
@@ -32,6 +34,8 @@ struct terakan_winsys_fn {
 
 struct terakan_winsys {
    struct terakan_winsys_fn const * fn;
+
+   struct terakan_gpu_info gpu_info;
 };
 
 #endif /* TERAKAN_WINSYS_H */
