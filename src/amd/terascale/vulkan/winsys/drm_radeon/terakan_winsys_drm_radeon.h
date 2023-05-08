@@ -31,6 +31,8 @@
 
 #include "../terakan_winsys.h"
 
+#include "vk_sync.h"
+
 #include <stddef.h>
 
 struct terakan_winsys_drm_radeon {
@@ -38,6 +40,9 @@ struct terakan_winsys_drm_radeon {
 
    /* Not owned by the winsys. */
    int fd;
+
+   struct vk_sync_type syncobj_sync_type;
+   struct vk_sync_type const * sync_types[2];
 };
 
 struct terakan_winsys * terakan_winsys_drm_radeon_create(int fd);

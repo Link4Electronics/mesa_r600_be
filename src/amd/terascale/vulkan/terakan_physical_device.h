@@ -26,17 +26,35 @@
 
 #include "terakan_instance.h"
 #include "winsys/terakan_winsys.h"
+#include "wsi_common.h"
 
 #include "vk_physical_device.h"
+
+#if !defined(_WIN32)
+#include <sys/types.h>
+#include <xf86drm.h>
+#endif
 
 struct terakan_physical_device {
    struct vk_physical_device vk;
 
 #if !defined(_WIN32)
+   /* TODO(Triang3l): master_fd. */
    int local_fd;
 #endif
 
    struct terakan_winsys * winsys;
+
+#if !defined(_WIN32)
+   int drm_available_nodes;
+   drmPciBusInfo drm_bus_info;
+   dev_t drm_primary_devid;
+   dev_t drm_render_devid;
+#endif
+
+   VkPhysicalDeviceMemoryProperties memory_properties;
+
+   struct wsi_device wsi_device;
 };
 
 VK_DEFINE_HANDLE_CASTS(
