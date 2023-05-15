@@ -34,6 +34,24 @@
 #include "vk_sync.h"
 
 #include <stddef.h>
+#include <vulkan/vulkan_core.h>
+#include <xf86drm.h>
+
+struct terakan_winsys_drm_radeon_bo {
+   struct terakan_winsys_bo base;
+
+   VkDeviceSize size;
+
+   __u32 domains;
+
+   __u32 handle;
+
+   void * mapping;
+};
+
+extern struct terakan_winsys_bo_fn const terakan_winsys_drm_radeon_bo_fn;
+
+extern struct terakan_winsys_cs_fn const terakan_winsys_drm_radeon_cs_fn;
 
 struct terakan_winsys_drm_radeon {
    struct terakan_winsys base;
