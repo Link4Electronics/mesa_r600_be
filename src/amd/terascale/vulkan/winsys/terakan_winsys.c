@@ -23,9 +23,19 @@
 
 #include "terakan_winsys.h"
 
+#include "util/u_atomic.h"
+
+void
+terakan_winsys_base_init(struct terakan_winsys * const winsys)
+{
+   winsys->last_bo_creation_number = 0;
+}
+
 void
 terakan_winsys_bo_base_init(
    struct terakan_winsys_bo * const bo, struct terakan_winsys * const winsys)
 {
    bo->winsys = winsys;
+
+   bo->creation_number = p_atomic_inc_return(&winsys->last_bo_creation_number);
 }
