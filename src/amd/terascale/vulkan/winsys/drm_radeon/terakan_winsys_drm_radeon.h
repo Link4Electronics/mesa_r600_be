@@ -34,6 +34,7 @@
 #include "vk_sync.h"
 
 #include <stddef.h>
+#include <radeon_surface.h>
 #include <vulkan/vulkan_core.h>
 #include <xf86drm.h>
 
@@ -49,6 +50,8 @@ struct terakan_winsys_drm_radeon_bo {
    void * mapping;
 };
 
+extern struct terakan_winsys_surface_fn const terakan_winsys_drm_radeon_surface_fn;
+
 extern struct terakan_winsys_bo_fn const terakan_winsys_drm_radeon_bo_fn;
 
 extern struct terakan_winsys_cs_fn const terakan_winsys_drm_radeon_cs_fn;
@@ -58,6 +61,8 @@ struct terakan_winsys_drm_radeon {
 
    /* Not owned by the winsys. */
    int fd;
+
+   struct radeon_surface_manager * surface_manager;
 
    struct vk_sync_type const * sync_types[2];
 };
