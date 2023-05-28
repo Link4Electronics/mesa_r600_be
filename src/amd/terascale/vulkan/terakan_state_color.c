@@ -34,13 +34,11 @@ VKAPI_ATTR void VKAPI_CALL
 terakan_CmdSetBlendConstants(
    VkCommandBuffer const commandBuffer, float const blendConstants[4])
 {
-   struct terakan_command_writer * const command_writer =
-      terakan_command_buffer_from_handle(commandBuffer)->command_writer;
-
+   struct terakan_hw_state_draw * const hw_state_draw =
+      &terakan_command_buffer_from_handle(commandBuffer)->command_writer->hw_state_draw;
+   /* The blend constant is not needed by internal draws, modify hw_state_draw directly. */
    bool const modified =
-      memcmp(command_writer->hw_state_draw.cb_blend_rgba, blendConstants, sizeof(float) * 4) != 0;
-   memcpy(command_writer->hw_state_draw.cb_blend_rgba, blendConstants, sizeof(float) * 4);
-
-   terakan_hw_state_draw_written(
-      &command_writer->hw_state_draw, TERAKAN_HW_STATE_DRAW_CB_BLEND_RGBA, modified);
+      memcmp(hw_state_draw->cb_blend_rgba, blendConstants, sizeof(float) * 4) != 0;
+   memcpy(hw_state_draw->cb_blend_rgba, blendConstants, sizeof(float) * 4);
+   terakan_hw_state_draw_written(hw_state_draw, TERAKAN_HW_STATE_DRAW_CB_BLEND_RGBA, modified);
 }
