@@ -24,7 +24,10 @@
 #ifndef TERAKAN_DEVICE_H
 #define TERAKAN_DEVICE_H
 
+#include "meta/terakan_meta.h"
+#include "winsys/terakan_winsys.h"
 #include "terakan_queue.h"
+#include "terakan_shader.h"
 
 #include "c11/threads.h"
 #include "vk_device.h"
@@ -33,6 +36,9 @@
 
 struct terakan_device {
    struct vk_device vk;
+
+   struct terakan_winsys_bo * meta_shaders_bo;
+   struct terakan_shader_static meta_shaders[TERAKAN_META_SHADER_COUNT];
 
    /* Mutex and condition variable for terakan_sync_completion timeline semaphore value updates and
     * controlling submission completion waits.
