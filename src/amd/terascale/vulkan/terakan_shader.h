@@ -24,7 +24,7 @@
 #ifndef TERAKAN_SHADER_H
 #define TERAKAN_SHADER_H
 
-#include "winsys/terakan_winsys.h"
+#include "terakan_bo.h"
 
 #include <stdint.h>
 
@@ -33,7 +33,7 @@
 
 /* Fields that don't depend on any other state. */
 struct terakan_shader_static {
-   struct terakan_winsys_bo const * program_bo;
+   struct terakan_bo const * program_bo;
    uint32_t program_start;
 
    uint32_t sq_pgm_resources[2];
