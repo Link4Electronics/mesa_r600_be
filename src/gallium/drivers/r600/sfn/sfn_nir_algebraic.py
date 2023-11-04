@@ -66,7 +66,7 @@ def run():
     import nir_algebraic  # pylint: disable=import-error
 
     print('#include "nir_search_helpers.h"')
-    print('#include "sfn/sfn_nir.h"')
+    print('#include "gallium/drivers/r600/sfn/sfn_nir.h"')
 
     print(nir_algebraic.AlgebraicPass("r600_sfn_lower_alu",
                                       lower_alu).render())
