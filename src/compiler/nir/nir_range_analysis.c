@@ -1824,6 +1824,7 @@ get_intrinsic_uub(struct analysis_state *state, struct scalar_query q, uint32_t 
       /* Very generous maximum: TCS/TES executed by largest possible workgroup */
       *result = get_max_workgroup_invocations(shader) / MAX2(shader->info.tess.tcs_vertices_out, 1u);
       break;
+   case nir_intrinsic_load_buffer_resource_r600:
    case nir_intrinsic_load_typed_buffer_amd: {
       const enum pipe_format format = nir_intrinsic_format(intrin);
       if (format == PIPE_FORMAT_NONE)
