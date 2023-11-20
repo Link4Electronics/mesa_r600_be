@@ -510,7 +510,7 @@ TexInstr::emit_set_offsets(nir_tex_instr *tex, int texture_id, Inputs& src, TexI
                                empty_dst,
                                {7, 7, 7, 7},
                                ofs,
-                               texture_id + R600_MAX_CONST_BUFFERS,
+                               texture_id + shader.binding_layout().texture_resource_offset,
                                src.texture_offset);
    set_ofs->set_always_keep();
    irt->add_prepare_instr(set_ofs);
@@ -547,7 +547,7 @@ TexInstr::emit_lowered_tex(nir_tex_instr *tex, Inputs& src, Shader& shader)
       }
    }
 
-   int texture_id = tex->texture_index + R600_MAX_CONST_BUFFERS;
+   int texture_id = tex->texture_index + shader.binding_layout().texture_resource_offset;
    auto irt = new TexInstr(src.opcode,
                            dst,
                            dst_swz,
@@ -587,14 +587,14 @@ TexInstr::emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader)
 
    RegisterVec4 buf_dest = vf.dest_vec4(tex->def, pin_group);
 
-   auto ir = new LoadFromBuffer(buf_dest,
-                                {0, 1, 2, 3},
-                                src.coord[0],
-                                0,
-                                tex->texture_index + R600_MAX_CONST_BUFFERS,
-                                tex_offset,
-                                fmt_invalid);
-
+   auto ir = new LoadFromBuffer(
+      buf_dest,
+      {0, 1, 2, 3},
+      src.coord[0],
+      0,
+      tex->texture_index + shader.binding_layout().texture_resource_offset,
+      tex_offset,
+      fmt_invalid);
    ir->set_fetch_flag(FetchInstr::use_const_field);
    shader.set_flag(Shader::sh_uses_tex_buffer);
 
@@ -612,7 +612,7 @@ TexInstr::emit_tex_texture_samples(nir_tex_instr *instr, Inputs& src, Shader& sh
       0, true, {4, 4, 4, 4}
    };
 
-   int res_id = R600_MAX_CONST_BUFFERS + instr->texture_index;
+   int res_id = R600_MAX_CONST_BUFFERS + shader.binding_layout().texture_resource_offset;
 
    // Fishy: should the zero be instr->sampler_index?
    auto ir =
@@ -633,10 +633,9 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
 
    if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
       if (shader.chip_family() >= CHIP_PALM) {
-         shader.emit_instruction(new QueryBufferSizeInstr(dest,
-                                                          {0, 7, 7, 7},
-                                                          tex->texture_index +
-                                                             R600_MAX_CONST_BUFFERS));
+         shader.emit_instruction(new QueryBufferSizeInstr(
+            dest, {0, 7, 7, 7},
+            tex->texture_index + shader.binding_layout().texture_resource_offset));
       } else if (shader.chip_family() < CHIP_CEDAR) {
          int id = 2 * tex->texture_index + R600_SHADER_BUFFER_INFO_SEL + 1;
          auto src = vf.uniform(id, 1, R600_BUFFER_INFO_CONST_BUFFER);
@@ -666,7 +665,7 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
                              dest,
                              dest_swz,
                              src_coord,
-                             tex->texture_index + R600_MAX_CONST_BUFFERS,
+                             tex->texture_index + shader.binding_layout().texture_resource_offset,
                              src.texture_offset);
 
       ir->set_dest_swizzle(dest_swz);
@@ -886,7 +885,7 @@ TexInstr::emit_tex_lod(nir_tex_instr *tex, Inputs& src, Shader& shader)
                            dst,
                            {1, 0, 7, 7},
                            src_coord,
-                           tex->texture_index + R600_MAX_CONST_BUFFERS,
+                           tex->texture_index + shader.binding_layout().texture_resource_offset,
                            src.texture_offset);
 
    shader.emit_instruction(irt);
