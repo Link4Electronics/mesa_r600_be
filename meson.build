@@ -711,7 +711,7 @@ if with_gallium_d3d12 or with_microsoft_clc or with_microsoft_vk or (with_any_vk
     dep_dxheaders = dependency('DirectX-Headers',
       version : '>= 1.619.1',
       fallback : ['DirectX-Headers', 'dep_dxheaders'],
-      required : with_gallium_d3d12 or with_microsoft_vk
+      required : with_gallium_d3d12 or with_microsoft_vk or (with_amd_terascale_vk and with_platform_windows)
     )
   endif
 endif
