@@ -207,7 +207,7 @@ static struct pipe_context *r600_create_context(struct pipe_screen *screen,
 		                               r600_cedar_to_hemlock_setup_buffer_constants;
 		break;
 	default:
-		R600_ERR("Unsupported gfx level %d.\n", rctx->b.gfx_level);
+		R600_ERR_F("Unsupported gfx level %d.\n", rctx->b.gfx_level);
 		goto fail;
 	}
 

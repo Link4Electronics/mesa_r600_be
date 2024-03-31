@@ -995,13 +995,14 @@ r600_as_texture(struct pipe_resource *res)
 	return (struct r600_texture *)res;
 }
 
-#define COMPUTE_DBG(rscreen, fmt, args...) \
+#define COMPUTE_DBG(rscreen, ...) \
 	do { \
-		if ((rscreen->b.debug_flags & DBG_COMPUTE)) fprintf(stderr, fmt, ##args); \
+		if ((rscreen->b.debug_flags & DBG_COMPUTE)) fprintf(stderr, __VA_ARGS__); \
 	} while (0);
 
-#define R600_ERR(fmt, args...) \
-	fprintf(stderr, "EE %s:%d %s - " fmt, __FILE__, __LINE__, __func__, ##args)
+#define R600_ERR_F(fmt, ...) \
+	fprintf(stderr, "EE %s:%d %s - " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define R600_ERR(err) R600_ERR_F("%s", err)
 
 /* For MSAA sample positions. */
 #define FILL_SREG(s0x, s0y, s1x, s1y, s2x, s2y, s3x, s3y)  \
