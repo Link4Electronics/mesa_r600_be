@@ -196,9 +196,9 @@ AssemblerVisitor::update_alu_dst_state(const AluInstr& ai)
    if (ai.opcode() != op1_mova_int) {
       if (ai.has_alu_flag(alu_write) && dst) {
          if (dst->sel() > g_clause_local_end && dst->sel() != g_registers_unused) {
-            R600_ASM_ERR("shader_from_nir: Don't support more then 123 GPRs + 4 clause "
-                         "local, but try using %d\n",
-                         dst->sel());
+            R600_ASM_ERR_F("shader_from_nir: Don't support more then 123 GPRs + 4 clause "
+                           "local, but try using %d\n",
+                           dst->sel());
             return false;
          }
 

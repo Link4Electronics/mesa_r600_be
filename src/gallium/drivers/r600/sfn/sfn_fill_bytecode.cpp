@@ -399,7 +399,7 @@ emit_bytecode_export_alpha_to_coverage(r600_bytecode& bc, const ExportInstr& exp
    r600_bytecode_output output = fill_bytecode_export_alpha_to_coverage(export_instr);
 
    if (r600_bytecode_add_output(&bc, &output)) {
-      R600_ASM_ERR("Error adding export at location %d\n", output.array_base);
+      R600_ASM_ERR_F("Error adding export at location %d\n", output.array_base);
       return false;
    }
 
@@ -413,13 +413,13 @@ emit_bytecode_export(r600_bytecode& bc,
 {
    auto output_opt = fill_bytecode_export(export_instr, ps_alpha_to_one);
    if (!output_opt) {
-      R600_ASM_ERR("shader_from_nir: export %d type not yet supported\n",
-                   export_instr.export_type());
+      R600_ASM_ERR_F("shader_from_nir: export %d type not yet supported\n",
+                     export_instr.export_type());
       return false;
    }
    
    if (r600_bytecode_add_output(&bc, &output_opt.value())) {
-      R600_ASM_ERR("Error adding export at location %d\n", export_instr.location());
+      R600_ASM_ERR_F("Error adding export at location %d\n", export_instr.location());
       return false;
    }
 
