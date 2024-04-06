@@ -25,6 +25,7 @@
 #define TERAKAN_PHYSICAL_DEVICE_WDDM_H
 
 #include "terakan_physical_device.h"
+#include "terakan_wddm_d3dkmthk.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +33,8 @@ extern "C" {
 
 struct terakan_physical_device_wddm {
    struct terakan_physical_device base;
+
+   D3DKMT_HANDLE d3dkmt_adapter;
 };
 
 VkResult terakan_physical_device_wddm_enumerate(struct vk_instance * instance);
