@@ -27,6 +27,9 @@
 #include "terakan_physical_device.h"
 #include "terakan_wddm_d3dkmthk.h"
 
+#include "vk_sync.h"
+#include "vk_sync_binary.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,7 +37,14 @@ extern "C" {
 struct terakan_physical_device_wddm {
    struct terakan_physical_device base;
 
+   LUID adapter_luid;
+
    D3DKMT_HANDLE d3dkmt_adapter;
+
+   D3DKMT_ADAPTERADDRESS adapter_address;
+
+   struct vk_sync_binary_type sync_type_binary;
+   struct vk_sync_type const * sync_types[3];
 };
 
 VkResult terakan_physical_device_wddm_enumerate(struct vk_instance * instance);
