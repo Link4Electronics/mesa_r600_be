@@ -32,8 +32,6 @@
 extern "C" {
 #endif
 
-extern struct terakan_queue_winsys_fn const terakan_queue_wddm_fn;
-
 struct terakan_device_wddm {
    struct terakan_device base;
 
