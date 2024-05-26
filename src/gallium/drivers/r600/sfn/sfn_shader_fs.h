@@ -68,7 +68,6 @@ private:
    Register *m_sample_id_reg{nullptr};
    Register *m_sample_mask_reg{nullptr};
    Register *m_helper_invocation{nullptr};
-   int m_nsys_inputs{0};
    bool m_apply_sample_mask{false};
 };
 

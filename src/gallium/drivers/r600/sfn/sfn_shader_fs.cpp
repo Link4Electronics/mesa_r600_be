@@ -46,7 +46,6 @@ FragmentShader::do_get_shader_info(r600_shader *sh_info)
    sh_info->dynamic = get_dynamic_offset();
    sh_info->uses_kill = m_uses_discard;
    sh_info->gs_prim_id_input = m_gs_prim_id_input;
-   sh_info->nsys_inputs = m_nsys_inputs;
    sh_info->uses_helper_invocation = m_helper_invocation != nullptr;
 }
 
@@ -213,7 +212,6 @@ FragmentShader::do_allocate_reserved_registers()
       m_sample_mask_reg = value_factory().allocate_pinned_register(face_reg_index, 2);
       sfn_log << SfnLog::io << "Set sample mask in register to " << *m_sample_mask_reg
               << "\n";
-      m_nsys_inputs = 1;
       ShaderInput input(R600_SHADERIO_FACE_LOCATION);
       input.set_system_value(SYSTEM_VALUE_SAMPLE_MASK_IN);
       input.set_gpr(face_reg_index);
@@ -225,7 +223,6 @@ FragmentShader::do_allocate_reserved_registers()
       int sample_id_reg = next_register++;
       m_sample_id_reg = value_factory().allocate_pinned_register(sample_id_reg, 3);
       sfn_log << SfnLog::io << "Set sample id register to " << *m_sample_id_reg << "\n";
-      m_nsys_inputs++;
       ShaderInput input(R600_SHADERIO_FIXED_PT_LOCATION);
       input.set_system_value(SYSTEM_VALUE_SAMPLE_ID);
       input.set_gpr(sample_id_reg);
