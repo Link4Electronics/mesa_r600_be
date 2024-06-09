@@ -950,6 +950,8 @@ Shader::process_intrinsic(nir_intrinsic_instr *intr)
    case nir_intrinsic_shared_atomic:
    case nir_intrinsic_shared_atomic_swap:
       return emit_atomic_local_shared(intr);
+   case nir_intrinsic_mbcnt_amd:
+      return emit_mbcnt(intr);
    case nir_intrinsic_shader_clock:
       return emit_shader_clock(intr);
    case nir_intrinsic_ddx:
@@ -1574,6 +1576,36 @@ Shader::emit_get_lds_info_uint2(nir_intrinsic_instr *instr, int offset)
                                    nullptr,
                                    fmt_32_32);
    emit_instruction(fetch);
+
+   return true;
+}
+
+bool
+Shader::emit_mbcnt(nir_intrinsic_instr *instr)
+{
+   auto& vf = value_factory();
+
+   const auto dest = vf.dest(instr->def, 0, pin_chan);
+
+   const auto mask = vf.src(instr->src[0], 0);
+   emit_instruction(new AluInstr(op1_mbcnt_32lo_accum_prev_int,
+                                 dest,
+                                 {mask, mask},
+                                 AluInstr::write,
+                                 2));
+
+   const nir_src& base_src = instr->src[1];
+   const nir_const_value *base_const = nir_src_as_const_value(base_src);
+   if (!base_const || base_const->u32) {
+      /* TeraScale, unlike GCN, doesn't accept the base of the accumulator,
+       * add it separately.
+       */
+      emit_instruction(new AluInstr(op2_add_int,
+                                    dest,
+                                    dest,
+                                    vf.src(base_src, 0),
+                                    AluInstr::write));
+   }
 
    return true;
 }
