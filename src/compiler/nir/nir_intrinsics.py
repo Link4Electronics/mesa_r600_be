@@ -410,6 +410,12 @@ index("bool", "vector_payload_intel")
 # Hardware mega fetch count in bytes for load_buffer_resource_r600.
 index("unsigned", "mega_fetch_count_r600")
 
+# Hardware UAV opcode for uav_instr_r600.
+index("unsigned", "uav_op_r600")
+
+# UAV IMMED resource index base for uav_returning_instr_r600.
+index("unsigned", "uav_return_id_base_r600")
+
 intrinsic("nop", flags=[CAN_ELIMINATE])
 
 # Uses a value and cannot be eliminated.
@@ -1984,7 +1990,11 @@ system_value("warp_id_arm", 1, bit_sizes=[32])
 system_value("warp_max_id_arm", 1, bit_sizes=[32])
 
 # R600 specific instrincs
-#
+
+system_value("shader_engine_id_r600", 1)
+# Hardware wave ID within the shader engine.
+system_value("hw_wave_id_r600", 1)
+
 # location where the tesselation data is stored in LDS
 system_value("tcs_in_param_base_r600", 4)
 system_value("tcs_out_param_base_r600", 4)
@@ -2017,12 +2027,38 @@ load("buffer_resource_r600", src_comp=[1, 1],
      indices=[ACCESS, ID_BASE, BASE, COMPONENT, FORMAT, MEGA_FETCH_COUNT_R600, FLAGS],
      flags=[CAN_ELIMINATE])
 
+# Load from a texture resource.
+# src[] = { texture index offset relative to ID_BASE, XYZ coordinates and LOD }
+# Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+# ID_BASE = buffer index base
+load("texture_resource_r600", src_comp=[1, 4],
+     indices=[ACCESS, ID_BASE, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
+
 # Load from a constant cache (kcache) buffer.
 # src[] = { buffer index offset relative to ID_BASE }
 # Relevant ACCESS: NON_UNIFORM
 # ID_BASE = buffer index base
 # BASE = data address in vec4 elements
 load("kcache_r600", src_comp=[1], indices=[ACCESS, ID_BASE, BASE, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
+
+# src[] = {
+#    UAV index offset relative to ID_BASE,
+#    address,
+#    value for non-NOP operations,
+#    value to compare to for CMPXCHG operations,
+# }
+# For sources that aren't needed, pass any value (such as undef).
+# uav_op_r600 must be a non-RTN one.
+# Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+intrinsic("uav_instr_r600", src_comp=[1, -1, -1, 1], bit_sizes=[32, 32, 32, 32],
+          indices=[UAV_OP_R600, ACCESS, ID_BASE])
+
+# Like uav_instr_r600, but for operations that return a value.
+# uav_op_r600 must be an RTN one.
+# The last source is the index in the IMMED buffer.
+intrinsic("uav_returning_instr_r600", dest_comp=0, src_comp=[1, -1, -1, 1, 1],
+          bit_sizes=[32, 32, 32, 32, 32, 32],
+          indices=[UAV_OP_R600, ACCESS, ID_BASE, UAV_RETURN_ID_BASE_R600, MEGA_FETCH_COUNT_R600])
 
 # AMD GCN/RDNA specific intrinsics
 
