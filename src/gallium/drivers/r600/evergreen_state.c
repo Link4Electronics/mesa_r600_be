@@ -2748,6 +2748,21 @@ static void cayman_convert_border_color(union pipe_color_union *in,
 	}
 }
 
+/* Map format channel index to user RGBA component index.
+ * For standard RGBA-like formats the mapping is identity.
+ * For legacy formats (L, A, LA, I) the mapping follows GL rules. */
+static inline unsigned
+border_color_adj_uc(enum pipe_format format, unsigned fmt_ch)
+{
+   if (util_format_is_luminance(format) || util_format_is_intensity(format))
+      return 0;
+   if (util_format_is_alpha(format))
+      return 3;
+   if (util_format_is_luminance_alpha(format))
+      return fmt_ch == 1 ? 3 : 0;
+   return fmt_ch;
+}
+
 void evergreen_convert_border_color(const union pipe_color_union *in,
 				    union pipe_color_union *out,
 				    const struct pipe_sampler_view *view)
@@ -2763,13 +2778,40 @@ void evergreen_convert_border_color(const union pipe_color_union *in,
 		util_format_is_alpha(format) ||
 		util_format_is_luminance(format) ||
 		util_format_is_luminance_alpha(format);
+	const unsigned ch0_idx = 0;
+	unsigned ch0_size = d->channel[ch0_idx].size;
+	if (UTIL_ARCH_BIG_ENDIAN && d->layout == UTIL_FORMAT_LAYOUT_PLAIN && !d->is_array)
+		ch0_size = d->channel[d->swizzle[ch0_idx]].size;
 	const bool is_lai =
 		is_luminance_or_alpha ||
 		util_format_is_intensity(format) ||
-		d->channel[0].size < 8;
+		ch0_size < 8;
 
 	if (is_lai)
 		memcpy(swizzle, neutral_swz, sizeof(swizzle));
+
+	unsigned eff_fmt[4];
+	memcpy(eff_fmt, d->swizzle, sizeof(eff_fmt));
+	if (UTIL_ARCH_BIG_ENDIAN && d->layout == UTIL_FORMAT_LAYOUT_PLAIN && !d->is_array && d->nr_channels >= 2) {
+		for (int fmt_i = 0; fmt_i < 4; fmt_i++) {
+			switch (d->swizzle[fmt_i]) {
+			case PIPE_SWIZZLE_X:
+				eff_fmt[fmt_i] = d->nr_channels >= 4 ? PIPE_SWIZZLE_W :
+						(d->nr_channels >= 3 ? PIPE_SWIZZLE_Z : PIPE_SWIZZLE_Y);
+				break;
+			case PIPE_SWIZZLE_Y:
+				eff_fmt[fmt_i] = d->nr_channels >= 4 ? PIPE_SWIZZLE_Z :
+						(d->nr_channels >= 3 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X);
+				break;
+			case PIPE_SWIZZLE_Z:
+				eff_fmt[fmt_i] = d->nr_channels >= 4 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X;
+				break;
+			case PIPE_SWIZZLE_W:
+				eff_fmt[fmt_i] = d->nr_channels >= 4 ? PIPE_SWIZZLE_X : PIPE_SWIZZLE_W;
+				break;
+			}
+		}
+	}
 
 	if (!util_format_is_depth_or_stencil(format)) {
 		const bool is_pure_integer = util_format_is_pure_integer(format);
@@ -2779,28 +2821,29 @@ void evergreen_convert_border_color(const union pipe_color_union *in,
 			     format == PIPE_FORMAT_RGTC1_SNORM ||
 			     format == PIPE_FORMAT_RGTC2_UNORM ||
 			     format == PIPE_FORMAT_RGTC2_SNORM)) {
-			if ((d->nr_channels == 2 &&
-			     (swizzle[PIPE_SWIZZLE_X] > PIPE_SWIZZLE_Y ||
-			      swizzle[PIPE_SWIZZLE_Y] > PIPE_SWIZZLE_Y)) ||
-			    format == PIPE_FORMAT_RGTC2_UNORM ||
-			    format == PIPE_FORMAT_RGTC2_SNORM) {
-				border_swizzle_nr_channels_2(swizzle, misc_swz);
-				input_swz = neutral_swz;
-				output_swz = misc_swz;
-			} else if (d->nr_channels == 1 && swizzle[PIPE_SWIZZLE_X] != PIPE_SWIZZLE_X) {
-				for (unsigned i = PIPE_SWIZZLE_Y; i <= PIPE_SWIZZLE_W; ++i) {
-					if (swizzle[i] == PIPE_SWIZZLE_X) {
-						memcpy(misc_swz, neutral_swz, sizeof(misc_swz));
-						misc_swz[PIPE_SWIZZLE_W] = i;
-						misc_swz[i] = PIPE_SWIZZLE_W;
-						input_swz = neutral_swz;
-						output_swz = misc_swz;
-						break;
+				if ((d->nr_channels == 2 &&
+				     (swizzle[PIPE_SWIZZLE_X] > PIPE_SWIZZLE_Y ||
+				      swizzle[PIPE_SWIZZLE_Y] > PIPE_SWIZZLE_Y)) ||
+				    format == PIPE_FORMAT_RGTC2_UNORM ||
+				    format == PIPE_FORMAT_RGTC2_SNORM) {
+					border_swizzle_nr_channels_2(swizzle, misc_swz);
+					input_swz = neutral_swz;
+					output_swz = misc_swz;
+				} else if (d->nr_channels == 1 && swizzle[PIPE_SWIZZLE_X] != PIPE_SWIZZLE_X) {
+					for (unsigned i = PIPE_SWIZZLE_Y; i <= PIPE_SWIZZLE_W; ++i) {
+						if (swizzle[i] == PIPE_SWIZZLE_X) {
+							memcpy(misc_swz, neutral_swz, sizeof(misc_swz));
+							misc_swz[PIPE_SWIZZLE_W] = i;
+							misc_swz[i] = PIPE_SWIZZLE_W;
+							input_swz = neutral_swz;
+							output_swz = misc_swz;
+							break;
+						}
 					}
-				}
 			}
 		}
 
+		memset(out, 0, sizeof(*out));
 		for (unsigned i = 0; i <= PIPE_SWIZZLE_W; ++i) {
 			unsigned swz = swizzle[i];
 
@@ -2815,20 +2858,90 @@ void evergreen_convert_border_color(const union pipe_color_union *in,
 			}
 
 			if (is_pure_integer) {
-				if (is_luminance_or_alpha)
-					swz = d->swizzle[i];
-				{
+				if (is_luminance_or_alpha || UTIL_ARCH_BIG_ENDIAN) {
+					if (UTIL_ARCH_BIG_ENDIAN && d->is_array && d->layout == UTIL_FORMAT_LAYOUT_PLAIN) {
+						/* Array formats on BE: d->swizzle is NOT BE-reversed (same as LE).
+						 * The swz redirect below would map view indices through the format
+						 * swizzle, producing PIPE_SWIZZLE_0/1 for non-existent channels,
+						 * which wrongly triggers the early continues. Skip the redirect
+						 * and let the LE path handle channel[] lookup naturally
+						 * (VOID type → val=0 for non-existent channels). */
+					} else {
+						swz = d->swizzle[input_swz[i]];
+						if (swz == PIPE_SWIZZLE_0) {
+							out->f[output_swz[i]] = 0.0f;
+							continue;
+						}
+						if (swz == PIPE_SWIZZLE_1) {
+							out->f[output_swz[i]] = 1.0f;
+							continue;
+						}
+					}
+				}
+				if (UTIL_ARCH_BIG_ENDIAN && d->layout == UTIL_FORMAT_LAYOUT_PLAIN && !d->is_array) {
+					float adj[4];
+					for (unsigned v = 0; v < 4; v++) {
+						unsigned f = eff_fmt[v];
+						if (f < PIPE_SWIZZLE_0) {
+							unsigned ci = d->swizzle[v];
+							const unsigned cs = d->channel[ci].size;
+							const unsigned type = d->channel[ci].type;
+							if (type == UTIL_FORMAT_TYPE_SIGNED)
+								adj[v] = ((double)(in->i[border_color_adj_uc(format, f)])) / ((1ul << (cs - 1)) - 1);
+							else if (type == UTIL_FORMAT_TYPE_UNSIGNED)
+								adj[v] = ((double)(in->ui[border_color_adj_uc(format, f)])) / ((1ul << cs) - 1);
+							else
+								adj[v] = 0;
+						} else if (f == PIPE_SWIZZLE_0) {
+							adj[v] = 0.0f;
+						} else {
+							adj[v] = 1.0f;
+						}
+					}
+					if (eff_fmt[swz] < PIPE_SWIZZLE_0)
+						out->f[output_swz[i]] = adj[input_swz[i]];
+				} else {
 					const unsigned cs = d->channel[swz].size;
 					const unsigned type = d->channel[swz].type;
+					double val;
 					if (type == UTIL_FORMAT_TYPE_SIGNED)
-						out->f[output_swz[i]] = ((double)(in->i[input_swz[i]])) / ((1ul << (cs - 1)) - 1 );
+						val = ((double)(in->i[input_swz[i]])) / ((1ul << (cs - 1)) - 1 );
 					else if (type == UTIL_FORMAT_TYPE_UNSIGNED)
-						out->f[output_swz[i]] = ((double)(in->ui[input_swz[i]])) / ((1ul << cs) - 1 );
+						val = ((double)(in->ui[input_swz[i]])) / ((1ul << cs) - 1 );
 					else
-						out->f[output_swz[i]] = 0;
+						val = 0;
+					out->f[output_swz[i]] = (float)val;
 				}
+		} else {
+			if (UTIL_ARCH_BIG_ENDIAN && d->layout == UTIL_FORMAT_LAYOUT_PLAIN &&
+			    !d->is_array && (is_luminance_or_alpha || util_format_is_intensity(format))) {
+				float adj[4];
+				for (unsigned v = 0; v < 4; v++) {
+					/* Border color registers map to the format's logical
+					 * channels (RGBA order), not to the format decoder's
+					 * X/Y/Z output channels. For legacy formats (L, A, LA, I)
+					 * the LE swizzle gives the correct logical mapping.
+					 * For non-legacy formats the mapping is identity. */
+					unsigned f;
+					if (is_luminance_or_alpha ||
+					    util_format_is_intensity(format)) {
+						f = eff_fmt[v];
+					} else {
+						f = v < d->nr_channels ? v : d->swizzle[v];
+					}
+					if (f < PIPE_SWIZZLE_0)
+						adj[v] = in->f[border_color_adj_uc(format, f)];
+					else if (f == PIPE_SWIZZLE_0)
+						adj[v] = 0.0f;
+					else
+						adj[v] = 1.0f;
+				}
+				if (swz < PIPE_SWIZZLE_0)
+					out->f[output_swz[i]] = adj[swz];
 			} else {
-				out->f[output_swz[i]] = in->f[input_swz[i]];
+				unsigned j = input_swz[i];
+				out->f[output_swz[i]] = in->f[j];
+			}
 			}
 		}
 	} else {

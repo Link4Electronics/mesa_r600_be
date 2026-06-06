@@ -1509,6 +1509,36 @@ void *r600_texture_transfer_map(struct pipe_context *ctx,
 		return NULL;
 	}
 
+	/*
+	 * On BE, the DB->CB decompress path writes staging with
+	 * COLOR_X24_8_32_FLOAT + ENDIAN_8IN32. In this CB format, stencil
+	 * is at word1 byte[3] (= absolute byte[7]). After ENDIAN_8IN32 byte
+	 * swap, the stencil moves to byte[4] (MSB of BE uint32).  The
+	 * unpack_s_8uint function reads the uint32 at byte[4] and truncates
+	 * to uint8 (lowest byte of the BE integer) = byte[7] = 0.  Byte-swap
+	 * dword1 so the stencil lands at byte[7] (LSB of BE uint32) where
+	 * unpack_s_8uint can read it.
+	 */
+	if (UTIL_ARCH_BIG_ENDIAN && (usage & PIPE_MAP_READ) && rtex->is_depth &&
+	    util_format_get_blocksize(texture->format) == 8) {
+		unsigned stride = trans->b.b.stride;
+		unsigned bw = util_format_get_blockwidth(texture->format);
+		unsigned bh = util_format_get_blockheight(texture->format);
+		unsigned width = box->width / bw;
+		unsigned height = box->height / bh;
+		unsigned depth = box->depth;
+		char *data = map + offset;
+
+		for (unsigned z = 0; z < depth; z++) {
+			char *layer = data + z * trans->b.b.layer_stride;
+			for (unsigned y = 0; y < height; y++) {
+				uint32_t *pixels = (uint32_t *)(layer + y * stride);
+				for (unsigned x = 0; x < width; x++)
+					pixels[x * 2 + 1] = __builtin_bswap32(pixels[x * 2 + 1]);
+			}
+		}
+	}
+
 	*ptransfer = &trans->b.b;
 	return map + offset;
 }
@@ -1615,7 +1645,7 @@ unsigned r600_translate_colorswap(enum pipe_format format, bool do_endian_swap)
 			 (HAS_SWIZZLE(0,Y) && HAS_SWIZZLE(1,NONE)) ||
 		         (HAS_SWIZZLE(0,NONE) && HAS_SWIZZLE(1,X)))
 			/* YX__ */
-			return (do_endian_swap ? V_0280A0_SWAP_STD : V_0280A0_SWAP_STD_REV);
+			return (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN ? V_0280A0_SWAP_STD : V_0280A0_SWAP_STD_REV);
 		else if (HAS_SWIZZLE(0,X) && HAS_SWIZZLE(3,Y))
 			return V_0280A0_SWAP_ALT; /* X__Y */
 		else if (HAS_SWIZZLE(0,Y) && HAS_SWIZZLE(3,X))
@@ -1623,24 +1653,31 @@ unsigned r600_translate_colorswap(enum pipe_format format, bool do_endian_swap)
 		break;
 	case 3:
 		if (HAS_SWIZZLE(0,X))
-			return (do_endian_swap ? V_0280A0_SWAP_STD_REV : V_0280A0_SWAP_STD);
+			return (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN &&
+				desc->colorspace != UTIL_FORMAT_COLORSPACE_ZS ? V_0280A0_SWAP_STD_REV : V_0280A0_SWAP_STD);
 		else if (HAS_SWIZZLE(0,Z))
 			return V_0280A0_SWAP_STD_REV; /* ZYX */
 		break;
 	case 4:
 		/* check the middle channels, the 1st and 4th channel can be NONE */
 		if (HAS_SWIZZLE(1,Y) && HAS_SWIZZLE(2,Z)) {
+			if (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN && !desc->is_array)
+				return V_0280A0_SWAP_STD_REV;
 			return V_0280A0_SWAP_STD; /* XYZW */
 		} else if (HAS_SWIZZLE(1,Z) && HAS_SWIZZLE(2,Y)) {
+			if (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN && !desc->is_array)
+				return V_0280A0_SWAP_STD;
 			return V_0280A0_SWAP_STD_REV; /* WZYX */
 		} else if (HAS_SWIZZLE(1,Y) && HAS_SWIZZLE(2,X)) {
+			if (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN && !desc->is_array)
+				return V_0280A0_SWAP_ALT_REV;
 			return V_0280A0_SWAP_ALT; /* ZYXW */
 		} else if (HAS_SWIZZLE(1,Z) && HAS_SWIZZLE(2,W)) {
 			/* YZWX */
 			if (desc->is_array)
 				return V_0280A0_SWAP_ALT_REV;
 			else
-				return (do_endian_swap ? V_0280A0_SWAP_ALT : V_0280A0_SWAP_ALT_REV);
+				return (do_endian_swap && desc->layout == UTIL_FORMAT_LAYOUT_PLAIN ? V_0280A0_SWAP_ALT : V_0280A0_SWAP_ALT_REV);
 		}
 		break;
 	}

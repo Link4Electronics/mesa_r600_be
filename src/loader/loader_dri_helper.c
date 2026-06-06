@@ -29,6 +29,7 @@
 #include "drm-uapi/drm_fourcc.h"
 #include "loader_dri_helper.h"
 #include "util/driconf.h"
+#include "util/u_endian.h"
 
 
 /* Creating a DRIImage accepts a pipe_format, whilst DRM-based platforms
@@ -92,6 +93,20 @@ loader_fourcc_to_pipe_format(uint32_t fourcc)
 uint32_t
 loader_pipe_format_to_fourcc(enum pipe_format pipe)
 {
+#if UTIL_ARCH_BIG_ENDIAN
+   switch (pipe) {
+   case PIPE_FORMAT_BGRX8888_SRGB: return __DRI_IMAGE_FOURCC_SXRGB8888;
+   case PIPE_FORMAT_BGRA8888_SRGB: return __DRI_IMAGE_FOURCC_SARGB8888;
+   case PIPE_FORMAT_RGBA8888_SRGB: return __DRI_IMAGE_FOURCC_SABGR8888;
+   case PIPE_FORMAT_BGRX8888_UNORM: return DRM_FORMAT_XRGB8888;
+   case PIPE_FORMAT_BGRA8888_UNORM: return DRM_FORMAT_ARGB8888;
+   case PIPE_FORMAT_RGBX8888_UNORM: return DRM_FORMAT_XBGR8888;
+   case PIPE_FORMAT_RGBA8888_UNORM: return DRM_FORMAT_ABGR8888;
+   default:
+      break;
+   }
+#endif
+
    for (int i = 0; i < ARRAY_SIZE(pipe_format_to_fourcc); i++) {
       if (pipe_format_to_fourcc[i].pipe == pipe)
          return pipe_format_to_fourcc[i].fourcc;

@@ -3270,7 +3270,6 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 	bool is_srgb_valid = false;
 	const unsigned char swizzle_xxxx[4] = {0, 0, 0, 0};
 	const unsigned char swizzle_yyyy[4] = {1, 1, 1, 1};
-	const unsigned char swizzle_xxxy[4] = {0, 0, 0, 1};
 	const unsigned char swizzle_zyx1[4] = {2, 1, 0, 5};
 	const unsigned char swizzle_zyxw[4] = {2, 1, 0, 3};
 
@@ -3305,13 +3304,39 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 		 * u_format.csv
 		 */
 		if (do_endian_swap) {
-			if (format == PIPE_FORMAT_L4A4_UNORM)
-				word4 |= r600_get_swizzle_combined(swizzle_xxxy, swizzle_view, false);
-			else if (format == PIPE_FORMAT_B4G4R4A4_UNORM)
+			if (format == PIPE_FORMAT_B4G4R4A4_UNORM)
 				word4 |= r600_get_swizzle_combined(swizzle_zyxw, swizzle_view, false);
 			else if (format == PIPE_FORMAT_B4G4R4X4_UNORM || format == PIPE_FORMAT_B5G6R5_UNORM)
 				word4 |= r600_get_swizzle_combined(swizzle_zyx1, swizzle_view, false);
-			else
+			else if (desc->layout == UTIL_FORMAT_LAYOUT_PLAIN && !desc->is_array && desc->nr_channels >= 2) {
+				unsigned char le_swizzle[4];
+				/* Derive LE swizzle from BE swizzle for packed bitmask formats.
+				 * The BE reversal (X<->W, Y<->Z for 4ch, X<->Z for 3ch, X<->Y for 2ch)
+				 * is its own inverse, so applying the same remap restores LE order.
+				 */
+				for (i = 0; i < 4; i++) {
+					switch (desc->swizzle[i]) {
+					case PIPE_SWIZZLE_X:
+						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_W :
+								(desc->nr_channels >= 3 ? PIPE_SWIZZLE_Z : PIPE_SWIZZLE_Y);
+						break;
+					case PIPE_SWIZZLE_Y:
+						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_Z :
+								(desc->nr_channels >= 3 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X);
+						break;
+					case PIPE_SWIZZLE_Z:
+						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X;
+						break;
+					case PIPE_SWIZZLE_W:
+						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_X : PIPE_SWIZZLE_W;
+						break;
+					default:
+						le_swizzle[i] = desc->swizzle[i];
+						break;
+					}
+				}
+				word4 |= r600_get_swizzle_combined(le_swizzle, swizzle_view, false);
+			} else
 				word4 |= r600_get_swizzle_combined(desc->swizzle, swizzle_view, false);
 		} else {
 			word4 |= r600_get_swizzle_combined(desc->swizzle, swizzle_view, false);
@@ -3513,17 +3538,25 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 			}
 			goto out_unknown;
 		case 4:
-			if (desc->channel[0].size == 5 &&
-			    desc->channel[1].size == 5 &&
-			    desc->channel[2].size == 5 &&
-			    desc->channel[3].size == 1) {
+			if ((desc->channel[0].size == 5 &&
+			     desc->channel[1].size == 5 &&
+			     desc->channel[2].size == 5 &&
+			     desc->channel[3].size == 1) ||
+			    (desc->channel[0].size == 1 &&
+			     desc->channel[1].size == 5 &&
+			     desc->channel[2].size == 5 &&
+			     desc->channel[3].size == 5)) {
 				result = FMT_1_5_5_5;
 				goto out_word4;
 			}
-			if (desc->channel[0].size == 10 &&
-			    desc->channel[1].size == 10 &&
-			    desc->channel[2].size == 10 &&
-			    desc->channel[3].size == 2) {
+			if ((desc->channel[0].size == 10 &&
+			     desc->channel[1].size == 10 &&
+			     desc->channel[2].size == 10 &&
+			     desc->channel[3].size == 2) ||
+			    (desc->channel[0].size == 2 &&
+			     desc->channel[1].size == 10 &&
+			     desc->channel[2].size == 10 &&
+			     desc->channel[3].size == 10)) {
 				result = FMT_2_10_10_10;
 				goto out_word4;
 			}
@@ -3683,6 +3716,10 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 	if (format == PIPE_FORMAT_R11G11B10_FLOAT) /* isn't plain */
 		return V_0280A0_COLOR_10_11_11_FLOAT;
 
+	if (format == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT ||
+	    format == PIPE_FORMAT_X32_S8X24_UINT)
+		return V_0280A0_COLOR_X24_8_32_FLOAT;
+
 	if (desc->layout != UTIL_FORMAT_LAYOUT_PLAIN ||
 	    channel == -1)
 		return ~0U;
@@ -3736,7 +3773,7 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 	case 3:
 		if (HAS_SIZE(5,6,5,0)) {
 			return V_0280A0_COLOR_5_6_5;
-		} else if (HAS_SIZE(32,8,24,0)) {
+		} else if (HAS_SIZE(32,8,24,0) || HAS_SIZE(32,24,8,0)) {
 			return V_0280A0_COLOR_X24_8_32_FLOAT;
 		}
 		break;
@@ -3760,9 +3797,9 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 				else
 					return V_0280A0_COLOR_32_32_32_32;
 			}
-		} else if (HAS_SIZE(5,5,5,1)) {
+		} else if (HAS_SIZE(5,5,5,1) || HAS_SIZE(1,5,5,5)) {
 			return V_0280A0_COLOR_1_5_5_5;
-		} else if (HAS_SIZE(10,10,10,2)) {
+		} else if (HAS_SIZE(10,10,10,2) || HAS_SIZE(2,10,10,10)) {
 			return V_0280A0_COLOR_2_10_10_10;
 		}
 		break;
@@ -3806,30 +3843,30 @@ uint32_t r600_colorformat_endian_swap(uint32_t colorformat, bool do_endian_swap)
 
 		case V_0280A0_COLOR_10_11_11_FLOAT:
 		case V_0280A0_COLOR_2_10_10_10:
-		case V_0280A0_COLOR_8_24:
-		case V_0280A0_COLOR_24_8:
-		case V_0280A0_COLOR_32_FLOAT:
-		case V_0280A0_COLOR_32:
-			return (do_endian_swap ? ENDIAN_8IN32 : ENDIAN_NONE);
-
 		case V_0280A0_COLOR_16_16_FLOAT:
 		case V_0280A0_COLOR_16_16:
-			return ENDIAN_8IN16;
+			return (do_endian_swap ? ENDIAN_8IN16 : ENDIAN_NONE);
+
+		case V_0280A0_COLOR_8_24:
+		case V_0280A0_COLOR_24_8:
+		case V_0280A0_COLOR_32:
+		case V_0280A0_COLOR_32_FLOAT:
+			return (do_endian_swap ? ENDIAN_8IN32 : ENDIAN_NONE);
 
 		/* 64-bit buffers. */
 		case V_0280A0_COLOR_16_16_16_16:
 		case V_0280A0_COLOR_16_16_16_16_FLOAT:
-			return ENDIAN_8IN16;
+			return (do_endian_swap ? ENDIAN_8IN16 : ENDIAN_NONE);
 
 		case V_0280A0_COLOR_32_32_FLOAT:
 		case V_0280A0_COLOR_32_32:
 		case V_0280A0_COLOR_X24_8_32_FLOAT:
-			return ENDIAN_8IN32;
+			return (do_endian_swap ? ENDIAN_8IN32 : ENDIAN_NONE);
 
 		/* 128-bit buffers. */
 		case V_0280A0_COLOR_32_32_32_32_FLOAT:
 		case V_0280A0_COLOR_32_32_32_32:
-			return ENDIAN_8IN32;
+			return (do_endian_swap ? ENDIAN_8IN32 : ENDIAN_NONE);
 		default:
 			return ENDIAN_NONE; /* Unsupported. */
 		}

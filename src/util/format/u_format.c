@@ -291,15 +291,21 @@ util_format_is_luminance_alpha(enum pipe_format format)
    const struct util_format_description *desc =
       util_format_description(format);
 
-   if ((desc->colorspace == UTIL_FORMAT_COLORSPACE_RGB ||
-        desc->colorspace == UTIL_FORMAT_COLORSPACE_SRGB) &&
-       desc->swizzle[0] == PIPE_SWIZZLE_X &&
-       desc->swizzle[1] == PIPE_SWIZZLE_X &&
-       desc->swizzle[2] == PIPE_SWIZZLE_X &&
-       desc->swizzle[3] == PIPE_SWIZZLE_Y) {
-      return true;
-   }
-   return false;
+   if (desc->colorspace != UTIL_FORMAT_COLORSPACE_RGB &&
+       desc->colorspace != UTIL_FORMAT_COLORSPACE_SRGB)
+      return false;
+
+   /* Luminance-alpha formats have all three RGB channels mapped to the same
+    * format channel (luminance), and alpha mapped to a different channel.
+    * On LE: [X,X,X,Y]; on BE (reversed bitmask): [Y,Y,Y,X].
+    * Check the pattern rather than specific swizzle values to handle both. */
+   return desc->nr_channels == 2 &&
+          desc->swizzle[0] == desc->swizzle[1] &&
+          desc->swizzle[0] == desc->swizzle[2] &&
+          desc->swizzle[3] != desc->swizzle[0] &&
+          desc->swizzle[3] != PIPE_SWIZZLE_0 &&
+          desc->swizzle[3] != PIPE_SWIZZLE_1 &&
+          desc->swizzle[3] != PIPE_SWIZZLE_NONE;
 }
 
 bool
