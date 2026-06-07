@@ -457,6 +457,7 @@ static void r600_init_screen_caps(struct r600_screen *rscreen)
 	caps->can_bind_const_buffer_as_vertex = true;
 	caps->allow_mapped_buffers_during_execution = true;
 	caps->robust_buffer_access_behavior = true;
+	caps->generate_mipmap = true;
 
 	caps->vertex_input_alignment = PIPE_VERTEX_INPUT_ALIGNMENT_4BYTE;
 

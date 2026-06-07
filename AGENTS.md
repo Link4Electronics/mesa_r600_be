@@ -185,6 +185,9 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 36. **`r600_texture.c:r600_texture_transfer_map`** — Replaced `>>= 16` with `__builtin_bswap32` for READ path 64-bit ZS stencil fixup on BE. The DB→CB decompress uses `COLOR_X24_8_32_FLOAT` + `ENDIAN_8IN32`. The CB format puts stencil at word1 byte[3] (= absolute byte[7]). `ENDIAN_8IN32` byte-swaps the word, moving stencil from byte[7] to byte[4] (MSB of BE uint32). `unpack_s_8uint` reads byte[4] as BE uint32 `0xSS000000` and truncates to uint8 → `0x00`. `__builtin_bswap32` reverses to `0x000000SS` → unpack correctly reads stencil `0xSS`.
 37. **`r600_texture.c:r600_texture_transfer_unmap`** — Removed the WRITE path stencil fixup entirely (`<<= 16` was incorrect: `0xSS000000 << 16 = 0` on uint32). `pack_s_8uint` writes stencil at byte[4] (MSB of BE uint32). The blitter reinterprets 64-bit ZS as `R16G16B16A16_UINT` with `ENDIAN_8IN16`. The B channel reads bytes[4..5] = `[SS, 0x00]`, byte-swapped → `[0x00, SS]` → LE uint16 `0x00SS` = stencil. The CB writes stencil to byte[7] of the depth texture (`COLOR_X24_8_32_FLOAT` + `ENDIAN_NONE`). The READ fix (item 36) correctly recovers stencil from byte[7] on readback.
 
+### Round 20 (this session)
+38. **`r600_blit.c:r600_generate_mipmap`** — Implemented driver-level `generate_mipmap` for compressed textures on BE. `util_gen_mipmap` returns false for compressed textures (no `PIPE_BIND_RENDER_TARGET` support), forcing CPU fallback via `_mesa_generate_mipmap` → `_mesa_GetTexSubImage_sw`, which writes to an intermediate Mesa internal format buffer with wrong byte order on BE, causing B↔G swap in re-compressed output. Fix: create temporary RGBA8 texture (is_array=true, correct byte order on BE), GPU blit decompress compressed level 0 to temp, GPU mipmap generation on temp via `util_blitter_generate_mipmap`, then CPU re-compress each level via `util_format_translate` (struct-based pack/unpack on RGBA8 is endian-safe; DXT pack functions write bytes explicitly in LE order). Enabled `caps->generate_mipmap = true` in `r600_init_screen_caps` and set `generate_mipmap` function pointer in `r600_init_blit_functions`. Expected to fix `fbo-generatemipmap-formats` NPOT compressed (10 tests with B↔G swap).
+
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
 - `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_texformat (R2: BE swizzle fix, L4A4)
@@ -196,3 +199,5 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 - `src/util/format/u_format_other.c` — R11G11B10/R9G9B9E5 pack (uses `util_cpu_to_le32`)
 - `src/util/format/u_format.yaml` — format definitions (BE reversal only for `layout: plain`)
 - `src/gallium/drivers/r600/r600_texture.c`:r600_texture_transfer_map, r600_texture_transfer_unmap (R19r3: 64-bit ZS dword1 bswap32 READ, removed WRITE)
+- `src/gallium/drivers/r600/r600_blit.c`:r600_generate_mipmap (R20: compressed mipmap GPU override)
+- `src/gallium/drivers/r600/r600_pipe.c`:r600_init_screen_caps (R20: caps->generate_mipmap = true)

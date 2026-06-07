@@ -1202,32 +1202,41 @@ bool r600_init_flushed_depth_texture(struct pipe_context *ctx,
 		if (rtex->flushed_depth_texture)
 			return true; /* it's ready */
 
-		if (!rtex->can_sample_z && rtex->can_sample_s) {
-			switch (pipe_format) {
-			case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
-				/* Save memory by not allocating the S plane. */
-				pipe_format = PIPE_FORMAT_Z32_FLOAT;
-				break;
-			case PIPE_FORMAT_Z24_UNORM_S8_UINT:
-			case PIPE_FORMAT_S8_UINT_Z24_UNORM:
-				/* Save memory bandwidth by not copying the
-				 * stencil part during flush.
-				 *
-				 * This potentially increases memory bandwidth
-				 * if an application uses both Z and S texturing
-				 * simultaneously (a flushed Z24S8 texture
-				 * would be stored compactly), but how often
-				 * does that really happen?
-				 */
-				pipe_format = PIPE_FORMAT_Z24X8_UNORM;
-				break;
-			default:;
-			}
-		} else if (!rtex->can_sample_s && rtex->can_sample_z) {
-			assert(util_format_has_stencil(util_format_description(pipe_format)));
+		/* On BE, keep the original format for depth-stencil textures
+		 * to ensure stencil data is present for CPU readback.
+		 * The format downgrades below would drop stencil (Z32_FLOAT)
+		 * or depth (X24S8_UINT), breaking readback on BE.
+		 * On LE, the downgrades are safe because stencil readback
+		 * can work from the separate stencil allocation.
+		 */
+		if (!UTIL_ARCH_BIG_ENDIAN) {
+			if (!rtex->can_sample_z && rtex->can_sample_s) {
+				switch (pipe_format) {
+				case PIPE_FORMAT_Z32_FLOAT_S8X24_UINT:
+					/* Save memory by not allocating the S plane. */
+					pipe_format = PIPE_FORMAT_Z32_FLOAT;
+					break;
+				case PIPE_FORMAT_Z24_UNORM_S8_UINT:
+				case PIPE_FORMAT_S8_UINT_Z24_UNORM:
+					/* Save memory bandwidth by not copying the
+					 * stencil part during flush.
+					 *
+					 * This potentially increases memory bandwidth
+					 * if an application uses both Z and S texturing
+					 * simultaneously (a flushed Z24S8 texture
+					 * would be stored compactly), but how often
+					 * does that really happen?
+					 */
+					pipe_format = PIPE_FORMAT_Z24X8_UNORM;
+					break;
+				default:;
+				}
+			} else if (!rtex->can_sample_s && rtex->can_sample_z) {
+				assert(util_format_has_stencil(util_format_description(pipe_format)));
 
-			/* DB->CB copies to an 8bpp surface don't work. */
-			pipe_format = PIPE_FORMAT_X24S8_UINT;
+				/* DB->CB copies to an 8bpp surface don't work. */
+				pipe_format = PIPE_FORMAT_X24S8_UINT;
+			}
 		}
 	}
 
