@@ -47,7 +47,7 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 ### Compressed textures
 - All compressors (S3TC/DXT/BPTC/RGTC) output LE bytes explicitly via byte-by-byte stores. Sampler reads with `ENDIAN_NONE` — correct.
 - **Do NOT add ENDIAN_8IN16/32 for FMT_BC1–FMT_BC7** (would break sampling).
-- NPOT generatemipmap failures (all compressed formats) have B↔G swap/white — suspected `util_format_translate` stride/byte order issue with padded NPOT inputs on BE.
+- NPOT generatemipmap failures (all compressed formats) have B↔G swap/white. DATA pipeline proved correct at 4x4, 6x6, 7x7 DXT5 — the swap is in the RENDERING/output pipeline, not in mipmap data.
 - ETC1/ETC2 miptree failures (26 tests) — piglit KTX loader bug on BE (header declares BE data).
 
 ### DMA
@@ -222,7 +222,11 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 - `depth32f_stencil8` stencil draw/read/blit (12 fail) — stencil always zero. Root cause: `COLOR_X24_8_32_FLOAT` + `ENDIAN_8IN32` moves stencil from byte[7] to byte[4] MSB; unpack reads lowest byte of BE uint32 → 0. Fix: `__builtin_bswap32` on staging dword1. The WRITE path (blitter `R16G16B16A16_UINT` + `ENDIAN_8IN16`) correctly handles stencil from byte[4] without any fix.
 
 ### NPOT compressed (all formats)
-All NPOT compressed mipmap tests fail with B↔G swap. The failure is identical with both GPU blit and state tracker CPU fallback — root cause is NOT in the GPU blit path or the padding code. Suspect: the `util_format_translate` pack function for block-compressed formats reads RGBA8 data incorrectly for NPOT padded inputs on BE, or the pack function's internal stride computation wraps incorrectly.
+All NPOT compressed mipmap tests fail with B↔G swap in rendered probe, but diagnostic at 4x4, 6x6, 7x7 DXT5 confirms the DATA pipeline (compress, decompress, glGenerateMipmap averaging, glGetTexImage readback) is fully correct on BE. The swap is NOT in the mipmap data pipeline.
+
+Root cause is in the RENDERING/output pipeline (the piglit test renders a mipmapped texture and probes the framebuffer). Both the CB path (COMP_SWAP + ENDIAN) and sampler path (DST_SEL + ENDIAN_SWAP) have been reviewed and are correct for the common formats. Most likely culprit: a rendering state difference specific to NPOT compressed mipmapped textures — possibly LOD calculation accuracy, pitch alignment interaction with mip level selection, or sampler address wrapping for non-block-aligned NPOT dimensions.
+
+**Open question**: does the swap reproduce with `glGetTexImage` at 291×129 specifically, or only in the rendered framebuffer probe? If only in rendering, the fix is not in mipmap gen code but in the rendering/sampling state.
 
 ### ETC1/ETC2 miptree (26 tests)
 piglit KTX loader bug (header declares BE data, piglit only supports LE).
@@ -232,22 +236,18 @@ piglit KTX loader bug (header declares BE data, piglit only supports LE).
 
 **Result**: All NPOT compressed mipmap tests still fail with G↔B swap (see round25 results below). This fix was insufficient.
 
-### Round 25 test results (piglit gpu -t fbo-generatemipmap-formats)
+### Round 27–28 test results (piglit gpu -t fbo-generatemipmap-formats)
 All non-NPOT compressed: **PASS** (via r600_generate_mipmap GPU blit).
-All NPOT compressed: **FAIL** with G↔B swap (via `_mesa_generate_mipmap` CPU fallback).
+All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
 
-| Format | NPOT Expected | NPOT Observed |
-|---|---|---|
-| DXT1 RGB | (0,0,255,255) | (8,255,8,255) — greenish (B value → G) |
-| DXT1 RGBA | (0,0,255,255) | (0,0,0,0) — black |
-| DXT3 | (0,0,255,127) | (0,255,0,68) — G=255 (got B's value) |
-| DXT5 | (0,0,255,127) | (0,255,0,64) — G=255 (got B's value) |
+### Round 29 (REVERT — this session)
+47. **`src/mesa/main/formats.c`** — **REVERTED** Round 23 change (`MESA_FORMAT_R8G8B8A8_UNORM` → `MESA_FORMAT_RGBA_UNORM8`). Root cause: `MESA_FORMAT_R8G8B8A8_UNORM` on BE aliases to `A8B8G8R8_UNORM` (bytes [A,B,G,R], swizzle [W,Z,Y,X]), while `MESA_FORMAT_RGBA_UNORM8` on BE aliases to `ABGR8888_UNORM` → `R8G8B8A8_UNORM` (bytes [R,G,B,A], swizzle [X,Y,Z,W]). The mipmap generator's `do_span_rgba_unorm8` uses format pack/unpack — both produce correct [R,G,B,A] values through their swizzles. But when `st_TexSubImage` reads temp_dst bytes as GL_RGBA/UBYTE at line 1052, it interprets byte0=R → with `R8G8B8A8_UNORM` bytes [A,B,G,R] this gives R↔A swap. `RGBA_UNORM8` is endian-aware (correct on both platforms).
+48. **`src/mesa/main/texcompress_s3tc.c`**, **`texcompress_bptc.c`**, **`texcompress_fxt1.c`** — **REVERTED** intermediate conversion format from `MESA_FORMAT_R8G8B8A8_UNORM` back to `MESA_FORMAT_RGBA_UNORM8`.
+49. **`dxt5_diag.c`** — Wrote and ran PPC64 diagnostic to verify compressed mipmap data pipeline. Tests: 4×4 DXT5 roundtrip (PASS), 6×6 RGBA8 glGenerateMipmap (PASS), 6×6 DXT5 glGenerateMipmap (PASS), 6×6 DXT5 pixel-level checkerboard glGenerateMipmap (PASS), 7×7 DXT5 pixel-level checkerboard glGenerateMipmap (PASS). **All PASS** — no G↔B swap at any tested NPOT size.
 
-### Round 23 (this session)
-43. **`src/mesa/main/formats.c`** — Changed `_mesa_get_uncompressed_format` to return `MESA_FORMAT_R8G8B8A8_UNORM` instead of `MESA_FORMAT_RGBA_UNORM8`. On BE, `MESA_FORMAT_RGBA_UNORM8` = `MESA_FORMAT_A8B8G8R8_UNORM` (channels [A,B,G,R], bytes [A,B,G,R] in memory), while `MESA_FORMAT_R8G8B8A8_UNORM` = `PIPE_FORMAT_RGBA8888_UNORM` = `PIPE_FORMAT_A8B8G8R8_UNORM` (with BE reversal: channels [R,G,B,A], bytes [R,G,B,A]). The temp buffer from `st_GetTexSubImage` has bytes in GL_RGBA order [R,G,B,A]; the mipmap generator's pack/unpack uses `temp_format` to read/write these bytes. With A8B8G8R8 (bytes [A,B,G,R]) the channels were misinterpreted: byte0→A, byte1→B, byte2→G, byte3→R, causing the averaging step to compute with wrong component values. This produced G↔B and R↔A swapped output, which `st_TexSubImage` then passed to the DXT compressor (reading GL_RGBA/UBYTE as bytes [R,G,B,A]). Root cause: `_mesa_generate_mipmap_level` in `mipmap.c` uses `temp_format` (Mesa format) for pixel averaging, writing temp_dst with the format's byte order. When `st_TexSubImage` later reads temp_dst as GL_RGBA/UBYTE, it interprets bytes in [R,G,B,A] order, mismatching the A8B8G8R8 writer's [A,B,G,R] order.
-44. **`src/mesa/main/texcompress_s3tc.c`** — Changed intermediate conversion format from `MESA_FORMAT_RGBA_UNORM8` to `MESA_FORMAT_R8G8B8A8_UNORM` in `_mesa_texstore_rgba_dxt1/3/5`. These intermediate conversions activate when srcFormat ≠ GL_RGBA or ImageTransferState or stride mismatch. The DXT compressors read converted bytes sequentially expecting [R,G,B,A] order, matching R8G8B8A8_UNORM on all platforms.
-45. **`src/mesa/main/texcompress_bptc.c`** — Same fix for `_mesa_texstore_bptc_rgba_unorm`.
-46. **`src/mesa/main/texcompress_fxt1.c`** — Same fix for `_mesa_texstore_fxt1`.
+**Result**: Builds cleanly. Restores Round 22 pass/fail counts. 
+
+**Critical finding**: the DXT5 NPOT data pipeline (compress → glGenerateMipmap → glGetTexImage) produces CORRECT data on BE at all tested sizes (4×4, 6×6, 7×7). The G↔B swap must be in the rendering/output pipeline (textured quad → framebuffer → glReadPixels probe), not in the texture data itself. Both the sampler path (ENDIAN_NONE for FMT_BC1–FMT_BC7) and CB path (ENDIAN_NONE for R8G8B8A8_UNORM array format) are verified correct. Most likely root cause: a rendering state difference specific to NPOT compressed mipmapped textures (LOD calculation, pitch alignment, or sampler address wrapping for non-block-aligned NPOT dimensions).
 
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
@@ -262,7 +262,8 @@ All NPOT compressed: **FAIL** with G↔B swap (via `_mesa_generate_mipmap` CPU f
 - `src/gallium/drivers/r600/r600_texture.c`:r600_texture_transfer_map, r600_texture_transfer_unmap (R19r3: 64-bit ZS dword1 bswap32 READ, removed WRITE)
 - `src/gallium/drivers/r600/r600_blit.c`:r600_generate_mipmap (R20: compressed mipmap GPU override; R22: snorm/float/2ch format filter)
 - `src/gallium/drivers/r600/r600_pipe.c`:r600_init_screen_caps (R20: caps->generate_mipmap = true)
-- `src/mesa/main/formats.c`:_mesa_get_uncompressed_format (R22: return RGBA_UNORM8 instead of A8B8G8R8_UNORM for all RGBA compressed formats [no-op on BE, both = A8B8G8R8]; R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8, which has bytes [R,G,B,A] on ALL platforms)
-- `src/mesa/main/texcompress_s3tc.c`:_mesa_texstore_rgba_dxt1/3/5 (R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8 for intermediate conversion)
-- `src/mesa/main/texcompress_bptc.c`:_mesa_texstore_bptc_rgba_unorm (R23: same fix)
-- `src/mesa/main/texcompress_fxt1.c`:_mesa_texstore_fxt1 (R23: same fix)
+- `src/mesa/main/formats.c`:_mesa_get_uncompressed_format (R22: return RGBA_UNORM8 instead of A8B8G8R8_UNORM for all RGBA compressed formats [no-op on BE, both = A8B8G8R8]; R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8, which has bytes [R,G,B,A] on ALL platforms; R29: REVERTED — R8G8B8A8_UNORM on BE = bytes [A,B,G,R], cause R↔A swap in st_TexSubImage)
+- `src/mesa/main/texcompress_s3tc.c`:_mesa_texstore_rgba_dxt1/3/5 (R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8; R29: REVERTED back to RGBA_UNORM8)
+- `src/mesa/main/texcompress_bptc.c`:_mesa_texstore_bptc_rgba_unorm (R23: same; R29: REVERTED)
+- `src/mesa/main/texcompress_fxt1.c`:_mesa_texstore_fxt1 (R23: same; R29: REVERTED)
+- `/tmp/fbo_diag.c` — FBO rendering diagnostic (render NPOT DXT5 mipmap to FBO + glReadPixels probe)
