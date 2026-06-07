@@ -47,7 +47,7 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 ### Compressed textures
 - All compressors (S3TC/DXT/BPTC/RGTC) output LE bytes explicitly via byte-by-byte stores. Sampler reads with `ENDIAN_NONE` — correct.
 - **Do NOT add ENDIAN_8IN16/32 for FMT_BC1–FMT_BC7** (would break sampling).
-- NPOT generatemipmap failures (10 tests) have unexplained B↔G swap — likely CPU fallback issue.
+- NPOT generatemipmap failures (all compressed formats) have B↔G swap/white — suspected `util_format_translate` stride/byte order issue with padded NPOT inputs on BE.
 - ETC1/ETC2 miptree failures (26 tests) — piglit KTX loader bug on BE (header declares BE data).
 
 ### DMA
@@ -127,15 +127,63 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 25. **`evergreen_convert_border_color`** — Fixed integer LE path for **array integer formats on BE** (R8I..RG32UI, is_array=true). On BE, the swz redirect at line 2859 (`swz = d->swizzle[input_swz[i]]`) was applied to ALL formats, but for array formats `d->swizzle` is NOT BE-reversed (same as LE). The redirect mapped view-swizzle indices (0/1/2/3) through the format swizzle, producing PIPE_SWIZZLE_0(4)/PIPE_SWIZZLE_1(5) for non-existent channels, which triggered the early continue (writing 0/1) instead of the correct channel lookup. This changed the border color register values, breaking the border_swizzle compensation designed for LE. Fix: skip the redirect + PIPE_SWIZZLE_0/1 checks for `d->is_array && d->layout == PLAIN` formats on BE, letting `swz = swizzle[i]` retain the view-swizzle index for natural channel[] lookup (VOID type → val=0).
 26. **`evergreen_convert_border_color`** — Changed `ch0_idx` to always be `0` (removed BE-specific `d->swizzle[0]` lookup). On BE, for 4-channel reversed formats like `rgb10_a2ui`, `d->swizzle[0] = 3` (W=alpha=2bit) made `is_lai = true`, neutralizing the view swizzle and breaking swizzled output. Using `channel[0].size` (R channel) directly matches LE semantics for the legacy-format check.
 
-### Round 16 (this session)
+### Round 16
 27. **`evergreen_convert_border_color`** — Changed BE non-integer adj path gate from `is_lai` to `is_luminance_or_alpha || util_format_is_intensity(format)`. Small-channel packed bitmask formats (rgb4/rgb5, B4G4R4X4/B5G5R5X1) are `is_lai=true` due to `channel[0].size < 8` but are NOT legacy formats — they have 3-4 channels with their own channel mapping. The adj path's `f = v < nr_channels ? v : d->swizzle[v]` fallback was designed for legacy single-channel expansion and produces wrong values for void/X channels when `d->swizzle[3]` maps to `PIPE_SWIZZLE_1`. Falling through to the LE path (`in->f[input_swz[i]]`) preserves the input values correctly. However, rgb4/rgb5 still fail — root cause is the `is_lai=true` swizzle neutralization preventing the undo of state tracker pre-swizzle, which is identical on LE and BE, so the actual issue is format/DST_SEL interaction with the X padding channel on BE.
 
-### Round 17 (this session)
+### Round 17
 28. **`evergreen_convert_border_color`** — Fixed `is_lai` check for packed bitmask integer formats on BE (e.g., R10G10B10A2_UINT). On BE, `d->channel[0]` is the FIRST channel after BE reversal (2-bit alpha for R10G10B10A2), making `ch0_size = 2 < 8` and incorrectly setting `is_lai = true`. This neutralizes the view swizzle, preventing the driver from undoing the state tracker's pre-swizzle, which causes a double-swizzle for swizzled views and wrong normalizer constants for non-swizzled views. Fix: use `d->channel[d->swizzle[ch0_idx]].size` on BE for non-array PLAIN formats to get the LE channel[0]'s size.
 29. **`evergreen_convert_border_color`** — Fixed channel size lookup in integer BE adj path. `ci = eff_fmt[v]` looked up channel size using the LE swizzle index as a BE channel index, which is wrong because `d->channel[]` is ordered for BE (reversed channel array). Changed to `ci = d->swizzle[v]` which correctly maps BE position `v` to the right channel index. Fixes both non-swizzled and swizzled border colors for packed bitmask integer formats (rgb10_a2ui) and all non-integer 10-bit packed formats (rgb10/rgb10_a2 UNORM swizzled).
 
-### Round 18 (this session)
+### Round 18
 30. **`r600_texture.c`** — Fixed Z32_FLOAT_S8X24_UINT stencil readback on BE (zero stencil in glReadPixels). Root cause: CB writes/reads with ENDIAN_8IN32 (byte-swaps dword1) but the stencil component within dword1 ends up at the wrong byte position for BE. After ENDIAN_8IN32, dword1 = [stencil, X, X, X] (stencil at bit[31] of the swapped dword = byte[4] in memory). The unpack_s_8uint reads byte[4..7] as uint32 and truncates to uint8 — on BE this gives `stencil << 24` → 0. Fix: bswap32 the second dword of each pixel in the staging buffer, converting [stencil, X, X, X] to [X, X, X, stencil], so the unpack function reads stencil from byte[7] (LSB of BE uint32) = stencil correctly. Applied in both READ path (map function, after CB write) and WRITE path (unmap function, before CB read). Guarded by `UTIL_ARCH_BIG_ENDIAN` and `blocksize == 8` (catches any 64-bit ZS format).
+
+### Round 19
+31. --REPLACED BY Round 19 fix Round 3--
+32. --REPLACED BY Round 19 fix Round 3--
+
+### Round 19 fix Round 3
+33. **`r600_state_common.c:r600_translate_colorformat`** — Added `HAS_SIZE(32,24,8,0)` case alongside `HAS_SIZE(32,8,24,0)`. On BE, `Z32_FLOAT_S8X24_UINT` has channels `[F32(32), X24(24), UP8(8)]` (BE YAML reorder). The LE channel size check `HAS_SIZE(32,8,24,0)` fails because `channel[1].size=24≠8`, causing `~0U` return → format 63 in CB_COLOR_INFO → kernel CS rejection. Fixes all `fbo-depthstencil-gl_depth32f_stencil8-*`, `depth-stencil-blit`, `texsubimage-depth-formats`, and `arb_copy_image` CS rejections.
+34. **`r600_state_common.c:r600_translate_colorformat`** — Added direct `PIPE_FORMAT_Z32_FLOAT_S8X24_UINT` / `PIPE_FORMAT_X32_S8X24_UINT` checks with hardcoded `V_0280A0_COLOR_X24_8_32_FLOAT` return, before the `layout != PLAIN` early-return. The `HAS_SIZE(32,24,8,0)` workaround (Round 19 fix Round 3) reads `util_format_channel_description` bitfields (`size:9`, `shift:16`), whose bit-level packing on BE GCC differs from LE. The direct format check bypasses the bitfield struct entirely and is authoritative.
+35. **`r600_texture.c:r600_translate_colorswap`** — Guarded 3-channel `do_endian_swap` COMP_SWAP reversal with `desc->colorspace != UTIL_FORMAT_COLORSPACE_ZS`. Depth formats (Z32_FLOAT_S8X24_UINT) have fixed component roles (depth, stencil) across both endiannesses — `STD_REV` would incorrectly swap depth↔stencil dwords after `ENDIAN_8IN32` byte swap. Fixes potential wrong depth/stencil values in CB blit path.
+36. **`r600_texture.c:r600_texture_transfer_map`** — Replaced `>>= 16` with `__builtin_bswap32` for READ path 64-bit ZS stencil fixup on BE. The DB→CB decompress uses `COLOR_X24_8_32_FLOAT` + `ENDIAN_8IN32`. The CB format puts stencil at word1 byte[3] (= absolute byte[7]). `ENDIAN_8IN32` byte-swaps the word, moving stencil from byte[7] to byte[4] (MSB of BE uint32). `unpack_s_8uint` reads byte[4] as BE uint32 `0xSS000000` and truncates to uint8 → `0x00`. `__builtin_bswap32` reverses to `0x000000SS` → unpack correctly reads stencil `0xSS`.
+37. **`r600_texture.c:r600_texture_transfer_unmap`** — Removed the WRITE path stencil fixup entirely (`<<= 16` was incorrect: `0xSS000000 << 16 = 0` on uint32). `pack_s_8uint` writes stencil at byte[4] (MSB of BE uint32). The blitter reinterprets 64-bit ZS as `R16G16B16A16_UINT` with `ENDIAN_8IN16`. The B channel reads bytes[4..5] = `[SS, 0x00]`, byte-swapped → `[0x00, SS]` → LE uint16 `0x00SS` = stencil. The CB writes stencil to byte[7] of the depth texture (`COLOR_X24_8_32_FLOAT` + `ENDIAN_NONE`). The READ fix (item 36) correctly recovers stencil from byte[7] on readback.
+
+### Round 20 (r1cddcdb)
+38. **`r600_blit.c:r600_generate_mipmap`** — Implemented driver-level `generate_mipmap` for compressed textures on BE. `util_gen_mipmap` returns false for compressed textures (no `PIPE_BIND_RENDER_TARGET` support), forcing CPU fallback via `_mesa_generate_mipmap` → `_mesa_GetTexSubImage_sw`, which writes to an intermediate Mesa internal format buffer with wrong byte order on BE, causing B↔G swap in re-compressed output. Fix: create temporary RGBA8 texture (is_array=true, correct byte order on BE), GPU blit decompress compressed level 0 to temp, GPU mipmap generation on temp via `util_blitter_generate_mipmap`, then CPU re-compress each level via `util_format_translate` (struct-based pack/unpack on RGBA8 is endian-safe; DXT pack functions write bytes explicitly in LE order). Enabled `caps->generate_mipmap = true` in `r600_init_screen_caps` and set `generate_mipmap` function pointer in `r600_init_blit_functions`. Expected to fix `fbo-generatemipmap-formats` NPOT compressed (10 tests with B↔G swap).
+
+### Round 20 revert (commit c355477 — buggy)
+39. **`r600_blit.c:r600_generate_mipmap`** — TEMPORARILY replaced GPU blit approach with pure-CPU R32G32B32A32_FLOAT fallback (no BE guard, ran on all platforms). Caused `double free or corruption (!prev)` heap corruption in `spec@ext_texture_compression_latc@fbo-generatemipmap-formats-signed` and `spec@ext_texture_srgb@fbo-generatemipmap-formats-s3tc` on BE. Reverted in Round 21.
+
+### Round 21 
+40. **`r600_blit.c:r600_generate_mipmap`** — Restored original GPU blit approach (R8G8B8A8_UNORM temp + HW decode + GPU mipmap + CPU re-compress). Reverted the CPU fallback (`commit c355477`) that introduced heap corruption crashes. Now gated on `UTIL_ARCH_BIG_ENDIAN` so LE uses the normal GPU mipmap path (which handles non-compressed formats only; compressed on LE falls through to state tracker). The crash tests should pass (no crash) though NPOT compressed results may still have B↔G swap.
+
+### Round 22 (this session)
+41. **`r600_blit.c:r600_generate_mipmap`** — Added format checks before GPU blit to avoid regressions:
+    - Skip snorm (`desc->is_snorm`): GPU blit to UNORM clamps signed values (fixes RGTC/LATC signed non-NPOT failures).
+    - Skip float channels (`UTIL_FORMAT_TYPE_FLOAT`): GPU blit to UNORM loses HDR range (fixes BPTC float failures).
+    - Skip 2-channel legacy replication (`swz[0]==swz[1]==swz[2] < 4 && swz[3] != swz[0] && swz[3] < 4`): DST_SEL replicates first channel to RGB, destroying the second channel (fixes LATC2, ATI 3DC non-NPOT failures).
+    - After this fix, the GPU blit override only applies to formats where all channels map directly (S3TC/DXT, RGTC unorm, BPTC unorm, SRGB variants). All other compressed formats fall through to the state tracker CPU fallback, which handles non-NPOT correctly.
+
+## Compressed mipmap test results (Round 22 — actual)
+
+`piglit run gpu -t 'fbo-generatemipmap-formats'` — totals: 235 pass, 31 fail, 1 skip, **0 crash**.
+
+| `spec` | non-NPOT result | NPOT result |
+|---|---|---|
+| `ext_texture_compression_s3tc` | 4/4 PASS | 0/4 FAIL (B↔G swap, alpha=0) |
+| `ext_texture_srgb@fbo-generatemipmap-formats-s3tc` | 8/8 PASS | 6/8 FAIL (B↔G swap); sluminance/sluminance_alpha PASS |
+| `ext_texture_compression_rgtc` | 4/4 PASS | 0/4 FAIL (R→255) |
+| `ext_texture_compression_rgtc@-signed` | 2/2 PASS | 0/2 FAIL |
+| `ext_texture_compression_latc` | 2/2 PASS | 0/2 FAIL (LATC1 white→black, LATC2 wrong alpha) |
+| `ext_texture_compression_latc@-signed` | 2/2 PASS | 0/2 FAIL |
+| `ati_texture_compression_3dc` | 1/1 PASS | 0/1 FAIL (wrong alpha) |
+| `arb_texture_compression_bptc@unorm` | 2/2 PASS | 0/2 FAIL (B↔G swap) |
+| `arb_texture_compression_bptc@float` | 0/2 FAIL (pre-existing decompressor bug) | 0/2 FAIL |
+| `arb_texture_compression` (generic) | 6/6 PASS | 3/5 FAIL; alpha+intensity NPOT PASS, rest B↔G/white |
+
+**Crash status**: `formats-signed` (LATC) and `formats-s3tc` (sRGB) — **no crash**.
+
+**Non-NPOT wins** (all previously failing formats now PASS via CPU fallback): RGTC signed, LATC1+LATC2, LATC signed, ATI 3DC, BPTC float (still fails — pre-existing), generic ARB luminance/alpha/intensity.
 
 ## Remaining failures analysis
 
@@ -170,23 +218,36 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 
 ### Misc
 - `!opengl 1.1@texwrap formats` / `offset` — basic texwrap (93 pass, 11 fail — many now passing with R10/R11)
-- `fbo-generatemipmap-formats` NPOT compressed (10 tests) — B↔G swap in NPOT.
-- ETC1/ETC2 miptree (26 tests) — piglit KTX loader bug.
+- ETC1/ETC2 miptree (26 tests) — piglit KTX loader bug (header declares BE data, piglit only supports LE).
 - `depth32f_stencil8` stencil draw/read/blit (12 fail) — stencil always zero. Root cause: `COLOR_X24_8_32_FLOAT` + `ENDIAN_8IN32` moves stencil from byte[7] to byte[4] MSB; unpack reads lowest byte of BE uint32 → 0. Fix: `__builtin_bswap32` on staging dword1. The WRITE path (blitter `R16G16B16A16_UINT` + `ENDIAN_8IN16`) correctly handles stencil from byte[4] without any fix.
 
-### Round 19 (this session)
-31. --REPLACED BY Round 19 fix Round 3--
-32. --REPLACED BY Round 19 fix Round 3--
+### NPOT compressed (all formats)
+All NPOT compressed mipmap tests fail with B↔G swap. The failure is identical with both GPU blit and state tracker CPU fallback — root cause is NOT in the GPU blit path or the padding code. Suspect: the `util_format_translate` pack function for block-compressed formats reads RGBA8 data incorrectly for NPOT padded inputs on BE, or the pack function's internal stride computation wraps incorrectly.
 
-### Round 19 fix Round 3 (this session)
-33. **`r600_state_common.c:r600_translate_colorformat`** — Added `HAS_SIZE(32,24,8,0)` case alongside `HAS_SIZE(32,8,24,0)`. On BE, `Z32_FLOAT_S8X24_UINT` has channels `[F32(32), X24(24), UP8(8)]` (BE YAML reorder). The LE channel size check `HAS_SIZE(32,8,24,0)` fails because `channel[1].size=24≠8`, causing `~0U` return → format 63 in CB_COLOR_INFO → kernel CS rejection. Fixes all `fbo-depthstencil-gl_depth32f_stencil8-*`, `depth-stencil-blit`, `texsubimage-depth-formats`, and `arb_copy_image` CS rejections.
-34. **`r600_state_common.c:r600_translate_colorformat`** — Added direct `PIPE_FORMAT_Z32_FLOAT_S8X24_UINT` / `PIPE_FORMAT_X32_S8X24_UINT` checks with hardcoded `V_0280A0_COLOR_X24_8_32_FLOAT` return, before the `layout != PLAIN` early-return. The `HAS_SIZE(32,24,8,0)` workaround (Round 19 fix Round 3) reads `util_format_channel_description` bitfields (`size:9`, `shift:16`), whose bit-level packing on BE GCC differs from LE. The direct format check bypasses the bitfield struct entirely and is authoritative.
-35. **`r600_texture.c:r600_translate_colorswap`** — Guarded 3-channel `do_endian_swap` COMP_SWAP reversal with `desc->colorspace != UTIL_FORMAT_COLORSPACE_ZS`. Depth formats (Z32_FLOAT_S8X24_UINT) have fixed component roles (depth, stencil) across both endiannesses — `STD_REV` would incorrectly swap depth↔stencil dwords after `ENDIAN_8IN32` byte swap. Fixes potential wrong depth/stencil values in CB blit path.
-36. **`r600_texture.c:r600_texture_transfer_map`** — Replaced `>>= 16` with `__builtin_bswap32` for READ path 64-bit ZS stencil fixup on BE. The DB→CB decompress uses `COLOR_X24_8_32_FLOAT` + `ENDIAN_8IN32`. The CB format puts stencil at word1 byte[3] (= absolute byte[7]). `ENDIAN_8IN32` byte-swaps the word, moving stencil from byte[7] to byte[4] (MSB of BE uint32). `unpack_s_8uint` reads byte[4] as BE uint32 `0xSS000000` and truncates to uint8 → `0x00`. `__builtin_bswap32` reverses to `0x000000SS` → unpack correctly reads stencil `0xSS`.
-37. **`r600_texture.c:r600_texture_transfer_unmap`** — Removed the WRITE path stencil fixup entirely (`<<= 16` was incorrect: `0xSS000000 << 16 = 0` on uint32). `pack_s_8uint` writes stencil at byte[4] (MSB of BE uint32). The blitter reinterprets 64-bit ZS as `R16G16B16A16_UINT` with `ENDIAN_8IN16`. The B channel reads bytes[4..5] = `[SS, 0x00]`, byte-swapped → `[0x00, SS]` → LE uint16 `0x00SS` = stencil. The CB writes stencil to byte[7] of the depth texture (`COLOR_X24_8_32_FLOAT` + `ENDIAN_NONE`). The READ fix (item 36) correctly recovers stencil from byte[7] on readback.
+### ETC1/ETC2 miptree (26 tests)
+piglit KTX loader bug (header declares BE data, piglit only supports LE).
 
-### Round 20 (this session)
-38. **`r600_blit.c:r600_generate_mipmap`** — Implemented driver-level `generate_mipmap` for compressed textures on BE. `util_gen_mipmap` returns false for compressed textures (no `PIPE_BIND_RENDER_TARGET` support), forcing CPU fallback via `_mesa_generate_mipmap` → `_mesa_GetTexSubImage_sw`, which writes to an intermediate Mesa internal format buffer with wrong byte order on BE, causing B↔G swap in re-compressed output. Fix: create temporary RGBA8 texture (is_array=true, correct byte order on BE), GPU blit decompress compressed level 0 to temp, GPU mipmap generation on temp via `util_blitter_generate_mipmap`, then CPU re-compress each level via `util_format_translate` (struct-based pack/unpack on RGBA8 is endian-safe; DXT pack functions write bytes explicitly in LE order). Enabled `caps->generate_mipmap = true` in `r600_init_screen_caps` and set `generate_mipmap` function pointer in `r600_init_blit_functions`. Expected to fix `fbo-generatemipmap-formats` NPOT compressed (10 tests with B↔G swap).
+### Round 22 (current session — NPOT S3TC mipmap debugging — OVERRIDDEN by Round 23)
+42. **`src/mesa/main/formats.c`** — Changed `_mesa_get_uncompressed_format` to return `MESA_FORMAT_RGBA_UNORM8` instead of `MESA_FORMAT_A8B8G8R8_UNORM` for all RGBA compressed formats. On LE: RGBA_UNORM8 = R8G8B8A8 (bytes [R,G,B,A]) — matches GL_RGBA/UBYTE. On BE: RGBA_UNORM8 = A8B8G8R8_UNORM (bytes [A,B,G,R]) — **wrong**. Despite identical bytes for a blue pixel (0,0,255,127 → [0,0,255,127] regardless of channel mapping), the A8B8G8R8 channel order causes the mipmap generator to interpret channels differently from GL_RGBA during the averaging step.
+
+**Result**: All NPOT compressed mipmap tests still fail with G↔B swap (see round25 results below). This fix was insufficient.
+
+### Round 25 test results (piglit gpu -t fbo-generatemipmap-formats)
+All non-NPOT compressed: **PASS** (via r600_generate_mipmap GPU blit).
+All NPOT compressed: **FAIL** with G↔B swap (via `_mesa_generate_mipmap` CPU fallback).
+
+| Format | NPOT Expected | NPOT Observed |
+|---|---|---|
+| DXT1 RGB | (0,0,255,255) | (8,255,8,255) — greenish (B value → G) |
+| DXT1 RGBA | (0,0,255,255) | (0,0,0,0) — black |
+| DXT3 | (0,0,255,127) | (0,255,0,68) — G=255 (got B's value) |
+| DXT5 | (0,0,255,127) | (0,255,0,64) — G=255 (got B's value) |
+
+### Round 23 (this session)
+43. **`src/mesa/main/formats.c`** — Changed `_mesa_get_uncompressed_format` to return `MESA_FORMAT_R8G8B8A8_UNORM` instead of `MESA_FORMAT_RGBA_UNORM8`. On BE, `MESA_FORMAT_RGBA_UNORM8` = `MESA_FORMAT_A8B8G8R8_UNORM` (channels [A,B,G,R], bytes [A,B,G,R] in memory), while `MESA_FORMAT_R8G8B8A8_UNORM` = `PIPE_FORMAT_RGBA8888_UNORM` = `PIPE_FORMAT_A8B8G8R8_UNORM` (with BE reversal: channels [R,G,B,A], bytes [R,G,B,A]). The temp buffer from `st_GetTexSubImage` has bytes in GL_RGBA order [R,G,B,A]; the mipmap generator's pack/unpack uses `temp_format` to read/write these bytes. With A8B8G8R8 (bytes [A,B,G,R]) the channels were misinterpreted: byte0→A, byte1→B, byte2→G, byte3→R, causing the averaging step to compute with wrong component values. This produced G↔B and R↔A swapped output, which `st_TexSubImage` then passed to the DXT compressor (reading GL_RGBA/UBYTE as bytes [R,G,B,A]). Root cause: `_mesa_generate_mipmap_level` in `mipmap.c` uses `temp_format` (Mesa format) for pixel averaging, writing temp_dst with the format's byte order. When `st_TexSubImage` later reads temp_dst as GL_RGBA/UBYTE, it interprets bytes in [R,G,B,A] order, mismatching the A8B8G8R8 writer's [A,B,G,R] order.
+44. **`src/mesa/main/texcompress_s3tc.c`** — Changed intermediate conversion format from `MESA_FORMAT_RGBA_UNORM8` to `MESA_FORMAT_R8G8B8A8_UNORM` in `_mesa_texstore_rgba_dxt1/3/5`. These intermediate conversions activate when srcFormat ≠ GL_RGBA or ImageTransferState or stride mismatch. The DXT compressors read converted bytes sequentially expecting [R,G,B,A] order, matching R8G8B8A8_UNORM on all platforms.
+45. **`src/mesa/main/texcompress_bptc.c`** — Same fix for `_mesa_texstore_bptc_rgba_unorm`.
+46. **`src/mesa/main/texcompress_fxt1.c`** — Same fix for `_mesa_texstore_fxt1`.
 
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
@@ -199,5 +260,9 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 - `src/util/format/u_format_other.c` — R11G11B10/R9G9B9E5 pack (uses `util_cpu_to_le32`)
 - `src/util/format/u_format.yaml` — format definitions (BE reversal only for `layout: plain`)
 - `src/gallium/drivers/r600/r600_texture.c`:r600_texture_transfer_map, r600_texture_transfer_unmap (R19r3: 64-bit ZS dword1 bswap32 READ, removed WRITE)
-- `src/gallium/drivers/r600/r600_blit.c`:r600_generate_mipmap (R20: compressed mipmap GPU override)
+- `src/gallium/drivers/r600/r600_blit.c`:r600_generate_mipmap (R20: compressed mipmap GPU override; R22: snorm/float/2ch format filter)
 - `src/gallium/drivers/r600/r600_pipe.c`:r600_init_screen_caps (R20: caps->generate_mipmap = true)
+- `src/mesa/main/formats.c`:_mesa_get_uncompressed_format (R22: return RGBA_UNORM8 instead of A8B8G8R8_UNORM for all RGBA compressed formats [no-op on BE, both = A8B8G8R8]; R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8, which has bytes [R,G,B,A] on ALL platforms)
+- `src/mesa/main/texcompress_s3tc.c`:_mesa_texstore_rgba_dxt1/3/5 (R23: use R8G8B8A8_UNORM instead of RGBA_UNORM8 for intermediate conversion)
+- `src/mesa/main/texcompress_bptc.c`:_mesa_texstore_bptc_rgba_unorm (R23: same fix)
+- `src/mesa/main/texcompress_fxt1.c`:_mesa_texstore_fxt1 (R23: same fix)

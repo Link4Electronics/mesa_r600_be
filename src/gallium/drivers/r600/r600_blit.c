@@ -1287,7 +1287,63 @@ static bool r600_generate_mipmap(struct pipe_context *ctx,
 	if (!num_levels)
 		return true;
 
-	if (util_format_is_compressed(format)) {
+	if (UTIL_ARCH_BIG_ENDIAN && util_format_is_compressed(format)) {
+		const struct util_format_description *desc =
+			util_format_description(format);
+
+		/* NPOT compressed: check all generated mip levels for
+		 * non-block-aligned dimensions. A power-of-two base texture
+		 * always produces block-aligned levels until 2x2/1x1;
+		 * those small non-aligned levels are handled correctly
+		 * by the padding code in the GPU path below.
+		 *
+		 * For truly NPOT textures (non-power-of-two base), ALL
+		 * generated levels will be non-block-aligned; fall back
+		 * to the CPU fallback which handles them correctly. */
+		{
+			bool is_npot = false;
+			unsigned num_levels = last_level - base_level;
+			unsigned bw = util_format_get_blockwidth(format);
+			unsigned bh = util_format_get_blockheight(format);
+			for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
+				unsigned lvl_w = u_minify(resource->width0,
+							  base_level + lvl);
+				unsigned lvl_h = u_minify(resource->height0,
+							  base_level + lvl);
+				if ((lvl_w & (bw - 1)) || (lvl_h & (bh - 1))) {
+					is_npot = true;
+					break;
+				}
+			}
+			/* If truly NPOT (all levels non-block-aligned), fall through
+			 * to CPU. If only small levels (2x2/1x1) are non-aligned,
+			 * continue to GPU path — padding code handles them. */
+			if (is_npot)
+				return false;
+		}
+
+		/* GPU blit decompresses to UNORM via HW sampler:
+		 * - snorm → signed values clamped to [0,1] → wrong re-compress
+		 * - float → HDR range lost → wrong re-compress
+		 * - LATC2/3DC etc. (R=G=B swizzle) → DST_SEL replicates
+		 *   first channel to RGB, destroying the second channel
+		 *   needed by pack_rgba_8unorm.
+		 * Skip the GPU blit for these; state tracker handles them. */
+		if (desc->is_snorm)
+			return false;
+		for (int i = 0; i < 4; i++) {
+			if (desc->channel[i].type == UTIL_FORMAT_TYPE_FLOAT)
+				return false;
+		}
+		const unsigned char *swz = desc->swizzle;
+		if (swz[0] == swz[1] && swz[1] == swz[2] && swz[0] < 4) {
+			/* RGB all replicate same channel (DST_SEL).
+			 * If A maps to a different real channel, the second
+			 * channel is corrupted for re-compress. */
+			if (swz[3] != swz[0] && swz[3] < 4)
+				return false;
+		}
+
 		struct pipe_screen *screen = ctx->screen;
 		unsigned num_layers = last_layer - first_layer + 1;
 
@@ -1339,38 +1395,14 @@ static bool r600_generate_mipmap(struct pipe_context *ctx,
 			ctx->blit(ctx, &blit);
 		}
 
-		for (unsigned lvl = 0; lvl < num_levels; lvl++) {
-			unsigned src_w = u_minify(temp->width0, lvl);
-			unsigned src_h = u_minify(temp->height0, lvl);
-			unsigned dst_w = u_minify(temp->width0, lvl + 1);
-			unsigned dst_h = u_minify(temp->height0, lvl + 1);
-
-			for (unsigned layer = 0; layer < num_layers; layer++) {
-				struct pipe_blit_info blit;
-				memset(&blit, 0, sizeof(blit));
-				blit.src.resource = temp;
-				blit.src.format = PIPE_FORMAT_R8G8B8A8_UNORM;
-				blit.src.level = lvl;
-				blit.dst.resource = temp;
-				blit.dst.format = PIPE_FORMAT_R8G8B8A8_UNORM;
-				blit.dst.level = lvl + 1;
-				blit.src.box.x = 0;
-				blit.src.box.y = 0;
-				blit.src.box.z = layer;
-				blit.src.box.width = src_w;
-				blit.src.box.height = src_h;
-				blit.src.box.depth = 1;
-				blit.dst.box.x = 0;
-				blit.dst.box.y = 0;
-				blit.dst.box.z = layer;
-				blit.dst.box.width = dst_w;
-				blit.dst.box.height = dst_h;
-				blit.dst.box.depth = 1;
-				blit.mask = PIPE_MASK_RGBA;
-				blit.filter = PIPE_TEX_FILTER_LINEAR;
-				ctx->blit(ctx, &blit);
-			}
-		}
+		r600_blitter_begin(ctx, R600_SAVE_FRAGMENT_STATE |
+				   R600_SAVE_TEXTURES |
+				   R600_SAVE_FRAMEBUFFER);
+		util_blitter_generate_mipmap(rctx->blitter, temp,
+					     PIPE_FORMAT_R8G8B8A8_UNORM,
+					     0, num_levels,
+					     0, num_layers - 1);
+		r600_blitter_end(ctx);
 
 		for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
 			unsigned dst_lvl = base_level + lvl;

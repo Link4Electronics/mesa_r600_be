@@ -123,17 +123,13 @@ _mesa_texstore_rgba_dxt1(TEXSTORE_PARAMS)
       if (!tempImage)
          return GL_FALSE; /* out of memory */
       tempImageSlices[0] = (GLubyte *) tempImage;
-      _mesa_texstore(ctx, dims,
-                     baseInternalFormat,
-#if UTIL_ARCH_LITTLE_ENDIAN
-                     MESA_FORMAT_R8G8B8A8_UNORM,
-#else
-                     MESA_FORMAT_A8B8G8R8_UNORM,
-#endif
-                     rgbaRowStride, tempImageSlices,
-                     srcWidth, srcHeight, srcDepth,
-                     srcFormat, srcType, srcAddr,
-                     srcPacking);
+_mesa_texstore(ctx, dims,
+                      baseInternalFormat,
+                      MESA_FORMAT_RGBA_UNORM8,
+                      rgbaRowStride, tempImageSlices,
+                      srcWidth, srcHeight, srcDepth,
+                      srcFormat, srcType, srcAddr,
+                      srcPacking);
       pixels = tempImage;
       srcFormat = GL_RGBA;
    }
@@ -178,17 +174,13 @@ _mesa_texstore_rgba_dxt3(TEXSTORE_PARAMS)
       if (!tempImage)
          return GL_FALSE; /* out of memory */
       tempImageSlices[0] = (GLubyte *) tempImage;
-      _mesa_texstore(ctx, dims,
-                     baseInternalFormat,
-#if UTIL_ARCH_LITTLE_ENDIAN
-                     MESA_FORMAT_R8G8B8A8_UNORM,
-#else
-                     MESA_FORMAT_A8B8G8R8_UNORM,
-#endif
-                     rgbaRowStride, tempImageSlices,
-                     srcWidth, srcHeight, srcDepth,
-                     srcFormat, srcType, srcAddr,
-                     srcPacking);
+_mesa_texstore(ctx, dims,
+                      baseInternalFormat,
+                      MESA_FORMAT_RGBA_UNORM8,
+                      rgbaRowStride, tempImageSlices,
+                      srcWidth, srcHeight, srcDepth,
+                      srcFormat, srcType, srcAddr,
+                      srcPacking);
       pixels = tempImage;
    }
    else {
@@ -234,11 +226,7 @@ _mesa_texstore_rgba_dxt5(TEXSTORE_PARAMS)
       tempImageSlices[0] = (GLubyte *) tempImage;
       _mesa_texstore(ctx, dims,
                      baseInternalFormat,
-#if UTIL_ARCH_LITTLE_ENDIAN
-                     MESA_FORMAT_R8G8B8A8_UNORM,
-#else
-                     MESA_FORMAT_A8B8G8R8_UNORM,
-#endif
+                     MESA_FORMAT_RGBA_UNORM8,
                      rgbaRowStride, tempImageSlices,
                      srcWidth, srcHeight, srcDepth,
                      srcFormat, srcType, srcAddr,
