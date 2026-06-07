@@ -1273,6 +1273,208 @@ static void r600_flush_resource(struct pipe_context *ctx,
 	}
 }
 
+static bool r600_generate_mipmap(struct pipe_context *ctx,
+				struct pipe_resource *resource,
+				enum pipe_format format,
+				unsigned base_level,
+				unsigned last_level,
+				unsigned first_layer,
+				unsigned last_layer)
+{
+	struct r600_context *rctx = (struct r600_context *)ctx;
+	unsigned num_levels = last_level - base_level;
+
+	if (!num_levels)
+		return true;
+
+	if (util_format_is_compressed(format)) {
+		struct pipe_screen *screen = ctx->screen;
+		unsigned num_layers = last_layer - first_layer + 1;
+
+		if (resource->target == PIPE_TEXTURE_3D)
+			return false;
+
+		struct pipe_resource templ;
+		memset(&templ, 0, sizeof(templ));
+		templ.target = num_layers > 1 ? PIPE_TEXTURE_2D_ARRAY :
+				PIPE_TEXTURE_2D;
+		templ.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+		templ.width0 = u_minify(resource->width0, base_level);
+		templ.height0 = u_minify(resource->height0, base_level);
+		templ.depth0 = 1;
+		templ.array_size = num_layers;
+		templ.last_level = num_levels;
+		templ.nr_samples = resource->nr_samples;
+		templ.nr_storage_samples = resource->nr_storage_samples;
+		templ.usage = PIPE_USAGE_DEFAULT;
+		templ.bind = PIPE_BIND_RENDER_TARGET |
+			     PIPE_BIND_SAMPLER_VIEW;
+
+		struct pipe_resource *temp = screen->resource_create(screen, &templ);
+		if (!temp)
+			return false;
+
+		for (unsigned layer = 0; layer < num_layers; layer++) {
+			unsigned src_layer = resource->target == PIPE_TEXTURE_CUBE ?
+					     first_layer : first_layer + layer;
+
+			struct pipe_blit_info blit;
+			memset(&blit, 0, sizeof(blit));
+			blit.src.resource = resource;
+			blit.src.format = format;
+			blit.src.level = base_level;
+			blit.dst.resource = temp;
+			blit.dst.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+			blit.dst.level = 0;
+			blit.src.box.x = 0;
+			blit.src.box.y = 0;
+			blit.src.box.z = src_layer;
+			blit.src.box.width = templ.width0;
+			blit.src.box.height = templ.height0;
+			blit.src.box.depth = 1;
+			blit.dst.box = blit.src.box;
+			blit.dst.box.z = layer;
+			blit.mask = PIPE_MASK_RGBA;
+			blit.filter = PIPE_TEX_FILTER_LINEAR;
+			ctx->blit(ctx, &blit);
+		}
+
+		for (unsigned lvl = 0; lvl < num_levels; lvl++) {
+			unsigned src_w = u_minify(temp->width0, lvl);
+			unsigned src_h = u_minify(temp->height0, lvl);
+			unsigned dst_w = u_minify(temp->width0, lvl + 1);
+			unsigned dst_h = u_minify(temp->height0, lvl + 1);
+
+			for (unsigned layer = 0; layer < num_layers; layer++) {
+				struct pipe_blit_info blit;
+				memset(&blit, 0, sizeof(blit));
+				blit.src.resource = temp;
+				blit.src.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+				blit.src.level = lvl;
+				blit.dst.resource = temp;
+				blit.dst.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+				blit.dst.level = lvl + 1;
+				blit.src.box.x = 0;
+				blit.src.box.y = 0;
+				blit.src.box.z = layer;
+				blit.src.box.width = src_w;
+				blit.src.box.height = src_h;
+				blit.src.box.depth = 1;
+				blit.dst.box.x = 0;
+				blit.dst.box.y = 0;
+				blit.dst.box.z = layer;
+				blit.dst.box.width = dst_w;
+				blit.dst.box.height = dst_h;
+				blit.dst.box.depth = 1;
+				blit.mask = PIPE_MASK_RGBA;
+				blit.filter = PIPE_TEX_FILTER_LINEAR;
+				ctx->blit(ctx, &blit);
+			}
+		}
+
+		for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
+			unsigned dst_lvl = base_level + lvl;
+			unsigned lvl_w = u_minify(resource->width0, dst_lvl);
+			unsigned lvl_h = u_minify(resource->height0, dst_lvl);
+
+			for (unsigned layer = 0; layer < num_layers; layer++) {
+				unsigned dst_layer = resource->target ==
+						     PIPE_TEXTURE_CUBE ?
+						     first_layer :
+						     first_layer + layer;
+
+				struct pipe_transfer *src_trans, *dst_trans;
+				uint8_t *src_map, *dst_map;
+
+				src_map = pipe_texture_map_3d(ctx, temp, lvl,
+							      PIPE_MAP_READ,
+							      0, 0, layer,
+							      lvl_w, lvl_h, 1,
+							      &src_trans);
+				if (!src_map)
+					continue;
+
+				dst_map = pipe_texture_map_3d(ctx, resource,
+							      dst_lvl,
+							      PIPE_MAP_WRITE |
+							      PIPE_MAP_DISCARD_RANGE,
+							      0, 0, dst_layer,
+							      lvl_w, lvl_h, 1,
+							      &dst_trans);
+				if (!dst_map) {
+					pipe_texture_unmap(ctx, src_trans);
+					continue;
+				}
+
+				unsigned bw = util_format_get_blockwidth(format);
+				unsigned bh = util_format_get_blockheight(format);
+				unsigned aw = (lvl_w + bw - 1) & ~(bw - 1);
+				unsigned ah = (lvl_h + bh - 1) & ~(bh - 1);
+
+				if (aw != lvl_w || ah != lvl_h) {
+					uint8_t *tmp = malloc(ah * aw * 4);
+					if (!tmp) {
+						pipe_texture_unmap(ctx, dst_trans);
+						pipe_texture_unmap(ctx, src_trans);
+						continue;
+					}
+
+					unsigned src_stride = src_trans->stride;
+					for (unsigned y = 0; y < ah; y++) {
+						unsigned sy = y < lvl_h ? y : lvl_h - 1;
+						for (unsigned x = 0; x < aw; x++) {
+							unsigned sx = x < lvl_w ? x : lvl_w - 1;
+							memcpy(tmp + y * aw * 4 + x * 4,
+							       src_map + sy * src_stride + sx * 4, 4);
+						}
+					}
+
+					util_format_translate(format,
+							      dst_map, dst_trans->stride,
+							      0, 0,
+							      PIPE_FORMAT_R8G8B8A8_UNORM,
+							      tmp, aw * 4,
+							      0, 0, aw, ah);
+					free(tmp);
+				} else {
+					util_format_translate(format,
+							      dst_map, dst_trans->stride,
+							      0, 0,
+							      PIPE_FORMAT_R8G8B8A8_UNORM,
+							      src_map, src_trans->stride,
+							      0, 0, lvl_w, lvl_h);
+				}
+
+				pipe_texture_unmap(ctx, dst_trans);
+				pipe_texture_unmap(ctx, src_trans);
+			}
+		}
+
+		pipe_resource_reference(&temp, NULL);
+		return true;
+	}
+
+	/* For non-compressed textures, check render target support. */
+	struct pipe_screen *screen = ctx->screen;
+	bool is_zs = util_format_is_depth_or_stencil(format);
+	if (!screen->is_format_supported(screen, format, resource->target,
+					 resource->nr_samples,
+					 resource->nr_storage_samples,
+					 PIPE_BIND_SAMPLER_VIEW |
+					 (is_zs ? PIPE_BIND_DEPTH_STENCIL :
+					  PIPE_BIND_RENDER_TARGET)))
+		return false;
+
+	r600_blitter_begin(ctx, R600_SAVE_FRAGMENT_STATE |
+			   R600_SAVE_TEXTURES |
+			   R600_SAVE_FRAMEBUFFER);
+	util_blitter_generate_mipmap(rctx->blitter, resource, format,
+				     base_level, last_level,
+				     first_layer, last_layer);
+	r600_blitter_end(ctx);
+	return true;
+}
+
 void r600_init_blit_functions(struct r600_context *rctx)
 {
 	rctx->b.b.clear = r600_clear;
@@ -1281,6 +1483,7 @@ void r600_init_blit_functions(struct r600_context *rctx)
 	rctx->b.b.resource_copy_region = r600_resource_copy_region;
 	rctx->b.b.blit = r600_blit;
 	rctx->b.b.flush_resource = r600_flush_resource;
+	rctx->b.b.generate_mipmap = r600_generate_mipmap;
 	rctx->b.clear_buffer = r600_clear_buffer;
 	rctx->b.blit_decompress_depth = r600_blit_decompress_depth;
 }
