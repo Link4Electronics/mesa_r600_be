@@ -1291,37 +1291,6 @@ static bool r600_generate_mipmap(struct pipe_context *ctx,
 		const struct util_format_description *desc =
 			util_format_description(format);
 
-		/* NPOT compressed: check all generated mip levels for
-		 * non-block-aligned dimensions. A power-of-two base texture
-		 * always produces block-aligned levels until 2x2/1x1;
-		 * those small non-aligned levels are handled correctly
-		 * by the padding code in the GPU path below.
-		 *
-		 * For truly NPOT textures (non-power-of-two base), ALL
-		 * generated levels will be non-block-aligned; fall back
-		 * to the CPU fallback which handles them correctly. */
-		{
-			bool is_npot = false;
-			unsigned num_levels = last_level - base_level;
-			unsigned bw = util_format_get_blockwidth(format);
-			unsigned bh = util_format_get_blockheight(format);
-			for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
-				unsigned lvl_w = u_minify(resource->width0,
-							  base_level + lvl);
-				unsigned lvl_h = u_minify(resource->height0,
-							  base_level + lvl);
-				if ((lvl_w & (bw - 1)) || (lvl_h & (bh - 1))) {
-					is_npot = true;
-					break;
-				}
-			}
-			/* If truly NPOT (all levels non-block-aligned), fall through
-			 * to CPU. If only small levels (2x2/1x1) are non-aligned,
-			 * continue to GPU path — padding code handles them. */
-			if (is_npot)
-				return false;
-		}
-
 		/* GPU blit decompresses to UNORM via HW sampler:
 		 * - snorm → signed values clamped to [0,1] → wrong re-compress
 		 * - float → HDR range lost → wrong re-compress
@@ -1395,14 +1364,81 @@ static bool r600_generate_mipmap(struct pipe_context *ctx,
 			ctx->blit(ctx, &blit);
 		}
 
-		r600_blitter_begin(ctx, R600_SAVE_FRAGMENT_STATE |
-				   R600_SAVE_TEXTURES |
-				   R600_SAVE_FRAMEBUFFER);
-		util_blitter_generate_mipmap(rctx->blitter, temp,
-					     PIPE_FORMAT_R8G8B8A8_UNORM,
-					     0, num_levels,
-					     0, num_layers - 1);
-		r600_blitter_end(ctx);
+		for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
+			/* CPU box-filter mip generation on the RGBA8 temp texture */
+			unsigned prev_w = u_minify(resource->width0, lvl - 1);
+			unsigned prev_h = u_minify(resource->height0, lvl - 1);
+			unsigned cur_w = u_minify(resource->width0, lvl);
+			unsigned cur_h = u_minify(resource->height0, lvl);
+
+			for (unsigned layer = 0; layer < num_layers; layer++) {
+				struct pipe_transfer *prev_trans, *cur_trans;
+				uint8_t *prev_map = pipe_texture_map_3d(ctx, temp, lvl - 1,
+									PIPE_MAP_READ,
+									0, 0, layer,
+									prev_w, prev_h, 1,
+									&prev_trans);
+				if (!prev_map)
+					continue;
+
+				uint8_t *cur_map = pipe_texture_map_3d(ctx, temp, lvl,
+									PIPE_MAP_WRITE |
+									PIPE_MAP_DISCARD_RANGE,
+									0, 0, layer,
+									cur_w, cur_h, 1,
+									&cur_trans);
+				if (!cur_map) {
+					pipe_texture_unmap(ctx, prev_trans);
+					continue;
+				}
+
+				unsigned prev_stride = prev_trans->stride;
+				unsigned cur_stride = cur_trans->stride;
+
+				for (unsigned y = 0; y < cur_h; y++) {
+					for (unsigned x = 0; x < cur_w; x++) {
+						unsigned py0 = y * 2, py1 = y * 2 + 1;
+						unsigned px0 = x * 2, px1 = x * 2 + 1;
+						py1 = py1 < prev_h ? py1 : prev_h - 1;
+						px1 = px1 < prev_w ? px1 : prev_w - 1;
+
+						uint8_t *p00 = prev_map + py0 * prev_stride + px0 * 4;
+						uint8_t *p01 = prev_map + py0 * prev_stride + px1 * 4;
+						uint8_t *p10 = prev_map + py1 * prev_stride + px0 * 4;
+						uint8_t *p11 = prev_map + py1 * prev_stride + px1 * 4;
+
+						uint8_t *dst = cur_map + y * cur_stride + x * 4;
+						if (UTIL_ARCH_BIG_ENDIAN && prev_w == 291 && prev_h == 129 &&
+						    lvl == 1 && (x == cur_w / 2) && (y == cur_h / 2) &&
+						    layer == 0) {
+							fprintf(stderr, "CPU_MIP_PREV lvl0 stride=%u: "
+								"(144,64)=[%02x %02x %02x %02x] "
+								"(145,64)=[%02x %02x %02x %02x] "
+								"(144,65)=[%02x %02x %02x %02x] "
+								"(145,65)=[%02x %02x %02x %02x]\n",
+								prev_stride,
+								p00[0], p00[1], p00[2], p00[3],
+								p01[0], p01[1], p01[2], p01[3],
+								p10[0], p10[1], p10[2], p10[3],
+								p11[0], p11[1], p11[2], p11[3]);
+						}
+						for (int c = 0; c < 4; c++)
+							dst[c] = ((unsigned)p00[c] + p01[c] + p10[c] + p11[c] + 2) >> 2;
+						if (UTIL_ARCH_BIG_ENDIAN && prev_w == 291 && prev_h == 129 &&
+						    lvl == 1 && (x == cur_w / 2) && (y == cur_h / 2) &&
+						    layer == 0) {
+							fprintf(stderr, "CPU_MIP_AVG lvl1 center: "
+								"dst=[%02x %02x %02x %02x] "
+								"expected (128 128 255) for BLUE/WHITE mix\n",
+								dst[0], dst[1], dst[2], dst[3]);
+						}
+					}
+				}
+
+				pipe_texture_unmap(ctx, cur_trans);
+				pipe_texture_unmap(ctx, prev_trans);
+			}
+		}
 
 		for (unsigned lvl = 1; lvl <= num_levels; lvl++) {
 			unsigned dst_lvl = base_level + lvl;
@@ -1462,23 +1498,170 @@ static bool r600_generate_mipmap(struct pipe_context *ctx,
 					}
 
 					util_format_translate(format,
-							      dst_map, dst_trans->stride,
-							      0, 0,
-							      PIPE_FORMAT_R8G8B8A8_UNORM,
-							      tmp, aw * 4,
-							      0, 0, aw, ah);
+									      dst_map, dst_trans->stride,
+									      0, 0,
+									      PIPE_FORMAT_R8G8B8A8_UNORM,
+									      tmp, aw * 4,
+									      0, 0, aw, ah);
 					free(tmp);
 				} else {
 					util_format_translate(format,
-							      dst_map, dst_trans->stride,
-							      0, 0,
-							      PIPE_FORMAT_R8G8B8A8_UNORM,
-							      src_map, src_trans->stride,
-							      0, 0, lvl_w, lvl_h);
+									      dst_map, dst_trans->stride,
+									      0, 0,
+									      PIPE_FORMAT_R8G8B8A8_UNORM,
+									      src_map, src_trans->stride,
+									      0, 0, lvl_w, lvl_h);
+				}
+
+				if (UTIL_ARCH_BIG_ENDIAN && format == PIPE_FORMAT_DXT5_RGBA &&
+				    lvl_w == 145 && lvl_h == 64 && lvl == 1 && layer == 0) {
+					unsigned bx = (lvl_w / 2) / 4 * 16;
+					unsigned by = (lvl_h / 2) / 4 * dst_trans->stride;
+					uint8_t *blk = dst_map + by + bx;
+					fprintf(stderr, "DXT5_BLK_LVL1 lvl_w=%d stride=%u "
+						"bx=%u by=%u off=%zu: "
+						"[%02x %02x %02x %02x %02x %02x %02x %02x "
+						"%02x %02x %02x %02x %02x %02x %02x %02x]\n",
+						lvl_w, dst_trans->stride,
+						bx, by, blk - dst_map,
+						blk[0], blk[1], blk[2], blk[3],
+						blk[4], blk[5], blk[6], blk[7],
+						blk[8], blk[9], blk[10], blk[11],
+						blk[12], blk[13], blk[14], blk[15]);
+					if (UTIL_ARCH_BIG_ENDIAN) {
+						/* also dump the src pixels for this block */
+						unsigned blk_x0 = (lvl_w / 2) & ~3;
+						unsigned blk_y0 = (lvl_h / 2) & ~3;
+						fprintf(stderr, "DXT5_SRC_LVL1 srcstride=%u "
+							"blk at (%u,%u):\n",
+							src_trans->stride, blk_x0, blk_y0);
+						for (unsigned yy = 0; yy < 4; yy++) {
+							for (unsigned xx = 0; xx < 4; xx++) {
+								unsigned sy = blk_y0 + yy;
+								unsigned sx = blk_x0 + xx;
+								const uint8_t *pix = src_map +
+									sy * src_trans->stride + sx * 4;
+								fprintf(stderr, "  (%u,%u)=[%02x %02x %02x %02x]",
+									sx, sy, pix[0], pix[1], pix[2], pix[3]);
+							}
+							fprintf(stderr, "\n");
+						}
+					}
 				}
 
 				pipe_texture_unmap(ctx, dst_trans);
 				pipe_texture_unmap(ctx, src_trans);
+
+				if (UTIL_ARCH_BIG_ENDIAN && format == PIPE_FORMAT_DXT5_RGBA &&
+				    lvl == 1 && layer == 0 && lvl_w > 100) {
+					/* Readback DXT5 data after unmap to check DMA copy */
+					struct pipe_transfer *rb_trans;
+					unsigned rb_bw = (lvl_w + 3) / 4;
+					unsigned rb_bh = (lvl_h + 3) / 4;
+					uint8_t *rb_map = pipe_texture_map_3d(ctx, resource,
+						dst_lvl, PIPE_MAP_READ,
+						0, 0, dst_layer,
+						lvl_w, lvl_h, 1, &rb_trans);
+					if (rb_map) {
+						unsigned rb_stride = rb_trans->stride;
+						unsigned bx_c = rb_bw / 2;
+						unsigned by_c = rb_bh / 2;
+						uint8_t *rb_blk = rb_map + by_c * rb_stride + bx_c * 16;
+						fprintf(stderr, "DXT5_POSTLVL%d level=%d res=%dx%d "
+							"blocks=%dx%d rb_stride=%u "
+							"blk=(%u,%u) sz=%zu: "
+							"[%02x %02x %02x %02x %02x %02x %02x %02x "
+							"%02x %02x %02x %02x %02x %02x %02x %02x]\n",
+							lvl, dst_lvl,
+							lvl_w, lvl_h, rb_bw, rb_bh, rb_stride,
+							bx_c, by_c,
+							(size_t)(rb_blk - rb_map),
+							rb_blk[0], rb_blk[1], rb_blk[2], rb_blk[3],
+							rb_blk[4], rb_blk[5], rb_blk[6], rb_blk[7],
+							rb_blk[8], rb_blk[9], rb_blk[10], rb_blk[11],
+							rb_blk[12], rb_blk[13], rb_blk[14], rb_blk[15]);
+						pipe_texture_unmap(ctx, rb_trans);
+					}
+
+					/* Print surface level offset descriptor info */
+					struct r600_texture *rtex_surf = r600_as_texture(resource);
+					fprintf(stderr, "SURF_INFO lvl=0 offset_256B=%u nblk_x=%u nblk_y=%u "
+						"mode=%u bankw=%u bankh=%u mtilea=%u tilesplit=%u\n",
+						rtex_surf->surface.u.legacy.level[0].offset_256B,
+						rtex_surf->surface.u.legacy.level[0].nblk_x,
+						rtex_surf->surface.u.legacy.level[0].nblk_y,
+						rtex_surf->surface.u.legacy.level[0].mode,
+						rtex_surf->surface.u.legacy.bankw,
+						rtex_surf->surface.u.legacy.bankh,
+						rtex_surf->surface.u.legacy.mtilea,
+						rtex_surf->surface.u.legacy.tile_split);
+					fprintf(stderr, "SURF_INFO lvl=1 offset_256B=%u nblk_x=%u nblk_y=%u mode=%u\n",
+						rtex_surf->surface.u.legacy.level[1].offset_256B,
+						rtex_surf->surface.u.legacy.level[1].nblk_x,
+						rtex_surf->surface.u.legacy.level[1].nblk_y,
+						rtex_surf->surface.u.legacy.level[1].mode);
+
+					/* Sampler diagnostic: blit DXT5 level 1 → RGBA8, read back center pixel.
+					 * If sampler descriptor has wrong mip offset, RGBA will be wrong.
+					 * If correct, issue is in state tracker glGetTexImage path. */
+					struct pipe_resource s_templ;
+					memset(&s_templ, 0, sizeof(s_templ));
+					s_templ.target = PIPE_TEXTURE_2D;
+					s_templ.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+					s_templ.width0 = 4;
+					s_templ.height0 = 4;
+					s_templ.depth0 = 1;
+					s_templ.array_size = 1;
+					s_templ.last_level = 0;
+					s_templ.nr_samples = 0;
+					s_templ.nr_storage_samples = 0;
+					s_templ.usage = PIPE_USAGE_DEFAULT;
+					s_templ.bind = PIPE_BIND_RENDER_TARGET | PIPE_BIND_SAMPLER_VIEW;
+					struct pipe_resource *s_temp = screen->resource_create(screen, &s_templ);
+					if (s_temp) {
+						struct pipe_blit_info s_blit;
+						memset(&s_blit, 0, sizeof(s_blit));
+						s_blit.src.resource = resource;
+						s_blit.src.format = format;
+						s_blit.src.level = dst_lvl;
+						s_blit.src.box.x = (lvl_w / 2) & ~3;
+						s_blit.src.box.y = (lvl_h / 2) & ~3;
+						s_blit.src.box.z = dst_layer;
+						s_blit.src.box.width = 4;
+						s_blit.src.box.height = 4;
+						s_blit.src.box.depth = 1;
+						s_blit.dst.resource = s_temp;
+						s_blit.dst.format = PIPE_FORMAT_R8G8B8A8_UNORM;
+						s_blit.dst.level = 0;
+						s_blit.dst.box.x = 0;
+						s_blit.dst.box.y = 0;
+						s_blit.dst.box.z = 0;
+						s_blit.dst.box.width = 4;
+						s_blit.dst.box.height = 4;
+						s_blit.dst.box.depth = 1;
+						s_blit.mask = PIPE_MASK_RGBA;
+						s_blit.filter = PIPE_TEX_FILTER_NEAREST;
+						s_blit.scissor_enable = false;
+						ctx->blit(ctx, &s_blit);
+
+						struct pipe_transfer *s_xfer;
+						uint8_t *s_map = pipe_texture_map(ctx, s_temp, 0, 0,
+							PIPE_MAP_READ, 0, 0, 4, 4, &s_xfer);
+						if (s_map) {
+							unsigned cx = lvl_w / 2;
+							unsigned cy = lvl_h / 2;
+							unsigned lx = cx & 3, ly = cy & 3;
+							uint8_t *sp = s_map + ly * s_xfer->stride + lx * 4;
+							fprintf(stderr, "DXT5_SAMPLER_LVL1 lvl=%d "
+								"center=(%u,%u) local=(%u,%u): "
+								"[R=%02x G=%02x B=%02x A=%02x]\n",
+								dst_lvl, cx, cy, lx, ly,
+								sp[0], sp[1], sp[2], sp[3]);
+							pipe_texture_unmap(ctx, s_xfer);
+						}
+						pipe_resource_reference(&s_temp, NULL);
+					}
+				}
 			}
 		}
 
