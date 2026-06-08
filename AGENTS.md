@@ -247,7 +247,22 @@ All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
 
 **Result**: Builds cleanly. Restores Round 22 pass/fail counts. 
 
-**Critical finding**: the DXT5 NPOT data pipeline (compress → glGenerateMipmap → glGetTexImage) produces CORRECT data on BE at all tested sizes (4×4, 6×6, 7×7). The G↔B swap must be in the rendering/output pipeline (textured quad → framebuffer → glReadPixels probe), not in the texture data itself. Both the sampler path (ENDIAN_NONE for FMT_BC1–FMT_BC7) and CB path (ENDIAN_NONE for R8G8B8A8_UNORM array format) are verified correct. Most likely root cause: a rendering state difference specific to NPOT compressed mipmapped textures (LOD calculation, pitch alignment, or sampler address wrapping for non-block-aligned NPOT dimensions).
+**Critical finding**: the DXT5 NPOT data pipeline (compress → glGenerateMipmap → glGetTexImage) produces CORRECT data on BE at all tested sizes (4×4, 6×6, 7×7). The G↔B swap must be in the rendering/output pipeline (textured quad → framebuffer → glReadPixels probe), not in the texture data itself. Both the sampler path (ENDIAN_NONE for FMT_BC1–FMT_BC7) and CB path (ENDIAN_NONE for R8G8B8A8_UNORM array format) are verified correct.
+
+**Round 29 follow-up — `fbo_diag2.c` (RGBW quadrant match to piglit):**
+50. **`fbo_diag2.c`** — Matches piglit's RGBW quadrant pattern (R/G/B/W in 4 quadrants). Tests POT 256×256 and NPOT 293×277, 291×129, 6×6 with DXT5. Renders each mip level at its exact size and probes the center. **Catch**: NPOT 293×277 Level 2 (73×69, both odd) shows `R=41 G=142 B=1` (white quadrant expected ≈255,255,255). Level 1 (146×138, both even) passes. Pattern: swap only at odd×odd mip levels of NPOT compressed textures.
+
+**Root cause hypothesis**: Sampler's DXT5 block address calculation is wrong for non-block-aligned NPOT mip levels when both dimensions are 1 mod 4 (73 = 18*4+1, 69 = 17*4+1). The pitch/offset in the mip chain descriptor may point to the wrong memory address for such levels, causing the sampler to read level 2 data from an incorrect location. Uniform-color textures hide this (all blocks are the same color). The fix likely involves the `TEX_PITCH` or `MIP_ADDRESS` field in the sampler resource descriptor, or the radeon surface allocator's mip chain offset calculation for compressed NPOT textures.
+
+**Round 29 follow-up — `fbo_diag2.c` DATA vs RENDER columns:**
+51. **`fbo_diag2.c`** — Added `glGetTexImage` RGBA readback for each level (DATA: column) alongside the existing RENDER probe. **Critical finding**: Level 2 DATA at 293×277 shows R=41 G=142 B=0 _before_ any rendering. The swap is in the **generated mip data**, not the sampler. This disproves the rendering/sampler-only hypothesis. Bus is in `_mesa_generate_mipmap` CPU fallback for large NPOT compressed textures on BE.
+
+### Round 23 (current — remove NPOT check, let GPU path handle NPOT compressed)
+52. **`r600_blit.c:r600_generate_mipmap`** — Removed the conservative NPOT check that rejected ALL NPOT compressed textures. Previously, any non-block-aligned generated level caused fallback to `_mesa_generate_mipmap` CPU path. But the CPU path produces wrong mip data for large NPOT sizes on BE (stride/offset bug in `_mesa_get_compressed_tex_image` averaging path). The GPU path avoids CPU averaging entirely by:
+    - Blitting DXT5 Level 0 → RGBA8 via HW sampler (correct at all sizes)
+    - GPU generating RGBA8 mip levels (no CPU averaging → no BE stride issue)
+    - CPU re-compressing each RGBA8 level to DXT5 via `util_format_translate` (endian-safe pack functions)
+    Expected to fix all 10 NPOT fbo-generatemipmap compressed failures.
 
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
