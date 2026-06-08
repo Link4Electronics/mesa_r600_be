@@ -174,8 +174,8 @@ static void surf_minify(struct radeon_surface *surf,
     if (surf->nsamples == 1 && surflevel->mode == RADEON_SURF_MODE_2D &&
         !(surf->flags & RADEON_SURF_FMASK)) {
         if (surflevel->nblk_x < xalign || surflevel->nblk_y < yalign) {
-            surflevel->mode = RADEON_SURF_MODE_1D;
-            return;
+            surflevel->nblk_x = MAX2(surflevel->nblk_x, xalign);
+            surflevel->nblk_y = MAX2(surflevel->nblk_y, yalign);
         }
     }
     surflevel->nblk_x  = align(surflevel->nblk_x, xalign);
@@ -583,8 +583,12 @@ static void eg_surf_minify(struct radeon_surface *surf,
     if (surf->nsamples == 1 && surflevel->mode == RADEON_SURF_MODE_2D &&
         !(surf->flags & RADEON_SURF_FMASK)) {
         if (surflevel->nblk_x < mtilew || surflevel->nblk_y < mtileh) {
-            surflevel->mode = RADEON_SURF_MODE_1D;
-            return;
+            /* Keep 2D mode and pad to macro tile size instead of demoting
+             * to 1D. The texture descriptor uses a single ARRAY_MODE for
+             * all mip levels; a per-level mode change causes the sampler
+             * to read wrong data on non-base levels. */
+            surflevel->nblk_x = MAX2(surflevel->nblk_x, mtilew);
+            surflevel->nblk_y = MAX2(surflevel->nblk_y, mtileh);
         }
     }
     surflevel->nblk_x  = align(surflevel->nblk_x, mtilew);
