@@ -1232,28 +1232,16 @@ static void r600_set_constant_buffer(struct pipe_context *ctx,
 	ptr = input->user_buffer;
 
 	if (ptr) {
-		/* Upload the user buffer. */
-		if (UTIL_ARCH_BIG_ENDIAN) {
-			uint32_t *tmpPtr;
-			unsigned i, size = input->buffer_size;
-
-			if (!(tmpPtr = malloc(size))) {
-				R600_ERR("Failed to allocate BE swap buffer.\n");
-				return;
-			}
-
-			for (i = 0; i < size / 4; ++i) {
-				tmpPtr[i] = util_cpu_to_le32(((uint32_t *)ptr)[i]);
-			}
-
-			u_upload_data_ref(ctx->stream_uploader, 0, size, 256,
-                                      tmpPtr, &cb->buffer_offset, &cb->buffer);
-			free(tmpPtr);
-		} else {
-			u_upload_data_ref(ctx->stream_uploader, 0,
-                                      input->buffer_size, 256, ptr,
-                                      &cb->buffer_offset, &cb->buffer);
-		}
+		/* Upload the user buffer.
+		 *
+		 * NB: Do NOT byte-swap here. The constant buffer descriptor
+		 * (emitted by evergreen_emit_constant_buffers) sets
+		 * ENDIAN_8IN32 on BE, so the hardware handles the swap.
+		 * Pre-swapping here would double-swap → wrong values.
+		 */
+		u_upload_data_ref(ctx->stream_uploader, 0,
+				  input->buffer_size, 256, ptr,
+				  &cb->buffer_offset, &cb->buffer);
 		/* account it in gtt */
 		rctx->b.gtt += input->buffer_size;
 	} else {
