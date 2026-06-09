@@ -1232,16 +1232,31 @@ static void r600_set_constant_buffer(struct pipe_context *ctx,
 	ptr = input->user_buffer;
 
 	if (ptr) {
-		/* Upload the user buffer.
-		 *
-		 * NB: Do NOT byte-swap here. The constant buffer descriptor
-		 * (emitted by evergreen_emit_constant_buffers) sets
-		 * ENDIAN_8IN32 on BE, so the hardware handles the swap.
-		 * Pre-swapping here would double-swap → wrong values.
-		 */
-		u_upload_data_ref(ctx->stream_uploader, 0,
-				  input->buffer_size, 256, ptr,
-				  &cb->buffer_offset, &cb->buffer);
+		if (UTIL_ARCH_BIG_ENDIAN) {
+			/* Pre-swap user buffer data to LE before upload.
+			 * The ALU constant cache (KC0/KC1) loads directly from
+			 * the buffer address and does NOT apply the RESOURCE
+			 * descriptor's ENDIAN_8IN32 swap. Without this pre-swap,
+			 * the CP reads BE bytes as LE → wrong constant values.
+			 */
+			uint32_t *tmpPtr;
+			unsigned i, size = input->buffer_size;
+			if (!(tmpPtr = malloc(size))) {
+				pipe_resource_reference(&cb->buffer, NULL);
+				return;
+			}
+			for (i = 0; i < size / 4; ++i) {
+				tmpPtr[i] = util_cpu_to_le32(((uint32_t *)ptr)[i]);
+			}
+			u_upload_data_ref(ctx->stream_uploader, 0,
+					  size, 256, tmpPtr,
+					  &cb->buffer_offset, &cb->buffer);
+			free(tmpPtr);
+		} else {
+			u_upload_data_ref(ctx->stream_uploader, 0,
+					  input->buffer_size, 256, ptr,
+					  &cb->buffer_offset, &cb->buffer);
+		}
 		/* account it in gtt */
 		rctx->b.gtt += input->buffer_size;
 	} else {

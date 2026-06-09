@@ -257,12 +257,15 @@ All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
 **Round 29 follow-up — `fbo_diag2.c` DATA vs RENDER columns:**
 51. **`fbo_diag2.c`** — Added `glGetTexImage` RGBA readback for each level (DATA: column) alongside the existing RENDER probe. **Critical finding**: Level 2 DATA at 293×277 shows R=41 G=142 B=0 _before_ any rendering. The swap is in the **generated mip data**, not the sampler. This disproves the rendering/sampler-only hypothesis. Bus is in `_mesa_generate_mipmap` CPU fallback for large NPOT compressed textures on BE.
 
-### Round 23 (current — remove NPOT check, let GPU path handle NPOT compressed)
+### Round 23 — remove NPOT check, let GPU path handle NPOT compressed
 52. **`r600_blit.c:r600_generate_mipmap`** — Removed the conservative NPOT check that rejected ALL NPOT compressed textures. Previously, any non-block-aligned generated level caused fallback to `_mesa_generate_mipmap` CPU path. But the CPU path produces wrong mip data for large NPOT sizes on BE (stride/offset bug in `_mesa_get_compressed_tex_image` averaging path). The GPU path avoids CPU averaging entirely by:
     - Blitting DXT5 Level 0 → RGBA8 via HW sampler (correct at all sizes)
     - GPU generating RGBA8 mip levels (no CPU averaging → no BE stride issue)
     - CPU re-compressing each RGBA8 level to DXT5 via `util_format_translate` (endian-safe pack functions)
     Expected to fix all 10 NPOT fbo-generatemipmap compressed failures.
+
+### Round 24 — constant buffer user-buffer pre-swap (REVERTED in Round 25)
+53. **`r600_state_common.c:r600_set_constant_buffer`** — Removed the `UTIL_ARCH_BIG_ENDIAN` pre-swap loop. **REVERTED in Round 25**: the ALU constant cache (KC0/KC1) loads directly from the buffer address in `R_028940_ALU_CONST_CACHE_PS_0` and does NOT apply the RESOURCE descriptor's `ENDIAN_8IN32`. The `PKT3_SET_RESOURCE` descriptor with `S_030008_ENDIAN_SWAP` at line 2366 is for *indirect resource-load access* (tbuffer_load), not for KC0. The r600 shader compiler uses KC0 for fixed-function uniforms → without pre-swap, CP reads BE bytes as LE → all shader constants wrong → xash3d regression ("red strips at distance"). Reverted to pre-swap user-buffer data to LE before upload.
 
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
