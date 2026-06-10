@@ -265,13 +265,17 @@ All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
     Expected to fix all 10 NPOT fbo-generatemipmap compressed failures.
 
 ### Round 24 — constant buffer user-buffer pre-swap (REVERTED in Round 25)
-53. **`r600_state_common.c:r600_set_constant_buffer`** — Removed the `UTIL_ARCH_BIG_ENDIAN` pre-swap loop. **REVERTED in Round 25**: the ALU constant cache (KC0/KC1) loads directly from the buffer address in `R_028940_ALU_CONST_CACHE_PS_0` and does NOT apply the RESOURCE descriptor's `ENDIAN_8IN32`. The `PKT3_SET_RESOURCE` descriptor with `S_030008_ENDIAN_SWAP` at line 2366 is for *indirect resource-load access* (tbuffer_load), not for KC0. The r600 shader compiler uses KC0 for fixed-function uniforms → without pre-swap, CP reads BE bytes as LE → all shader constants wrong → xash3d regression ("red strips at distance"). Reverted to pre-swap user-buffer data to LE before upload.
+53. **`r600_state_common.c:r600_set_constant_buffer`** — Removed the `UTIL_ARCH_BIG_ENDIAN` pre-swap loop. **REVERTED in Round 25**: the ALU constant cache (KC0/KC1) loads directly from the buffer address in `R_028940_ALU_CONST_CACHE_PS_0` and does NOT apply the RESOURCE descriptor's `ENDIAN_8IN32`. The `PKT3_SET_RESOURCE` descriptor with `S_030008_ENDIAN_SWAP` at line 2366 is for *indirect resource-load access* (tbuffer_load), not for KC0. The r600 shader compiler uses KC0 for fixed-function uniforms → without pre-swap, CP reads BE bytes as LE → all shader constants wrong → xash3d regression. Reverted to pre-swap user-buffer data to LE before upload (commit `a3a4d35`).
+
+### Round 23 (real Round 25) — radeon_surface.c MODE_1D demotion restored
+54. **`radeon_surface.c:surf_minify`** and **`radeon_surface.c:eg_surf_minify`** — **REVERTED** the MODE_2D-pad change from commit `eddbfe3`. Both functions now demote sub-tile-sized mip levels to `RADEON_SURF_MODE_1D` (original behavior) instead of padding `nblk_x/y` to macro-tile size in MODE_2D. The MODE_2D-pad approach was mathematically correct (HW mip-chain offset computation using `ceil(pitch_L / mtilew) * ceil(height_L / mtileh) * mtileb` matches the padded layout), but still caused rendering artifacts in xash3d (glowing red strips at distance). Root cause hypothesis: EG hardware auto-demotes small mip levels to MODE_1D internally regardless of the texture descriptor's ARRAY_MODE, so forcing MODE_2D causes a tiling-pattern mismatch between the stored padded data and the HW's linear read. Fix: restore MODE_1D demotion, letting small levels match the HW's internal handling.
 
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
 - `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_texformat (R2: BE swizzle fix, L4A4)
 - `src/gallium/drivers/r600/r600_state_common.c`:r600_colorformat_endian_swap (R3: FMT_5_9_9_9 revert; R4/5: ENDIAN_8IN32)
 - `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_colorformat (R1: BE channel size checks)
+- `src/gallium/winsys/radeon/drm/radeon_surface.c`:surf_minify, eg_surf_minify (R23–R25: MODE_2D-pad reverted, MODE_1D demotion restored)
 - `src/gallium/drivers/r600/evergreen_state.c`:evergreen_convert_border_color (R2–R9: all border color fixes)
 - `src/gallium/drivers/r600/evergreen_state.c`:cayman_convert_border_color — NOT modified
 - `src/gallium/drivers/r600/evergreen_state.c`:evergreen_dma_copy, evergreen_dma_copy_tile — DMA raw copy
