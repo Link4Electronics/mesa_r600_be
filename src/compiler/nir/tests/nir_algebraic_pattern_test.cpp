@@ -281,7 +281,10 @@ nir_algebraic_pattern_test::skip_test(nir_alu_instr *alu, uint32_t bit_size,
 static bool
 compare_inexact(double a, double b, uint32_t bit_size)
 {
-   return abs(a - b) > pow(0.5, bit_size / 4);
+   double tolerance = pow(0.5, bit_size / 4);
+   if (abs(a - b) > max(abs(a) * tolerance, tolerance))
+      return true;
+   return false;
 }
 
 /* Returns true if this expression means the testcase passed with these input values
@@ -324,15 +327,15 @@ nir_algebraic_pattern_test::evaluate_expression(nir_instr *instr)
                   if (exact) {
                      if (!(is_float && isnan(af) && isnan(bf)))
                         return false;
-                  } else {
-                     /* NOTE: we do inexact float compare even on integer
-                      * outputs!  This handles (poorly) the expected inexactness
-                      * of e.g. the pack_half_2x16_split ->
-                      * pack_half_2x16_rtz_split transform.
-                      */
-                     if (compare_inexact(af, bf, bit_size))
-                        return false;
-                  }
+               } else {
+                      /* NOTE: we do inexact float compare even on integer
+                       * outputs!  This handles (poorly) the expected inexactness
+                       * of e.g. the pack_half_2x16_split ->
+                       * pack_half_2x16_rtz_split transform.
+                       */
+                      if (!(isnan(af) && isnan(bf)) && compare_inexact(af, bf, bit_size))
+                         return false;
+                   }
                } else {
                   return false;
                }

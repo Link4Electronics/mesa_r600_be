@@ -479,7 +479,8 @@ test_unary(unsigned verbose, FILE *fp, const struct unary_test_t *test, unsigned
             continue;
          }
 
-         if (test->ref == &nearbyintf && length == 2 &&
+          if (test->ref == &nearbyintf && length == 2 &&
+             !util_get_cpu_caps()->has_altivec &&
              !util_get_cpu_caps()->has_neon &&
              DETECT_ARCH_S390 == false &&
              !util_get_cpu_caps()->has_sse4_1 &&
