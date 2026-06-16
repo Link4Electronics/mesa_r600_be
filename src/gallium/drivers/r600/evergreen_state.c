@@ -2363,7 +2363,8 @@ static void evergreen_emit_constant_buffers(struct r600_context *rctx,
 		radeon_emit(cs, va); /* RESOURCEi_WORD0 */
 		radeon_emit(cs, cb->buffer_size -1); /* RESOURCEi_WORD1 */
 		radeon_emit(cs, /* RESOURCEi_WORD2 */
-			    S_030008_ENDIAN_SWAP(gs_ring_buffer ? ENDIAN_NONE : r600_endian_swap(32)) |
+			    S_030008_ENDIAN_SWAP(gs_ring_buffer ? ENDIAN_NONE :
+				(UTIL_ARCH_BIG_ENDIAN ? ENDIAN_NONE : r600_endian_swap(32))) |
 			    S_030008_STRIDE(gs_ring_buffer ? 4 : 16) |
 			    S_030008_BASE_ADDRESS_HI(va >> 32UL) |
 			    S_030008_DATA_FORMAT(FMT_32_32_32_32_FLOAT));

@@ -525,6 +525,19 @@ void r600_buffer_subdata(struct pipe_context *ctx,
 		return;
 
 	memcpy(map, data, size);
+
+	if (UTIL_ARCH_BIG_ENDIAN && (buffer->bind & PIPE_BIND_CONSTANT_BUFFER) && size >= 4) {
+		/* Pre-swap constant buffer data to LE after upload.
+		 * The ALU constant cache (KC0/KC1) loads directly from the
+		 * buffer address and does NOT apply any byte swap. Without
+		 * this pre-swap, native BE data would be read as LE by the
+		 * GPU hardware, producing wrong float/int values.
+		 */
+		uint32_t *p = (uint32_t*)map;
+		unsigned n = size / 4;
+		for (unsigned i = 0; i < n; ++i)
+			p[i] = util_cpu_to_le32(p[i]);
+	}
 	r600_buffer_transfer_unmap(ctx, transfer);
 }
 
