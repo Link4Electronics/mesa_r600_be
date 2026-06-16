@@ -270,6 +270,11 @@ All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
 ### Round 23 (real Round 25) — radeon_surface.c MODE_1D demotion restored
 54. **`radeon_surface.c:surf_minify`** and **`radeon_surface.c:eg_surf_minify`** — **REVERTED** the MODE_2D-pad change from commit `eddbfe3`. Both functions now demote sub-tile-sized mip levels to `RADEON_SURF_MODE_1D` (original behavior) instead of padding `nblk_x/y` to macro-tile size in MODE_2D. The MODE_2D-pad approach was mathematically correct (HW mip-chain offset computation using `ceil(pitch_L / mtilew) * ceil(height_L / mtileh) * mtileb` matches the padded layout), but still caused rendering artifacts in xash3d (glowing red strips at distance). Root cause hypothesis: EG hardware auto-demotes small mip levels to MODE_1D internally regardless of the texture descriptor's ARRAY_MODE, so forcing MODE_2D causes a tiling-pattern mismatch between the stored padded data and the HW's linear read. Fix: restore MODE_1D demotion, letting small levels match the HW's internal handling.
 
+### Round 26 — UBO (uniform buffer object) byte order on BE
+55. **`r600_buffer_common.c:r600_buffer_subdata`** — Pre-swap constant buffer data to LE at upload time on BE. The r600 shader compiler uses the ALU constant cache (KC0/KC1) for UBO access with compile-time constant offset. KC0 has NO byte swap — raw GPU memory is read as LE. UBO data from `glBufferData` stored in native BE produces wrong float/int values when read via KC0. Fix: after `memcpy` in `r600_buffer_subdata`, byte-swap each dword to LE when `buffer->bind & PIPE_BIND_CONSTANT_BUFFER` on BE.
+56. **`evergreen_state.c:evergreen_emit_constant_buffers`** — Use `ENDIAN_NONE` instead of `r600_endian_swap(32)` for constant buffer resource descriptors on BE. After change #55, data in constant buffers is LE. The VFETCH path (`tbuffer_load`) would double-swap LE data with `ENDIAN_8IN32` enabled. Fix: set `ENDIAN_NONE` on BE so both KC0 and VFETCH read LE data correctly.
+57. **`r600_state.c:r600_emit_constant_buffers`** — Same fix for non-evergreen (r600 chip family).
+
 ## Relevant Files
 - `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
 - `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_texformat (R2: BE swizzle fix, L4A4)
