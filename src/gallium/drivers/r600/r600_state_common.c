@@ -3528,44 +3528,38 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 
 	/* Non-uniform formats. */
 	if (!uniform) {
+#define _HAS_SIZE(x,y,z,w) \
+	(desc->channel[0].size == (x) && desc->channel[1].size == (y) && \
+         desc->channel[2].size == (z) && desc->channel[3].size == (w))
+#if UTIL_ARCH_BIG_ENDIAN
+#define _HAS_SIZE_BE(a,b,c,d) _HAS_SIZE(d,c,b,a)
+#else
+#define _HAS_SIZE_BE(a,b,c,d) _HAS_SIZE(a,b,c,d)
+#endif
 		if (desc->colorspace != UTIL_FORMAT_COLORSPACE_SRGB &&
 		    desc->channel[0].pure_integer)
 			word4 |= S_038010_NUM_FORMAT_ALL(V_038010_SQ_NUM_FORMAT_INT);
 		switch(desc->nr_channels) {
 		case 3:
-			if (desc->channel[0].size == 5 &&
-			    desc->channel[1].size == 6 &&
-			    desc->channel[2].size == 5) {
+			if (_HAS_SIZE(5,6,5,0)) {
 				result = FMT_5_6_5;
 				goto out_word4;
 			}
 			goto out_unknown;
 		case 4:
-			if ((desc->channel[0].size == 5 &&
-			     desc->channel[1].size == 5 &&
-			     desc->channel[2].size == 5 &&
-			     desc->channel[3].size == 1) ||
-			    (desc->channel[0].size == 1 &&
-			     desc->channel[1].size == 5 &&
-			     desc->channel[2].size == 5 &&
-			     desc->channel[3].size == 5)) {
+			if (_HAS_SIZE_BE(5,5,5,1)) {
 				result = FMT_1_5_5_5;
 				goto out_word4;
 			}
-			if ((desc->channel[0].size == 10 &&
-			     desc->channel[1].size == 10 &&
-			     desc->channel[2].size == 10 &&
-			     desc->channel[3].size == 2) ||
-			    (desc->channel[0].size == 2 &&
-			     desc->channel[1].size == 10 &&
-			     desc->channel[2].size == 10 &&
-			     desc->channel[3].size == 10)) {
+			if (_HAS_SIZE_BE(10,10,10,2)) {
 				result = FMT_2_10_10_10;
 				goto out_word4;
 			}
 			goto out_unknown;
 		}
 		goto out_unknown;
+#undef _HAS_SIZE_BE
+#undef _HAS_SIZE
 	}
 
 	i = util_format_get_first_non_void_channel(format);
@@ -3715,6 +3709,11 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 #define HAS_SIZE(x,y,z,w) \
 	(desc->channel[0].size == (x) && desc->channel[1].size == (y) && \
          desc->channel[2].size == (z) && desc->channel[3].size == (w))
+#if UTIL_ARCH_BIG_ENDIAN
+#define HAS_SIZE_BE(a,b,c,d) HAS_SIZE(d,c,b,a)
+#else
+#define HAS_SIZE_BE(a,b,c,d) HAS_SIZE(a,b,c,d)
+#endif
 
 	if (format == PIPE_FORMAT_R11G11B10_FLOAT) /* isn't plain */
 		return V_0280A0_COLOR_10_11_11_FLOAT;
@@ -3776,7 +3775,7 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 	case 3:
 		if (HAS_SIZE(5,6,5,0)) {
 			return V_0280A0_COLOR_5_6_5;
-		} else if (HAS_SIZE(32,8,24,0) || HAS_SIZE(32,24,8,0)) {
+		} else if (HAS_SIZE(32,8,24,0)) {
 			return V_0280A0_COLOR_X24_8_32_FLOAT;
 		}
 		break;
@@ -3800,9 +3799,9 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 				else
 					return V_0280A0_COLOR_32_32_32_32;
 			}
-		} else if (HAS_SIZE(5,5,5,1) || HAS_SIZE(1,5,5,5)) {
+		} else if (HAS_SIZE_BE(5,5,5,1)) {
 			return V_0280A0_COLOR_1_5_5_5;
-		} else if (HAS_SIZE(10,10,10,2) || HAS_SIZE(2,10,10,10)) {
+		} else if (HAS_SIZE_BE(10,10,10,2)) {
 			return V_0280A0_COLOR_2_10_10_10;
 		}
 		break;
