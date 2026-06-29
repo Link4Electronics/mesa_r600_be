@@ -1109,12 +1109,14 @@ terakan_physical_device_init(
 
    device->submission_info_gfx = *submission_info_gfx;
 
-   device->nir_options_non_fs = (nir_shader_compiler_options){
+   device->nir_options = (nir_shader_compiler_options){
       .lower_fdiv = true,
 
-      .fuse_ffma16 = true,
-      .fuse_ffma32 = true,
-      .fuse_ffma64 = true,
+      .float_mul_add16 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+      .float_mul_add32 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+      .float_mul_add64 = device->chip_info.is_r9xx
+                            ? nir_float_muladd_support_has_ffma | nir_float_muladd_support_fuse
+                            : 0,
 
       .lower_flrp16 = true,
       .lower_flrp32 = true,
@@ -1140,8 +1142,6 @@ terakan_physical_device_init(
       .lower_isign = true,
       .lower_fsign = true,
       .lower_iabs = true,
-
-      .lower_ldexp = true,
 
       .lower_pack_unorm_2x16 = true,
       .lower_pack_snorm_2x16 = true,
@@ -1201,6 +1201,8 @@ terakan_physical_device_init(
       /* TODO(Triang3l): Implement bfi in SFN. */
       .has_bitfield_select = true,
 
+      .avoid_ternary_with_fabs = true,
+
       /* Arbitrary (from RADV - in RadeonSI both are 128), was 255 due to a bug with the old
        * (pre-SFN) compiler from 2014:
        * https://bugs.freedesktop.org/show_bug.cgi?id=86720
@@ -1214,7 +1216,13 @@ terakan_physical_device_init(
       .lower_doubles_options = device->chip_info.is_r9xx
                                   ? nir_lower_ddiv | nir_lower_dfloor | nir_lower_dceil |
                                        nir_lower_dmod | nir_lower_dsub | nir_lower_dtrunc
-                                  : nir_lower_fp64_full_software,
+                                  : nir_lower_fp64_full_software | nir_lower_dceil |
+                                       nir_lower_dsqrt | nir_lower_drcp | nir_lower_drsq,
+
+      .support_indirect_inputs =
+         BITFIELD_MASK(MESA_SHADER_STAGES) & ~BITFIELD_BIT(MESA_SHADER_FRAGMENT),
+      .support_indirect_outputs =
+         BITFIELD_MASK(MESA_SHADER_STAGES) & ~BITFIELD_BIT(MESA_SHADER_FRAGMENT),
 
       .lower_image_offset_to_range_base = true,
 
@@ -1222,13 +1230,8 @@ terakan_physical_device_init(
 
       .lower_fquantize2f16 = true,
 
-      .has_ddx_intrinsics = true,
-
       .io_options = nir_io_mediump_is_32bit,
    };
-
-   device->nir_options_fs = device->nir_options_non_fs;
-   device->nir_options_fs.lower_all_io_to_temps = true;
 
    /* Must be allocated using calloc because r600_isa_destroy frees it, and r600_isa_destroy also
     * must be called even if r600_isa_init fails.

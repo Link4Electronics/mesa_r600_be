@@ -1007,8 +1007,9 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    /* Initialize the static state. */
    struct vk_graphics_pipeline_all_state all_state;
    struct vk_graphics_pipeline_state state = {};
-   result = vk_graphics_pipeline_state_fill(&device->vk, &state, create_info, NULL, 0, &all_state,
-                                            NULL, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, NULL);
+   result =
+      vk_graphics_pipeline_state_fill(&device->vk, &state, create_info, NULL, NULL, 0, &all_state,
+                                      NULL, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, NULL);
    if (result != VK_SUCCESS) {
       goto fail_pipeline;
    }

@@ -255,9 +255,9 @@ terakan_nir_get_binding(nir_src const src, VkDescriptorType const expected_type,
    nir_def * array_index = binding.num_indices >= 1 ? binding.indices[0].ssa : NULL;
    unsigned array_index_range_first, array_index_range_last;
    if (array_index != NULL) {
-      if (array_index->parent_instr->type == nir_instr_type_load_const) {
-         nir_load_const_instr const * const array_index_load_const =
-            nir_instr_as_load_const(array_index->parent_instr);
+      nir_load_const_instr const * const array_index_load_const =
+         nir_def_as_load_const_or_null(array_index);
+      if (array_index_load_const != NULL) {
          array_index_range_first = array_index_load_const->value[0].u32;
          if (unlikely(array_index_range_first >= set_binding->descriptor_count)) {
             vk_loge(VK_LOG_OBJS(&layout->vk.base),
@@ -383,14 +383,12 @@ terakan_nir_gather_uavs_needed_instr(nir_builder * const b, nir_instr * const in
       TERAKAN_RESOURCE_RANGE_MUTABLE_BASE;
    /* The array index logic must be consistent with the assumptions in terakan_nir_get_binding_uav.
     */
-   if (binding.array_index == NULL ||
-       binding.array_index->parent_instr->type == nir_instr_type_load_const) {
+   if (binding.array_index == NULL || nir_def_is_const(binding.array_index)) {
       /* Constant index - mark only one resource as needing a UAV, and expect this constant index to
        * be added before retrieving the UAV index for the resource index.
        */
       if (binding.array_index != NULL) {
-         mutable_resource_first +=
-            nir_instr_as_load_const(binding.array_index->parent_instr)->value[0].u32;
+         mutable_resource_first += nir_def_as_load_const(binding.array_index)->value[0].u32;
       }
       BITSET_SET(state->uavs_for_mutable_resources_needed, mutable_resource_first);
    } else {
@@ -484,12 +482,10 @@ terakan_nir_get_binding_uav(struct terakan_nir_binding const * const binding,
     * terakan_nir_gather_uavs_needed_instr.
     */
    bool apply_array_index;
-   if (binding->array_index == NULL ||
-       binding->array_index->parent_instr->type == nir_instr_type_load_const) {
+   if (binding->array_index == NULL || nir_def_is_const(binding->array_index)) {
       /* Constant index - don't require the entire array to be bound, pre-apply the array index. */
       if (binding->array_index != NULL) {
-         mutable_resource_first +=
-            nir_instr_as_load_const(binding->array_index->parent_instr)->value[0].u32;
+         mutable_resource_first += nir_def_as_load_const(binding->array_index)->value[0].u32;
       }
       mutable_resource_last = mutable_resource_first;
       apply_array_index = false;
@@ -729,9 +725,10 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const b, nir_tex_instr * cons
       shader_nir_progress = true;
       tex->texture_index = resource_index_base;
       if (binding.array_index != NULL) {
-         if (binding.array_index->parent_instr->type == nir_instr_type_load_const) {
-            tex->texture_index +=
-               nir_instr_as_load_const(binding.array_index->parent_instr)->value[0].u32;
+         nir_load_const_instr const * const array_index_load_const =
+            nir_def_as_load_const_or_null(binding.array_index);
+         if (array_index_load_const != NULL) {
+            tex->texture_index += array_index_load_const->value[0].u32;
             nir_tex_instr_remove_src(tex, texture_deref_src_index);
          } else {
             texture_src->src_type = nir_tex_src_texture_offset;
@@ -758,9 +755,10 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const b, nir_tex_instr * cons
       shader_nir_progress = true;
       tex->sampler_index = sampler_index_base;
       if (binding.array_index != NULL) {
-         if (binding.array_index->parent_instr->type == nir_instr_type_load_const) {
-            tex->sampler_index +=
-               nir_instr_as_load_const(binding.array_index->parent_instr)->value[0].u32;
+         nir_load_const_instr const * const array_index_load_const =
+            nir_def_as_load_const_or_null(binding.array_index);
+         if (array_index_load_const != NULL) {
+            tex->sampler_index += array_index_load_const->value[0].u32;
             nir_tex_instr_remove_src(tex, sampler_deref_src_index);
          } else {
             sampler_src->src_type = nir_tex_src_sampler_offset;
@@ -1367,7 +1365,7 @@ terakan_nir_lower_bindings(nir_shader * const shader,
    do {
       constant_folding_progress = false;
       bool copy_prop_progress = false;
-      NIR_PASS(copy_prop_progress, shader, nir_copy_prop);
+      NIR_PASS(copy_prop_progress, shader, nir_opt_copy_prop);
       if (copy_prop_progress) {
          constant_folding_progress = true;
          /* Cleanup to prevent the same propagations from happening infinitely. */

@@ -1807,7 +1807,7 @@ terakan_CreateImageView(VkDevice const deviceHandle,
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
 
-   vk_image_view_init(&device->vk, &image_view->vk, false, pCreateInfo);
+   vk_image_view_init(&device->vk, &image_view->vk, pCreateInfo);
 
    struct terakan_image const * const image = terakan_image_from_handle(pCreateInfo->image);
 

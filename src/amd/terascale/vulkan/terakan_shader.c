@@ -128,11 +128,6 @@ terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const s
    static struct spirv_to_nir_options const spirv_options = {
       .environment = NIR_SPIRV_VULKAN,
 
-      /* TODO(Triang3l): Possibly SUBGROUP_SIZE_API_CONSTANT when the subgroup size is properly
-       * exposed.
-       */
-      .subgroup_size = SUBGROUP_SIZE_UNIFORM,
-
       /* TODO(Triang3l): Capabilities when supported and tested. */
 
       .ubo_addr_format = nir_address_format_32bit_index_offset,
@@ -145,11 +140,8 @@ terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const s
    };
 
    nir_shader * nir =
-      vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint,
-                      spirv_options.subgroup_size, specialization_info, &spirv_options,
-                      stage == MESA_SHADER_FRAGMENT ? &physical_device->nir_options_fs
-                                                    : &physical_device->nir_options_non_fs,
-                      false, NULL);
+      vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint, specialization_info,
+                      &spirv_options, &physical_device->nir_options, false, NULL);
 
    /* SFN expects certain fragment shader system values to be accessed via load_input rather than
     * the system value load intrinsics, make sure that's the case before nir_lower_system_values is
@@ -176,11 +168,11 @@ terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const s
             var->data.driver_location = var->data.location - VERT_ATTRIB_GENERIC0;
          }
       } else {
-         nir_assign_io_var_locations(nir, nir_var_shader_in, &nir->num_inputs, nir->info.stage);
+         nir_assign_io_var_locations(nir, nir_var_shader_in);
       }
       /* Fragment shader outputs are compacted in the end, not assigning locations here. */
       if (nir->info.stage != MESA_SHADER_FRAGMENT) {
-         nir_assign_io_var_locations(nir, nir_var_shader_out, &nir->num_outputs, nir->info.stage);
+         nir_assign_io_var_locations(nir, nir_var_shader_out);
       }
    }
 
@@ -189,8 +181,10 @@ terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const s
     */
 
    if (nir->info.stage != MESA_SHADER_COMPUTE) {
-      nir_lower_io_vars_to_temporaries(nir, nir_shader_get_entrypoint(nir), true,
-                                       nir->options->lower_all_io_to_temps);
+      nir_lower_io_vars_to_temporaries(nir, nir_shader_get_entrypoint(nir),
+                                       nir->info.stage == MESA_SHADER_FRAGMENT
+                                          ? nir_var_shader_out
+                                          : nir_var_shader_in | nir_var_shader_out);
    }
 
    /* Lower interface and binding derefs. */
@@ -346,7 +340,7 @@ terakan_shader_lower_and_optimize_post_link(
     */
 
    if (nir->info.stage == MESA_SHADER_FRAGMENT) {
-      nir_assign_io_var_locations(nir, nir_var_shader_out, &nir->num_outputs, nir->info.stage);
+      nir_assign_io_var_locations(nir, nir_var_shader_out);
    }
 
    /* Lower texture operations. */
@@ -389,7 +383,7 @@ terakan_shader_lower_and_optimize_post_link(
 
    assert(nir->options->lower_to_scalar);
    NIR_PASS(_, nir, nir_lower_alu_to_scalar, nir->options->lower_to_scalar_filter, NULL);
-   NIR_PASS(_, nir, nir_lower_phis_to_scalar, false);
+   NIR_PASS(_, nir, nir_lower_phis_to_scalar, NULL, NULL);
 
    /* Everything lowered by nir_lower_alu is supported natively as of this writing. */
 

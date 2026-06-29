@@ -290,14 +290,8 @@ terakan_CmdBeginQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool
                                         VK_ERROR_OUT_OF_HOST_MEMORY);
             return;
          }
-         if (unlikely(!_mesa_hash_table_init(&active_queries->begin_indirect_buffer_ht,
-                                             active_queries, _mesa_hash_pointer,
-                                             _mesa_key_pointer_equal))) {
-            vk_command_buffer_set_error(&command_writer->base.command_buffer->vk,
-                                        VK_ERROR_OUT_OF_HOST_MEMORY);
-            ralloc_free(active_queries);
-            return;
-         }
+         _mesa_hash_table_init(&active_queries->begin_indirect_buffer_ht, active_queries,
+                               _mesa_hash_pointer, _mesa_key_pointer_equal);
       }
       command_writer->active_queries = active_queries;
    }

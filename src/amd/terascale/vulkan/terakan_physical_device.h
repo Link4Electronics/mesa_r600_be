@@ -191,9 +191,9 @@ struct terakan_physical_device {
 
    struct terakan_physical_device_submission_info_gfx submission_info_gfx;
 
-   /* nir_shader_compiler_options's lifetime must be at least as long as that of any NIR shader. */
-   nir_shader_compiler_options nir_options_non_fs;
-   nir_shader_compiler_options nir_options_fs;
+   /* `nir_shader_compiler_options`'s lifetime must be at least as long as that of any NIR shader.
+    */
+   nir_shader_compiler_options nir_options;
    struct r600_isa * isa;
 
    VkPhysicalDeviceMemoryProperties memory_properties;

@@ -38,7 +38,7 @@ terakan_nir_compact_rtv_dsb_exports(nir_shader * const shader,
       return false;
    }
 
-   NIR_PASS_V(shader, nir_lower_io_array_vars_to_elements_no_indirects, true);
+   NIR_PASS(_, shader, nir_lower_io_array_vars_to_elements_no_indirects, true);
 
    uint8_t uncompacted_exports = 0b0;
    nir_foreach_shader_out_variable (var, shader) {
