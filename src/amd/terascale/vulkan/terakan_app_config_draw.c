@@ -240,7 +240,7 @@ terakan_app_config_draw_apply_sq_pgm_pre_rasterization(
    /* Map the hardware stages to the software shaders. */
    struct terakan_shader_impl const * const hw_ls =
       tessellation_enable ? sw_stages[MESA_SHADER_VERTEX] : NULL;
-   gl_shader_stage const hw_vses_sw_stage =
+   mesa_shader_stage const hw_vses_sw_stage =
       tessellation_enable ? MESA_SHADER_TESS_EVAL : MESA_SHADER_VERTEX;
    struct terakan_shader_impl const * const hw_es =
       geometry_shader_enable ? sw_stages[hw_vses_sw_stage] : NULL;
@@ -375,7 +375,7 @@ terakan_app_config_draw_apply_sq_pgm_pre_rasterization(
             command_writer->push_constants_state.usage_pre_rasterization,
             stage_shader->push_constants_usage);
       command_writer->push_constants_state.graphics_stages_using_push_constants |=
-         mesa_to_vk_shader_stage((gl_shader_stage)sw_stage_index);
+         mesa_to_vk_shader_stage((mesa_shader_stage)sw_stage_index);
    }
 
    terakan_hw_config_sqk_set_usage_vs_tes(

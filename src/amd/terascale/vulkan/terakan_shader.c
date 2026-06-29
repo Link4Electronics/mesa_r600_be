@@ -118,7 +118,7 @@ terakan_nir_shared_type_info(struct glsl_type const * const type, unsigned * con
 
 nir_shader *
 terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const spirv_size_bytes,
-                            uint32_t const * const spirv, gl_shader_stage const stage,
+                            uint32_t const * const spirv, mesa_shader_stage const stage,
                             char const * const entrypoint,
                             VkSpecializationInfo const * const specialization_info)
 {

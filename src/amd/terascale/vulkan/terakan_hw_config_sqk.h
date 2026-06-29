@@ -337,7 +337,7 @@ extern struct terakan_hw_config_sqk_set_functions const
  */
 static inline bool
 terakan_hw_config_sqk_set_draw_usage_(struct terakan_hw_config_sqk * const config,
-                                      gl_shader_stage const stage_index,
+                                      mesa_shader_stage const stage_index,
                                       struct terakan_shader_sqk_usage const * const usage)
 {
    assert(stage_index != MESA_SHADER_COMPUTE);

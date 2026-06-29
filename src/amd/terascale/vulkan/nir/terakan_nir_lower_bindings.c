@@ -469,7 +469,7 @@ static unsigned
 terakan_nir_get_binding_uav(struct terakan_nir_binding const * const binding,
                             bool const immed_needed,
                             struct terakan_nir_lower_bindings_state const * const state,
-                            gl_shader_stage const stage, bool * const apply_array_index_out)
+                            mesa_shader_stage const stage, bool * const apply_array_index_out)
 {
    if (state->uavs_for_mutable_resources_needed == NULL) {
       /* UAVs are not supported at this stage. */
@@ -705,7 +705,7 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const b, nir_tex_instr * cons
 {
    bool shader_nir_progress = false;
 
-   gl_shader_stage const stage = b->shader->info.stage;
+   mesa_shader_stage const stage = b->shader->info.stage;
 
    /* If nir_tex_src_texture/sampler_deref isn't present, the lowering was possibly invoked multiple
     * times, just ignore the instruction if it has already been lowered.
@@ -792,7 +792,7 @@ terakan_nir_lower_bindings_instr_load_ubo(nir_builder * const b, nir_intrinsic_i
       binding.array_index = nir_imm_zero(b, 1, 32);
    }
 
-   gl_shader_stage const stage = b->shader->info.stage;
+   mesa_shader_stage const stage = b->shader->info.stage;
 
    /* TODO(Triang3l): Load from the constant cache. */
 
@@ -1043,7 +1043,7 @@ terakan_nir_lower_bindings_instr_image_deref_load(
 
    b->cursor = nir_before_instr(&intrin->instr);
 
-   gl_shader_stage const stage = b->shader->info.stage;
+   mesa_shader_stage const stage = b->shader->info.stage;
 
    enum gl_access_qualifier access = nir_intrinsic_access(intrin);
    if (state->uavs_for_mutable_resources_needed != NULL) {

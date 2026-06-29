@@ -61,11 +61,13 @@ terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
       terakan_pipeline_layout_from_handle(layoutHandle);
 
    bool const is_compute = pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE;
-   gl_shader_stage const shader_stage_first = is_compute ? MESA_SHADER_COMPUTE : MESA_SHADER_VERTEX;
-   gl_shader_stage const shader_stage_last =
+   mesa_shader_stage const shader_stage_first =
+      is_compute ? MESA_SHADER_COMPUTE : MESA_SHADER_VERTEX;
+   mesa_shader_stage const shader_stage_last =
       is_compute ? MESA_SHADER_COMPUTE : MESA_SHADER_FRAGMENT;
 
-   gl_shader_stage const uav_shader_stage = is_compute ? MESA_SHADER_COMPUTE : MESA_SHADER_FRAGMENT;
+   mesa_shader_stage const uav_shader_stage =
+      is_compute ? MESA_SHADER_COMPUTE : MESA_SHADER_FRAGMENT;
 
    uint32_t const * set_dynamic_offsets = pDynamicOffsets;
 
@@ -88,7 +90,7 @@ terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                                                          set_layout
                                                             ->pool_first_sampler_offset_bytes);
 
-      for (gl_shader_stage shader_stage = shader_stage_first; shader_stage <= shader_stage_last;
+      for (mesa_shader_stage shader_stage = shader_stage_first; shader_stage <= shader_stage_last;
            ++shader_stage) {
          struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[shader_stage];

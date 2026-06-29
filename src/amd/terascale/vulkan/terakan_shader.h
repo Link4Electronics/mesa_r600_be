@@ -357,7 +357,7 @@ struct terakan_device;
 
 /* Converts SPIR-V to NIR and performs pre-link lowerings. */
 nir_shader * terakan_shader_spirv_to_nir(struct terakan_device * device, size_t spirv_size_bytes,
-                                         uint32_t const * spirv, gl_shader_stage stage,
+                                         uint32_t const * spirv, mesa_shader_stage stage,
                                          char const * entrypoint,
                                          VkSpecializationInfo const * specialization_info);
 

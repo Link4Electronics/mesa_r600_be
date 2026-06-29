@@ -1103,7 +1103,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
       terakan_pipeline_layout_from_handle(create_info->layout);
 
    u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      gl_shader_stage const shader_stage =
+      mesa_shader_stage const shader_stage =
          vk_to_mesa_shader_stage((VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index));
       struct shader_create_data const * const shader_data = &shaders_create_data[shader_stage];
 
@@ -1227,7 +1227,7 @@ fail_shader_bo:
    terakan_bo_free(pipeline->shader_bo, allocator);
 fail_shaders:
    u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      gl_shader_stage const shader_stage =
+      mesa_shader_stage const shader_stage =
          vk_to_mesa_shader_stage((VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index));
       struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
       r600_bytecode_clear(&shader->shader.bc);
