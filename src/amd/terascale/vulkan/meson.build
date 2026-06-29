@@ -204,18 +204,15 @@ libvulkan_terascale = shared_library(
   install : true,
 )
 
-icd_lib_path = join_paths(get_option('prefix'), get_option('libdir'))
-icd_file_name = 'libvulkan_terascale.so'
-if with_platform_windows
-  icd_lib_path = join_paths(get_option('prefix'), get_option('bindir'))
-  icd_file_name = 'vulkan_terascale.dll'
-endif
+icd_file_name = libname_prefix + 'vulkan_terascale.' + libname_suffix
 
 icd_command = [
   prog_python, '@INPUT0@',
   '--api-version', '1.0',
   '--xml', '@INPUT1@',
-  '--lib-path', join_paths(icd_lib_path, icd_file_name),
+  '--sizeof-pointer', sizeof_pointer,
+  '--icd-lib-path', vulkan_icd_lib_path,
+  '--icd-filename', icd_file_name,
   '--out', '@OUTPUT@',
 ]
 if with_platform_windows
@@ -225,10 +222,11 @@ endif
 terascale_icd = custom_target(
   'terascale_icd',
   input : [vk_icd_gen, vk_api_xml],
-  output : 'terascale_icd.@0@.json'.format(host_machine.cpu()),
+  output : 'terascale_icd.' + vulkan_manifest_suffix,
   command : icd_command,
   build_by_default : true,
   install_dir : with_vulkan_icd_dir,
+  install_tag : 'runtime',
   install : true,
 )
 
@@ -241,10 +239,12 @@ _dev_icd = custom_target(
     prog_python, '@INPUT0@',
     '--api-version', '1.0',
     '--xml', '@INPUT1@',
-    '--lib-path', meson.current_build_dir() / icd_file_name,
+    '--sizeof-pointer', sizeof_pointer,
+    '--icd-lib-path', meson.current_build_dir(),
+    '--icd-filename', icd_file_name,
     '--out', '@OUTPUT@',
   ],
   build_by_default : true,
 )
 
-devenv.append('VK_ICD_FILENAMES', _dev_icd.full_path())
+devenv.append('VK_DRIVER_FILES', _dev_icd.full_path())
