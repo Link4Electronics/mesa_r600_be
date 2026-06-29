@@ -115,8 +115,8 @@ terakan_physical_device_tiling_info_equal(
 struct terakan_physical_device_submission_info {
    enum terakan_queue_relocation_type relocation_type;
    /* Maximum amount of additional data that may be added to submissions in the queue `submit`
-    * function by the winsys, but that doesn't need to be reserved inside the `submit` arguments
-    * themselves.
+    * function by the platform-specific implementation, but that doesn't need to be reserved inside
+    * the `submit` arguments themselves.
     */
    struct terakan_queue_submission_size submission_outer_reserved_amount;
 };
@@ -157,14 +157,15 @@ struct terakan_physical_device_submission_info_gfx {
 struct terakan_physical_device;
 struct terakan_device;
 
-struct terakan_physical_device_winsys_fn {
-   /* Called before vk_physical_device_init to get capabilities of additional extensions offered by
-    * the winsys, as well as the device UUID. It's assumed that before the call, the fields this
-    * function is supposed to set are zero in the capability structures.
+struct terakan_physical_device_platform_fn {
+   /* Called before `vk_physical_device_init` to get capabilities of additional extensions offered
+    * by the platform, as well as the device UUID. It's assumed that before the call, the fields
+    * this function is supposed to set are zero in the capability structures.
     */
-   void (*get_winsys_extensions)(struct terakan_physical_device const * device,
-                                 struct vk_device_extension_table * extensions,
-                                 struct vk_features * features, struct vk_properties * properties);
+   void (*get_platform_extensions)(struct terakan_physical_device const * device,
+                                   struct vk_device_extension_table * extensions,
+                                   struct vk_features * features,
+                                   struct vk_properties * properties);
 
    VkResult (*create_device)(struct terakan_physical_device * physical_device,
                              VkDeviceCreateInfo const * create_info,
@@ -174,12 +175,12 @@ struct terakan_physical_device_winsys_fn {
    void (*destroy)(struct terakan_physical_device * device);
 };
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_physical_device {
    struct vk_physical_device vk;
 
    /* Private, use wrappers externally. */
-   struct terakan_physical_device_winsys_fn const * winsys_fn;
+   struct terakan_physical_device_platform_fn const * platform_fn;
 
    struct terakan_physical_device_chip_info chip_info;
 
@@ -216,7 +217,7 @@ void terakan_physical_device_destroy(struct vk_physical_device * device);
  */
 VkResult terakan_physical_device_init(
    struct terakan_physical_device * device, struct terakan_instance * instance,
-   struct terakan_physical_device_winsys_fn const * winsys_fn_static, uint32_t pci_device_id,
+   struct terakan_physical_device_platform_fn const * platform_fn_static, uint32_t pci_device_id,
    VkDeviceSize gtt_allocation_granularity, VkDeviceSize gtt_size, VkDeviceSize vram_size,
    VkDeviceSize vram_visible, VkDeviceSize max_memory_allocation_size,
    VkDeviceSize min_memory_map_alignment,

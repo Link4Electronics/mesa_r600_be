@@ -123,8 +123,8 @@ struct terakan_bo_reference_writer {
 };
 
 /* bo_references must point to `terakan_device::bo_reference_size *
- * TERAKAN_BO_REFERENCE_WRITER_REFERENCE_COUNT` references that will be passed to the winsys during
- * submission.
+ * TERAKAN_BO_REFERENCE_WRITER_REFERENCE_COUNT` references that will be passed to the platform
+ * submission implementation.
  */
 void terakan_bo_reference_writer_reset(struct terakan_bo_reference_writer * writer,
                                        void * bo_references, uint32_t max_bo_reference_count);

@@ -132,17 +132,17 @@ libterakan_deps = [
 
 if with_platform_windows
   libterakan_files += files(
-    'winsys/wddm/terakan_bo_wddm.c',
-    'winsys/wddm/terakan_bo_wddm.h',
-    'winsys/wddm/terakan_device_wddm.c',
-    'winsys/wddm/terakan_device_wddm.h',
-    'winsys/wddm/terakan_instance_wddm.c',
-    'winsys/wddm/terakan_instance_wddm.h',
-    'winsys/wddm/terakan_physical_device_wddm.c',
-    'winsys/wddm/terakan_physical_device_wddm.h',
-    'winsys/wddm/terakan_queue_wddm.c',
-    'winsys/wddm/terakan_queue_wddm.h',
-    'winsys/wddm/terakan_wddm_d3dkmthk.h',
+    'platform/wddm/terakan_bo_wddm.c',
+    'platform/wddm/terakan_bo_wddm.h',
+    'platform/wddm/terakan_device_wddm.c',
+    'platform/wddm/terakan_device_wddm.h',
+    'platform/wddm/terakan_instance_wddm.c',
+    'platform/wddm/terakan_instance_wddm.h',
+    'platform/wddm/terakan_physical_device_wddm.c',
+    'platform/wddm/terakan_physical_device_wddm.h',
+    'platform/wddm/terakan_queue_wddm.c',
+    'platform/wddm/terakan_queue_wddm.h',
+    'platform/wddm/terakan_wddm_d3dkmthk.h',
   )
   libterakan_deps += [
     cc.find_library('cfgmgr32'),
@@ -151,16 +151,16 @@ if with_platform_windows
   ]
 elif system_has_kms_drm
   libterakan_files += files(
-    'winsys/drm_radeon/terakan_bo_drm_radeon.c',
-    'winsys/drm_radeon/terakan_bo_drm_radeon.h',
-    'winsys/drm_radeon/terakan_device_drm_radeon.c',
-    'winsys/drm_radeon/terakan_device_drm_radeon.h',
-    'winsys/drm_radeon/terakan_instance_drm_radeon.c',
-    'winsys/drm_radeon/terakan_instance_drm_radeon.h',
-    'winsys/drm_radeon/terakan_physical_device_drm_radeon.c',
-    'winsys/drm_radeon/terakan_physical_device_drm_radeon.h',
-    'winsys/drm_radeon/terakan_queue_drm_radeon.c',
-    'winsys/drm_radeon/terakan_queue_drm_radeon.h',
+    'platform/drm_radeon/terakan_bo_drm_radeon.c',
+    'platform/drm_radeon/terakan_bo_drm_radeon.h',
+    'platform/drm_radeon/terakan_device_drm_radeon.c',
+    'platform/drm_radeon/terakan_device_drm_radeon.h',
+    'platform/drm_radeon/terakan_instance_drm_radeon.c',
+    'platform/drm_radeon/terakan_instance_drm_radeon.h',
+    'platform/drm_radeon/terakan_physical_device_drm_radeon.c',
+    'platform/drm_radeon/terakan_physical_device_drm_radeon.h',
+    'platform/drm_radeon/terakan_queue_drm_radeon.c',
+    'platform/drm_radeon/terakan_queue_drm_radeon.h',
   )
   libterakan_deps += dep_libdrm
 endif

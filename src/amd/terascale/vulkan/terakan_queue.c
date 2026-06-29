@@ -87,7 +87,7 @@ terakan_queue_completion_thread_func(void * queue_ptr)
          &queue->completion_submissions_pending, struct terakan_queue_completion_submission, link);
       list_del(&submission->link);
       mtx_unlock(&device->completion_mutex);
-      bool const awaited = device->winsys_fn->queue->completion_submission_await(submission);
+      bool const awaited = device->platform_fn->queue->completion_submission_await(submission);
       mtx_lock(&device->completion_mutex);
       if (unlikely(!awaited)) {
          vk_device_set_lost(&device->vk, "Failed to await for the submission completion fence");
@@ -283,7 +283,7 @@ terakan_queue_get_graphics_signal_indirect_buffer(
 
    /* Pad the GFX ring indirect buffer to the size alignment requirement with NOPs, and also prevent
     * the submission from being empty as it's still needed for the completion signal, but an empty
-    * one may be rejected by the winsys.
+    * one may be rejected by the platform.
     */
    while ((indirect_buffer_size_dwords &
            (TERAKAN_QUEUE_INDIRECT_BUFFER_SIZE_ALIGNMENT_DWORDS_GFX - 1)) ||
@@ -376,7 +376,7 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
          queue->shader_rings = NULL;
       }
 
-      VkResult const shader_rings_allocate_result = device->winsys_fn->bo->allocate_device_memory(
+      VkResult const shader_rings_allocate_result = device->platform_fn->bo->allocate_device_memory(
          device, (VkDeviceSize)shader_ring_bytes_needed_total_shr8 << 8, 0x100,
          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
          &queue->shader_rings);
@@ -394,8 +394,8 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
     *
     * However, in Terakan, there's only one GFX queue, for which vkQueueSubmit must be externally
     * synchronized, so it's safe to modify the command buffers here without additional
-    * synchronization (such as locking before modifying, unlocking after submitting to the winsys)
-    * or creating copies of them even if they are in the pending state.
+    * synchronization (such as locking before modifying, unlocking after the platform submission) or
+    * creating copies of them even if they are in the pending state.
     */
 
    /* Note that if `shader_ring_bytes_needed_total_shr8` ended up being 0, but base and size setting
@@ -414,7 +414,7 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
                               link) {
             if (command_buffer_indirect_buffer->shader_rings_bo_placeholder_reference !=
                 UINT32_MAX) {
-               device->winsys_fn->queue->create_bo_reference(
+               device->platform_fn->queue->create_bo_reference(
                   (char *)command_buffer_indirect_buffer->bo_references +
                      device->bo_reference_size *
                         command_buffer_indirect_buffer->shader_rings_bo_placeholder_reference,
@@ -469,9 +469,9 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
       list_for_each_entry (struct terakan_command_buffer_indirect_buffer const,
                            command_buffer_indirect_buffer, &command_buffer->indirect_buffers,
                            link) {
-         /* The winsys may not support empty indirect buffers. */
+         /* The platform may not support empty indirect buffers. */
          assert(command_buffer_indirect_buffer->indirect_buffer_size_dwords != 0);
-         VkResult const command_buffer_submit_result = device->winsys_fn->queue->submit(
+         VkResult const command_buffer_submit_result = device->platform_fn->queue->submit(
             queue->submission_context, command_buffer_indirect_buffer->bo_reference_count,
             command_buffer_indirect_buffer->bo_references,
             command_buffer_indirect_buffer->indirect_buffer_size_dwords,
@@ -571,7 +571,7 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
    } else {
       mtx_unlock(&device->completion_mutex);
       VkResult const completion_submission_create_result =
-         device->winsys_fn->queue->completion_submission_alloc_and_init_winsys(
+         device->platform_fn->queue->completion_submission_alloc_and_init_platform(
             queue, &completion_submission);
       if (completion_submission_create_result != VK_SUCCESS) {
          /* Lose the device as the submission has been done partially already, don't leave it in an
@@ -645,7 +645,7 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
 
    /* Submit the memory dependency packets and a signal of the completion fence. */
    VkResult const completion_submission_submit_result =
-      device->winsys_fn->queue->completion_submission_submit(
+      device->platform_fn->queue->completion_submission_submit(
          completion_submission, signal_indirect_buffer_size_dwords, signal_indirect_buffer);
    if (completion_submission_submit_result != VK_SUCCESS) {
       /* Lose the device regardless of the actual result for this specific command buffer because a
@@ -734,18 +734,20 @@ terakan_queue_destroy(struct terakan_queue * const queue)
                                 link) {
          vk_free(&device->vk.alloc, completion_signal);
       }
-      device->winsys_fn->queue->completion_submission_finish_winsys_and_free(completion_submission);
+      device->platform_fn->queue->completion_submission_finish_platform_and_free(
+         completion_submission);
    }
    LIST_FOR_EACH_ENTRY_SAFE (completion_submission, next_submission,
                              &queue->completion_submissions_free, link) {
-      device->winsys_fn->queue->completion_submission_finish_winsys_and_free(completion_submission);
+      device->platform_fn->queue->completion_submission_finish_platform_and_free(
+         completion_submission);
    }
    LIST_FOR_EACH_ENTRY_SAFE (completion_signal, next_signal, &queue->completion_signals_free,
                              link) {
       vk_free(&device->vk.alloc, completion_signal);
    }
 
-   device->winsys_fn->queue->release_submission_context(queue->submission_context);
+   device->platform_fn->queue->release_submission_context(queue->submission_context);
 
    vk_queue_finish(&queue->vk);
 
@@ -781,7 +783,7 @@ terakan_queue_create(struct terakan_device * const device,
       MAX2(desired_submission_size.indirect_buffer_dwords,
            TERAKAN_QUEUE_SIGNAL_INDIRECT_BUFFER_MAX_DWORDS);
 
-   result = device->winsys_fn->queue->acquire_submission_context(
+   result = device->platform_fn->queue->acquire_submission_context(
       device, AMD_IP_GFX, desired_submission_size, &queue->submission_context);
    if (result != VK_SUCCESS) {
       result = vk_error(device, result);
@@ -834,7 +836,7 @@ fail_completion_thread:
    cnd_broadcast(&device->completion_condition);
    thrd_join(queue->completion_thread, NULL);
 fail_submission_context:
-   device->winsys_fn->queue->release_submission_context(queue->submission_context);
+   device->platform_fn->queue->release_submission_context(queue->submission_context);
 fail_queue:
    vk_queue_finish(&queue->vk);
 fail_alloc:

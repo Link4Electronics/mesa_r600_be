@@ -946,7 +946,7 @@ terakan_CreateQueryPool(VkDevice const deviceHandle,
             uav_bytes_per_element, physical_device->tiling_info.pipe_interleave_bytes_log2);
       bo_size = ALIGN_POT(bo_size, (VkDeviceSize)uav_size_granularity);
    }
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, bo_size,
       1u << terakan_color_descriptor_buffer_uav_base_granularity_log2(uav_bytes_per_element,
                                                                       physical_device),

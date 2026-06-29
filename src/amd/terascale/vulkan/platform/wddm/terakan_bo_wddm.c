@@ -230,7 +230,7 @@ terakan_bo_wddm_allocate_device_memory(
    return VK_SUCCESS;
 }
 
-struct terakan_bo_winsys_fn const terakan_bo_wddm_fn = {
+struct terakan_bo_platform_fn const terakan_bo_wddm_fn = {
    .set_tiling = terakan_bo_wddm_set_tiling,
    .map_impl = terakan_bo_wddm_map_impl,
    .unmap_impl = terakan_bo_wddm_unmap_impl,

@@ -49,7 +49,7 @@
 #include <dxgi.h>
 
 static void
-terakan_physical_device_wddm_get_winsys_extensions(
+terakan_physical_device_wddm_get_platform_extensions(
    struct terakan_physical_device const * const device_base,
    struct vk_device_extension_table * const extensions, UNUSED struct vk_features * const features,
    struct vk_properties * const properties)
@@ -97,8 +97,8 @@ terakan_physical_device_wddm_destroy(struct terakan_physical_device * const devi
    vk_free(&device->base.vk.instance->alloc, device);
 }
 
-static struct terakan_physical_device_winsys_fn const terakan_physical_device_wddm_fn = {
-   .get_winsys_extensions = terakan_physical_device_wddm_get_winsys_extensions,
+static struct terakan_physical_device_platform_fn const terakan_physical_device_wddm_fn = {
+   .get_platform_extensions = terakan_physical_device_wddm_get_platform_extensions,
    .create_device = terakan_device_wddm_create,
    .destroy = terakan_physical_device_wddm_destroy,
 };

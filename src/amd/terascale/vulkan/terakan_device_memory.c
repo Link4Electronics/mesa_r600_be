@@ -60,7 +60,7 @@ terakan_GetMemoryFdPropertiesKHR(VkDevice const deviceHandle,
    }
 
    bool vram_preferred;
-   if (!device->winsys_fn->bo->get_fd_vram_preference(device, fd, &vram_preferred)) {
+   if (!device->platform_fn->bo->get_fd_vram_preference(device, fd, &vram_preferred)) {
       return vk_error(device, VK_ERROR_INVALID_EXTERNAL_HANDLE);
    }
 
@@ -93,7 +93,7 @@ terakan_GetMemoryFdKHR(VkDevice const deviceHandle, VkMemoryGetFdInfoKHR const *
 
    struct terakan_bo * const bo = terakan_device_memory_from_handle(pGetFdInfo->memory)->bo;
 
-   int const fd = device->winsys_fn->bo->export_fd(
+   int const fd = device->platform_fn->bo->export_fd(
       bo, pGetFdInfo->handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
    if (fd < 0) {
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
@@ -225,7 +225,7 @@ terakan_AllocateMemory(VkDevice const deviceHandle,
             result = vk_error(device, VK_ERROR_INVALID_EXTERNAL_HANDLE);
             goto fail_device_memory;
          }
-         result = device->winsys_fn->bo->import_fd(
+         result = device->platform_fn->bo->import_fd(
             device, import_fd_info->fd, bo_size,
             (memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0, pAllocator,
             VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &device_memory->bo);
@@ -242,7 +242,7 @@ terakan_AllocateMemory(VkDevice const deviceHandle,
          goto fail_device_memory;
       }
    } else {
-      result = device->winsys_fn->bo->allocate_device_memory(
+      result = device->platform_fn->bo->allocate_device_memory(
          device, bo_size, physical_device->buffer_image_bo_alignment, memory_property_flags,
          device_memory->vk.export_handle_types, pAllocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT,
          &device_memory->bo);
@@ -282,7 +282,7 @@ terakan_AllocateMemory(VkDevice const deviceHandle,
                .attrib_macro_tile_aspect =
                   dedicated_image_main_aspect->tiling.attrib_macro_tile_aspect,
             };
-            if (!device->winsys_fn->bo->set_tiling(device_memory->bo, &bo_tiling)) {
+            if (!device->platform_fn->bo->set_tiling(device_memory->bo, &bo_tiling)) {
                result = vk_error(device, VK_ERROR_UNKNOWN);
                goto fail_bo;
             }

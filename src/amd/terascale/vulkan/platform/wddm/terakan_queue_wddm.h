@@ -1,11 +1,6 @@
 /*
  * Copyright © 2024 Vitaliy Triang3l Kuzmin
  *
- * Based on Gallium Radeon DRM winsys which is:
- * Copyright © 2008 Jérôme Glisse
- * Copyright © 2009 Corbin Simpson <MostAwesomeDude@gmail.com>
- * Copyright © 2011 Marek Olšák <maraeo@gmail.com>
- *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -26,33 +21,48 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_BO_DRM_RADEON_H
-#define TERAKAN_BO_DRM_RADEON_H
+#ifndef TERAKAN_QUEUE_WDDM_H
+#define TERAKAN_QUEUE_WDDM_H
 
-#include "terakan_bo.h"
-
-#include <stdbool.h>
-#include <xf86drm.h>
-#include <vulkan/vulkan_core.h>
+#include "terakan_bo_wddm.h"
+#include "terakan_queue.h"
+#include "terakan_wddm_d3dkmthk.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct terakan_bo_drm_radeon {
-   struct terakan_bo base;
+/* One allocation list entry with hAllocation = 0 referenced in the header entries of the patch
+ * location list.
+ */
+#define TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_BO_REFERENCES 1
+/* 2 header entries. */
+#define TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_RELOCATIONS 2
 
-   __u32 domains;
+struct terakan_device_wddm;
 
-   __u32 handle;
+struct terakan_queue_submission_context_wddm {
+   struct terakan_queue_submission_context base;
 
-   bool handle_shareable;
+   struct terakan_device_wddm const * device;
+
+   D3DKMT_HANDLE context;
+
+   void * command_buffer;
+   D3DDDI_ALLOCATIONLIST * allocation_list;
+   D3DDDI_PATCHLOCATIONLIST * patch_location_list;
 };
 
-extern struct terakan_bo_winsys_fn const terakan_bo_drm_radeon_fn;
+struct terakan_queue_completion_submission_wddm_1_0 {
+   struct terakan_queue_completion_submission base;
+
+   struct terakan_bo_wddm * bo;
+};
+
+extern struct terakan_queue_platform_fn const terakan_queue_wddm_fn;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_BO_DRM_RADEON_H */
+#endif /* TERAKAN_QUEUE_WDDM_H */

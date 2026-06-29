@@ -117,7 +117,7 @@ terakan_bo_reference_writer_add_reference(struct terakan_bo_reference_writer * c
    /* Create the new or update the existing reference. */
    size_t const reference_size = bo->device->bo_reference_size;
    if (reference_index != UINT32_MAX) {
-      bo->device->winsys_fn->queue->update_bo_reference(
+      bo->device->platform_fn->queue->update_bo_reference(
          (char *)writer->references + reference_size * reference_index, bo, is_reading, is_writing,
          priority);
    } else {
@@ -126,7 +126,7 @@ terakan_bo_reference_writer_add_reference(struct terakan_bo_reference_writer * c
       }
       reference_index = writer->reference_count++;
       writer->reference_bos[reference_index] = bo;
-      bo->device->winsys_fn->queue->create_bo_reference(
+      bo->device->platform_fn->queue->create_bo_reference(
          (char *)writer->references + reference_size * reference_index, bo, is_reading, is_writing,
          priority);
    }
@@ -151,11 +151,11 @@ terakan_command_buffer_optimal_submission_size_gfx(
    struct terakan_physical_device_submission_info const * const submission_info_gfx)
 {
    /* Subtract the reserved amount from the optimal size of the application's indirect buffers
-    * because it's preferable to keep the amount round, as the winsys may internally allocate its
-    * submission memory with a large alignment (for instance, according to the addresses, it seems
-    * that in the WDDM Radeon Software driver, memory for submissions is allocated with VirtualAlloc
-    * granularity), and adding a few BO references or relocations beyond some power-of-two amount
-    * may result in a lot of padding.
+    * because it's preferable to keep the amount round, as the platform-specific queue
+    * implementation may internally allocate its submission memory with a large alignment (for
+    * instance, according to the addresses, it seems that in the WDDM Radeon Software driver, memory
+    * for submissions is allocated with VirtualAlloc granularity), and adding a few BO references or
+    * relocations beyond some power-of-two amount may result in a lot of padding.
     */
    return terakan_queue_submission_size_subtract_saturating(
       (struct terakan_queue_submission_size){
@@ -238,7 +238,7 @@ terakan_push_buffer_allocate(struct terakan_command_buffer * const command_buffe
 
       struct terakan_device * const device = terakan_command_buffer_device(command_buffer);
 
-      VkResult const bo_allocate_result = device->winsys_fn->bo->allocate_device_memory(
+      VkResult const bo_allocate_result = device->platform_fn->bo->allocate_device_memory(
          device, TERAKAN_PUSH_BUFFER_SIZE_BYTES, TERAKAN_PUSH_BUFFER_ALIGNMENT,
          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,

@@ -85,7 +85,7 @@ struct terakan_bo_tiling {
    uint8_t attrib_macro_tile_aspect;
 };
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_bo {
    struct terakan_device * device;
 
@@ -117,11 +117,11 @@ void terakan_bo_free(struct terakan_bo * bo, VkAllocationCallbacks const * alloc
 void terakan_bo_init(struct terakan_bo * bo, struct terakan_device * device, uint64_t size);
 
 /* Non-`impl` functions are public. */
-struct terakan_bo_winsys_fn {
+struct terakan_bo_platform_fn {
    /* Returns whether setting was successful. */
    bool (*set_tiling)(struct terakan_bo * bo, struct terakan_bo_tiling const * tiling);
 
-   /* Only needed if the winsys supports VK_KHR_external_memory_fd. */
+   /* Only needed if the platform supports VK_KHR_external_memory_fd. */
    int (*export_fd)(struct terakan_bo * bo, bool writable);
 
    void * (*map_impl)(struct terakan_bo * bo);
@@ -143,12 +143,12 @@ struct terakan_bo_winsys_fn {
                                       VkAllocationCallbacks const * allocator,
                                       VkSystemAllocationScope scope, struct terakan_bo ** bo_out);
 
-   /* Only needed if the winsys supports VK_KHR_external_memory_fd.
+   /* Only needed if the platform supports VK_KHR_external_memory_fd.
     * Returns whether the query was successful.
     */
    bool (*get_fd_vram_preference)(struct terakan_device * device, int fd,
                                   bool * vram_preferred_out);
-   /* Only needed if the winsys supports VK_KHR_external_memory_fd.
+   /* Only needed if the platform supports VK_KHR_external_memory_fd.
     * On failure, returns VK_ERROR_OUT_OF_HOST_MEMORY or VK_ERROR_INVALID_EXTERNAL_HANDLE.
     */
    VkResult (*import_fd)(struct terakan_device * device, int fd, VkDeviceSize size,

@@ -40,15 +40,15 @@
 #include <stdlib.h>
 
 #if defined(_WIN32)
-#define TERAKAN_INSTANCE_HAS_WINSYS_WDDM
+#define TERAKAN_INSTANCE_HAS_PLATFORM_WDDM
 #else
-#define TERAKAN_INSTANCE_HAS_WINSYS_DRM_RADEON
+#define TERAKAN_INSTANCE_HAS_PLATFORM_DRM_RADEON
 #endif
 
-#if defined(TERAKAN_INSTANCE_HAS_WINSYS_DRM_RADEON)
-#include "winsys/drm_radeon/terakan_instance_drm_radeon.h"
-#elif defined(TERAKAN_INSTANCE_HAS_WINSYS_WDDM)
-#include "winsys/wddm/terakan_instance_wddm.h"
+#if defined(TERAKAN_INSTANCE_HAS_PLATFORM_DRM_RADEON)
+#include "platform/drm_radeon/terakan_instance_drm_radeon.h"
+#elif defined(TERAKAN_INSTANCE_HAS_PLATFORM_WDDM)
+#include "platform/wddm/terakan_instance_wddm.h"
 #endif
 
 static struct debug_control const terakan_test_flags[] = {
@@ -243,9 +243,9 @@ terakan_CreateInstance(VkInstanceCreateInfo const * const pCreateInfo,
    }
 
    struct terakan_instance * instance;
-#if defined(TERAKAN_INSTANCE_HAS_WINSYS_DRM_RADEON)
+#if defined(TERAKAN_INSTANCE_HAS_PLATFORM_DRM_RADEON)
    result = terakan_instance_drm_radeon_create(pCreateInfo, pAllocator, &instance);
-#elif defined(TERAKAN_INSTANCE_HAS_WINSYS_WDDM)
+#elif defined(TERAKAN_INSTANCE_HAS_PLATFORM_WDDM)
    result = terakan_instance_wddm_create(pCreateInfo, pAllocator, &instance);
 #else
 #error "No instance creation function for the target platform"

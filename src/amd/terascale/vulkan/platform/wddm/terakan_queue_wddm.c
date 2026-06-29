@@ -336,11 +336,11 @@ terakan_queue_completion_submission_wddm_submit(
 
    /* Make the BO in use until the GPU has completed the submission. */
    void * const signal_bo_reference = alloca(device->bo_reference_size);
-   device->winsys_fn->queue->create_bo_reference(signal_bo_reference, &submission->bo->base, false,
-                                                 true, TERAKAN_BO_PRIORITY_SYNC);
-   return device->winsys_fn->queue->submit(submission->base.queue->submission_context, 1,
-                                           signal_bo_reference, signal_indirect_buffer_size_dwords,
-                                           signal_indirect_buffer, 0, NULL);
+   device->platform_fn->queue->create_bo_reference(signal_bo_reference, &submission->bo->base,
+                                                   false, true, TERAKAN_BO_PRIORITY_SYNC);
+   return device->platform_fn->queue->submit(
+      submission->base.queue->submission_context, 1, signal_bo_reference,
+      signal_indirect_buffer_size_dwords, signal_indirect_buffer, 0, NULL);
 }
 
 static bool
@@ -375,7 +375,7 @@ terakan_queue_completion_submission_wddm_await(
 }
 
 static void
-terakan_queue_completion_submission_wddm_finish_winsys_and_free(
+terakan_queue_completion_submission_wddm_finish_platform_and_free(
    struct terakan_queue_completion_submission * const submission_base)
 {
    struct terakan_queue_completion_submission_wddm_1_0 * const submission =
@@ -387,7 +387,7 @@ terakan_queue_completion_submission_wddm_finish_winsys_and_free(
 }
 
 static VkResult
-terakan_queue_completion_submission_wddm_alloc_and_init_winsys(
+terakan_queue_completion_submission_wddm_alloc_and_init_platform(
    struct terakan_queue * const queue,
    struct terakan_queue_completion_submission ** const submission_out)
 {
@@ -405,7 +405,7 @@ terakan_queue_completion_submission_wddm_alloc_and_init_winsys(
    }
 
    struct terakan_bo * bo_base;
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, 1, 1, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
       &bo_base);
    if (result != VK_SUCCESS) {
@@ -422,7 +422,7 @@ terakan_queue_completion_submission_wddm_alloc_and_init_winsys(
    return VK_SUCCESS;
 }
 
-struct terakan_queue_winsys_fn const terakan_queue_wddm_fn = {
+struct terakan_queue_platform_fn const terakan_queue_wddm_fn = {
    .create_bo_reference = terakan_queue_wddm_create_bo_reference,
    .update_bo_reference = terakan_queue_wddm_update_bo_reference,
    .release_submission_context = terakan_queue_wddm_release_submission_context,
@@ -430,8 +430,8 @@ struct terakan_queue_winsys_fn const terakan_queue_wddm_fn = {
    .submit = terakan_queue_wddm_submit,
    .completion_submission_submit = terakan_queue_completion_submission_wddm_submit,
    .completion_submission_await = terakan_queue_completion_submission_wddm_await,
-   .completion_submission_finish_winsys_and_free =
-      terakan_queue_completion_submission_wddm_finish_winsys_and_free,
-   .completion_submission_alloc_and_init_winsys =
-      terakan_queue_completion_submission_wddm_alloc_and_init_winsys,
+   .completion_submission_finish_platform_and_free =
+      terakan_queue_completion_submission_wddm_finish_platform_and_free,
+   .completion_submission_alloc_and_init_platform =
+      terakan_queue_completion_submission_wddm_alloc_and_init_platform,
 };

@@ -148,8 +148,8 @@ terakan_bo_drm_radeon_free_impl(struct terakan_bo * const bo_base,
    bool close_bo;
    if (bo->handle_shareable) {
       /* Close the handle atomically with reference count management to make sure the handle isn't
-       * closed while another thread is importing the same GEM BO or destroying another winsys BO
-       * for this GEM BO.
+       * closed while another thread is importing the same GEM BO or destroying another Terakan BO
+       * wrapper for this GEM BO.
        */
       mtx_lock(&device->shared_bo_mutex);
       struct hash_entry * const reference_count_entry =
@@ -381,7 +381,7 @@ terakan_bo_drm_radeon_import_fd(struct terakan_device * const device_base, int c
    return VK_SUCCESS;
 }
 
-struct terakan_bo_winsys_fn const terakan_bo_drm_radeon_fn = {
+struct terakan_bo_platform_fn const terakan_bo_drm_radeon_fn = {
    .set_tiling = terakan_bo_drm_radeon_set_tiling,
    .export_fd = terakan_bo_drm_radeon_export_fd,
    .map_impl = terakan_bo_drm_radeon_map_impl,

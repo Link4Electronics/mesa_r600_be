@@ -366,9 +366,10 @@ terakan_physical_device_chip_info_init(
       max_render_backends_per_se_log2 + (unsigned)chip_info_out->two_shader_engines_max;
 }
 
-/* Winsys-specific extensions are not handled, they should be configured by the
- * get_winsys_extensions winsys callback.
- * deviceUUID is not set as well, expected to be configured by the winsys.
+/* Platform-specific extensions are not handled, they should be configured by the
+ * `get_platform_extensions` callback.
+ * `deviceUUID` is not set as well, expected to be configured by the platform-specific
+ * initialization.
  */
 static void
 terakan_physical_device_get_capabilities(
@@ -1066,13 +1067,13 @@ terakan_physical_device_destroy(struct vk_physical_device * const device_base)
 
    r600_isa_destroy(device->isa);
 
-   device->winsys_fn->destroy(device);
+   device->platform_fn->destroy(device);
 }
 
 VkResult
 terakan_physical_device_init(
    struct terakan_physical_device * const device, struct terakan_instance * const instance,
-   struct terakan_physical_device_winsys_fn const * const winsys_fn_static,
+   struct terakan_physical_device_platform_fn const * const platform_fn_static,
    uint32_t const pci_device_id, VkDeviceSize const gtt_allocation_granularity,
    VkDeviceSize const gtt_size, VkDeviceSize const vram_size, VkDeviceSize const vram_visible,
    VkDeviceSize const max_memory_allocation_size, VkDeviceSize const min_memory_map_alignment,
@@ -1086,7 +1087,7 @@ terakan_physical_device_init(
    /* See NON-CONFORMANT: comments throughout the code for technical reasons. */
    vk_warn_non_conformant_implementation("terakan");
 
-   device->winsys_fn = winsys_fn_static;
+   device->platform_fn = platform_fn_static;
 
    terakan_physical_device_chip_info_init(pci_device_id, &device->chip_info);
 
@@ -1248,7 +1249,7 @@ terakan_physical_device_init(
       instance, &device->chip_info, device->tiling_info.pipe_interleave_bytes_log2,
       min_memory_map_alignment, clock_crystal_frequency_hz, max_memory_allocation_size, &extensions,
       &features, &properties);
-   device->winsys_fn->get_winsys_extensions(device, &extensions, &features, &properties);
+   device->platform_fn->get_platform_extensions(device, &extensions, &features, &properties);
 
    struct vk_physical_device_dispatch_table dispatch_table;
    vk_physical_device_dispatch_table_from_entrypoints(&dispatch_table,

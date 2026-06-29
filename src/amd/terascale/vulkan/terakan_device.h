@@ -43,21 +43,21 @@
 extern "C" {
 #endif
 
-struct terakan_device_winsys_fn {
-   struct terakan_bo_winsys_fn const * bo;
+struct terakan_device_platform_fn {
+   struct terakan_bo_platform_fn const * bo;
 
-   struct terakan_queue_winsys_fn const * queue;
+   struct terakan_queue_platform_fn const * queue;
 
    void (*destroy)(struct terakan_device * device);
 };
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_device {
    struct vk_device vk;
 
    struct vk_device_dispatch_table command_dispatch_table;
 
-   struct terakan_device_winsys_fn const * winsys_fn;
+   struct terakan_device_platform_fn const * platform_fn;
 
    size_t bo_reference_size;
    size_t bo_reference_alignment;
@@ -156,7 +156,7 @@ VkResult terakan_device_init(struct terakan_device * device,
                              struct terakan_physical_device * physical_device,
                              VkDeviceCreateInfo const * create_info,
                              VkAllocationCallbacks const * allocator,
-                             struct terakan_device_winsys_fn const * winsys_fn_static,
+                             struct terakan_device_platform_fn const * platform_fn_static,
                              size_t bo_reference_size, size_t bo_reference_alignment);
 
 #ifdef __cplusplus

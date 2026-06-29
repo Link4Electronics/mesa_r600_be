@@ -21,26 +21,39 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_BO_WDDM_H
-#define TERAKAN_BO_WDDM_H
+#ifndef TERAKAN_QUEUE_DRM_RADEON_H
+#define TERAKAN_QUEUE_DRM_RADEON_H
 
-#include "terakan_bo.h"
-#include "terakan_wddm_d3dkmthk.h"
+#include "terakan_bo_drm_radeon.h"
+#include "terakan_queue.h"
+
+#include <radeon_drm.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct terakan_bo_wddm {
-   struct terakan_bo base;
+struct terakan_device_drm_radeon;
 
-   D3DKMT_HANDLE allocation;
+struct terakan_queue_submission_context_drm_radeon {
+   struct terakan_queue_submission_context base;
+
+   struct terakan_device_drm_radeon const * device;
+
+   /* RADEON_CS_RING. */
+   __u32 ring;
 };
 
-extern struct terakan_bo_winsys_fn const terakan_bo_wddm_fn;
+struct terakan_queue_completion_submission_drm_radeon {
+   struct terakan_queue_completion_submission base;
+
+   struct terakan_bo_drm_radeon * bo;
+};
+
+extern struct terakan_queue_platform_fn const terakan_queue_drm_radeon_fn;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_BO_WDDM_H */
+#endif /* TERAKAN_QUEUE_DRM_RADEON_H */

@@ -1182,7 +1182,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    /* 32 bits are enough for the BO size, as qword addresses in shader control flow instructions are
     * 24-bit.
     */
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, shader_bo_bytes_shr8 << 8, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,

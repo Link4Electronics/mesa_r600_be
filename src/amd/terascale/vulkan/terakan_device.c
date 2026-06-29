@@ -87,7 +87,7 @@ terakan_DestroyDevice(VkDevice const deviceHandle, VkAllocationCallbacks const *
       return;
    }
 
-   device->winsys_fn->destroy(device);
+   device->platform_fn->destroy(device);
 }
 
 VkResult
@@ -95,7 +95,7 @@ terakan_device_init(struct terakan_device * const device,
                     struct terakan_physical_device * const physical_device,
                     VkDeviceCreateInfo const * const create_info,
                     VkAllocationCallbacks const * const allocator,
-                    struct terakan_device_winsys_fn const * const winsys_fn_static,
+                    struct terakan_device_platform_fn const * const platform_fn_static,
                     size_t const bo_reference_size, size_t const bo_reference_alignment)
 {
    VkResult result;
@@ -131,7 +131,7 @@ terakan_device_init(struct terakan_device * const device,
 
    device->vk.command_buffer_ops = &terakan_command_buffer_ops;
 
-   device->winsys_fn = winsys_fn_static;
+   device->platform_fn = platform_fn_static;
 
    device->bo_reference_size = bo_reference_size;
    device->bo_reference_alignment = bo_reference_alignment;
@@ -143,7 +143,7 @@ terakan_device_init(struct terakan_device * const device,
         reference_placeholder_bos_created < TERAKAN_QUEUE_BO_REFERENCE_PLACEHOLDER_INDEX_COUNT;
         ++reference_placeholder_bos_created) {
       /* 0x100 for base address alignment for 8-shifted addresses. */
-      result = device->winsys_fn->bo->allocate_device_memory(
+      result = device->platform_fn->bo->allocate_device_memory(
          device, 0x100, 0x100, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL,
          VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
          &device->reference_placeholder_bos[reference_placeholder_bos_created]);
@@ -154,7 +154,7 @@ terakan_device_init(struct terakan_device * const device,
       }
    }
 
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, MAX2(sizeof(uint32_t), TERAKAN_CP_DMA_COPY_OPTIMAL_ALIGNMENT * 2),
       MAX2(sizeof(uint32_t), TERAKAN_CP_DMA_COPY_OPTIMAL_ALIGNMENT),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
@@ -173,7 +173,7 @@ terakan_device_init(struct terakan_device * const device,
          DIV_ROUND_UP(physical_device->chip_info.uav_immediate_size_elements << element_bytes_log2,
                       (uint32_t)1 << 8);
    }
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, uav_immediate_bo_bytes_shr8 << 8, (VkDeviceSize)1 << 8,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
       &device->uav_immediate_bo);
@@ -195,7 +195,7 @@ terakan_device_init(struct terakan_device * const device,
    unsigned const query_accumulator_uav_base_granularity_log2 =
       terakan_color_descriptor_buffer_uav_base_granularity_log2(
          query_accumulator_uav_bytes_per_element, physical_device);
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device,
       ALIGN_POT(TERAKAN_KCACHE_HW_LINE_BYTES,
                 query_accumulator_uav_bytes_per_element *
@@ -234,7 +234,7 @@ terakan_device_init(struct terakan_device * const device,
          meta_shader_offset >> TERAKAN_SHADER_PROGRAM_ALIGNMENT_LOG2;
       meta_shaders_bo_size = meta_shader_offset + meta_shader_description->program_size_bytes;
    }
-   result = device->winsys_fn->bo->allocate_device_memory(
+   result = device->platform_fn->bo->allocate_device_memory(
       device, meta_shaders_bo_size, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -376,8 +376,8 @@ terakan_CreateDevice(VkPhysicalDevice const physicalDevice,
       terakan_physical_device_from_handle(physicalDevice);
 
    struct terakan_device * device;
-   VkResult const result =
-      physical_device->winsys_fn->create_device(physical_device, pCreateInfo, pAllocator, &device);
+   VkResult const result = physical_device->platform_fn->create_device(physical_device, pCreateInfo,
+                                                                       pAllocator, &device);
    if (result != VK_SUCCESS) {
       return result;
    }

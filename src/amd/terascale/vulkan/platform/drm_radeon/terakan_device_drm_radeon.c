@@ -52,7 +52,7 @@ terakan_device_drm_radeon_destroy(struct terakan_device * const device_base)
    vk_free(&device->base.vk.alloc, device);
 }
 
-static struct terakan_device_winsys_fn const terakan_device_drm_radeon_fn = {
+static struct terakan_device_platform_fn const terakan_device_drm_radeon_fn = {
    .bo = &terakan_bo_drm_radeon_fn,
    .queue = &terakan_queue_drm_radeon_fn,
    .destroy = terakan_device_drm_radeon_destroy,

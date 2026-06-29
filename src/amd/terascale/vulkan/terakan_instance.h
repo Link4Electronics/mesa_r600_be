@@ -93,7 +93,7 @@ struct terakan_instance;
 
 typedef void (*terakan_instance_destroy_fn)(struct terakan_instance * instance);
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_instance {
    struct vk_instance vk;
 
@@ -135,8 +135,8 @@ VK_DEFINE_HANDLE_CASTS(terakan_instance, vk.base, VkInstance, VK_OBJECT_TYPE_INS
 
 void terakan_instance_finish(struct terakan_instance * instance);
 
-/* The winsys must set the physical device enumeration function after initializing the instance
- * base.
+/* Platform-specific instance creation must set the physical device enumeration function after
+ * initializing the instance base.
  */
 VkResult terakan_instance_init(struct terakan_instance * instance,
                                VkInstanceCreateInfo const * create_info,

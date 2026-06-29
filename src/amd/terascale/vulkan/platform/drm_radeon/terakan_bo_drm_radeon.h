@@ -1,6 +1,11 @@
 /*
  * Copyright © 2024 Vitaliy Triang3l Kuzmin
  *
+ * Based on Gallium Radeon DRM winsys which is:
+ * Copyright © 2008 Jérôme Glisse
+ * Copyright © 2009 Corbin Simpson <MostAwesomeDude@gmail.com>
+ * Copyright © 2011 Marek Olšák <maraeo@gmail.com>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -21,39 +26,33 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_QUEUE_DRM_RADEON_H
-#define TERAKAN_QUEUE_DRM_RADEON_H
+#ifndef TERAKAN_BO_DRM_RADEON_H
+#define TERAKAN_BO_DRM_RADEON_H
 
-#include "terakan_bo_drm_radeon.h"
-#include "terakan_queue.h"
+#include "terakan_bo.h"
 
-#include <radeon_drm.h>
+#include <stdbool.h>
+#include <xf86drm.h>
+#include <vulkan/vulkan_core.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct terakan_device_drm_radeon;
+struct terakan_bo_drm_radeon {
+   struct terakan_bo base;
 
-struct terakan_queue_submission_context_drm_radeon {
-   struct terakan_queue_submission_context base;
+   __u32 domains;
 
-   struct terakan_device_drm_radeon const * device;
+   __u32 handle;
 
-   /* RADEON_CS_RING. */
-   __u32 ring;
+   bool handle_shareable;
 };
 
-struct terakan_queue_completion_submission_drm_radeon {
-   struct terakan_queue_completion_submission base;
-
-   struct terakan_bo_drm_radeon * bo;
-};
-
-extern struct terakan_queue_winsys_fn const terakan_queue_drm_radeon_fn;
+extern struct terakan_bo_platform_fn const terakan_bo_drm_radeon_fn;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_QUEUE_DRM_RADEON_H */
+#endif /* TERAKAN_BO_DRM_RADEON_H */

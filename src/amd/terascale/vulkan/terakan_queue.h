@@ -115,10 +115,10 @@ terakan_queue_submission_size_add(struct terakan_queue_submission_size const a,
    return submission_size;
 }
 
-/* Primarily for reserving space for winsys-specific data.
+/* Primarily for reserving space for platform-specific data.
  * The subtraction is saturating primarily to handle the case when virtual memory is used and thus
  * relocations aren't needed for the commands themselves, thus the optimal relocation count would be
- * 0, but the winsys still passes some data via relocations internally.
+ * 0, but platform-specific submission still passes some data via relocations internally.
  */
 static inline struct terakan_queue_submission_size
 terakan_queue_submission_size_subtract_saturating(struct terakan_queue_submission_size const a,
@@ -144,7 +144,7 @@ terakan_queue_submission_size_min(struct terakan_queue_submission_size const a,
    return submission_size;
 }
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_queue_submission_context {
    struct terakan_queue_submission_size max_submission_size;
 };
@@ -166,7 +166,7 @@ struct terakan_queue_completion_signal {
 
 struct terakan_queue;
 
-/* Partially implemented by the winsys. */
+/* Partially implemented by the platform specialization. */
 struct terakan_queue_completion_submission {
    struct terakan_queue * queue;
 
@@ -217,9 +217,9 @@ VkResult terakan_queue_create(struct terakan_device * device,
                               VkDeviceQueueCreateInfo const * create_info, uint32_t index_in_family,
                               struct terakan_queue ** queue_out);
 
-struct terakan_queue_winsys_fn {
-   /* BO references in command submissions are winsys-specific objects whose size and alignment are
-    * terakan_device::bo_reference_size/alignment.
+struct terakan_queue_platform_fn {
+   /* BO references in command submissions are platform-specific objects whose size and alignment
+    * are `terakan_device::bo_reference_size/alignment`.
     */
    void (*create_bo_reference)(void * bo_reference, struct terakan_bo const * bo, bool is_reading,
                                bool is_writing, enum terakan_bo_priority priority);
@@ -227,8 +227,8 @@ struct terakan_queue_winsys_fn {
                                bool is_writing, enum terakan_bo_priority priority);
 
    void (*release_submission_context)(struct terakan_queue_submission_context * submission_context);
-   /* Depending on the winsys implementation, the returned pointer may be not unique, hence
-    * acquire / release rather than create / destroy.
+   /* Depending on the platform-specific implementation, the returned pointer may be not unique,
+    * hence acquire / release rather than create / destroy.
     *
     * The actual maximum submission size for the created context can end up being arbitrarily large,
     * including smaller than the desired size, or values like UINT32_MAX (the implementation though
@@ -236,8 +236,8 @@ struct terakan_queue_winsys_fn {
     * submissions, but also for completion submission signals).
     *
     * In general a submission context is not free-threaded (shares the external synchronization
-    * requirement with the queue), so if the winsys shares a submission context between queues,
-    * thread safety must be ensured inside the implementation.
+    * requirement with the queue), so if the platform-specific device implementation shares a
+    * submission context between queues, thread safety must be ensured inside the implementation.
     *
     * Not exposing queue priorities as the DRM Radeon 2.50.0 kernel driver only provides a
     * high-priority DMA ring on R9xx.
@@ -267,10 +267,10 @@ struct terakan_queue_winsys_fn {
                                             uint32_t const * signal_indirect_buffer);
    /* Returns whether the wait was successful. In case of a GPU hang, must return in finite time. */
    bool (*completion_submission_await)(struct terakan_queue_completion_submission * submission);
-   void (*completion_submission_finish_winsys_and_free)(
+   void (*completion_submission_finish_platform_and_free)(
       struct terakan_queue_completion_submission * submission);
    /* On failure, returns VK_ERROR_OUT_OF_HOST_MEMORY or VK_ERROR_OUT_OF_DEVICE_MEMORY. */
-   VkResult (*completion_submission_alloc_and_init_winsys)(
+   VkResult (*completion_submission_alloc_and_init_platform)(
       struct terakan_queue * queue, struct terakan_queue_completion_submission ** submission_out);
 };
 

@@ -33,7 +33,7 @@ void *
 terakan_bo_map(struct terakan_bo * const bo)
 {
    if (bo->mapping == NULL) {
-      bo->mapping = bo->device->winsys_fn->bo->map_impl(bo);
+      bo->mapping = bo->device->platform_fn->bo->map_impl(bo);
    }
    return bo->mapping;
 }
@@ -44,7 +44,7 @@ terakan_bo_unmap(struct terakan_bo * const bo)
    if (bo->mapping == NULL) {
       return;
    }
-   bo->device->winsys_fn->bo->unmap_impl(bo);
+   bo->device->platform_fn->bo->unmap_impl(bo);
    bo->mapping = NULL;
 }
 
@@ -52,7 +52,7 @@ void
 terakan_bo_free(struct terakan_bo * const bo, VkAllocationCallbacks const * const allocator)
 {
    terakan_bo_unmap(bo);
-   bo->device->winsys_fn->bo->free_impl(bo, allocator);
+   bo->device->platform_fn->bo->free_impl(bo, allocator);
 }
 
 void
