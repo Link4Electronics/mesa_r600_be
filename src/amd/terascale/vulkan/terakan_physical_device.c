@@ -47,6 +47,7 @@
 #include "vk_alloc.h"
 #include "vk_device.h"
 #include "vk_extensions.h"
+#include "vk_limits.h"
 #include "vk_log.h"
 #include "vk_util.h"
 #include "wsi_common.h"
@@ -586,13 +587,17 @@ terakan_physical_device_get_capabilities(
     * can be empty, but other drivers generally provide small numbers of bound sets, so expose a
     * finite amount assuming that every binding can be in its own set.
     */
-   uint32_t const max_per_set_descriptors = properties_out->maxDescriptorSetSamplers +
+   properties_out->maxBoundDescriptorSets = properties_out->maxDescriptorSetSamplers +
                                             properties_out->maxDescriptorSetUniformBuffers +
                                             properties_out->maxDescriptorSetStorageBuffers +
                                             properties_out->maxDescriptorSetSampledImages +
                                             properties_out->maxDescriptorSetStorageImages +
                                             properties_out->maxDescriptorSetInputAttachments;
-   properties_out->maxBoundDescriptorSets = max_per_set_descriptors;
+   /* TODO(Triang3l): Remove the arbitrary `MESA_VK_MAX_DESCRIPTOR_SETS` in the common Vulkan
+    * runtime in favor of dynamic allocation.
+    */
+   properties_out->maxBoundDescriptorSets =
+      MIN2(properties_out->maxBoundDescriptorSets, MESA_VK_MAX_DESCRIPTOR_SETS);
 
    properties_out->maxVertexInputAttributes = TERAKAN_VK_STATE_MAX_VERTEX_ATTRIBUTES;
    properties_out->maxVertexInputBindings = TERAKAN_VK_STATE_MAX_VERTEX_BINDINGS;
