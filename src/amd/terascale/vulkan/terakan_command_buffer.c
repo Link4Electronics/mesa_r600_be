@@ -416,8 +416,13 @@ terakan_command_buffer_create(struct vk_command_pool * const command_pool,
       return vk_error(command_pool->base.device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
 
-   result =
-      vk_command_buffer_init(command_pool, &command_buffer->vk, &terakan_command_buffer_ops, 0);
+   struct vk_command_buffer_init_params command_buffer_init_params = {
+      .pool = command_pool,
+      .ops = &terakan_command_buffer_ops,
+      .level = level,
+      .needs_cmd_queue = level == VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+   };
+   result = vk_command_buffer_init_with_params(&command_buffer->vk, &command_buffer_init_params);
    if (result != VK_SUCCESS) {
       vk_free(&command_pool->alloc, command_buffer);
       return result;
