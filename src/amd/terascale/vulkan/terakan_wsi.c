@@ -44,7 +44,16 @@ terakan_wsi_finish(struct terakan_physical_device * const physical_device)
 VkResult
 terakan_wsi_init(struct terakan_physical_device * const physical_device)
 {
-   struct wsi_device_options const device_options = {.sw_device = false};
+   /* Temporarily using the software WSI implementation because:
+    * - On WDDM, as of April 2024, the DXGI path in the common Mesa WSI uses Direct3D 12, which is
+    *   not available on TeraScale;
+    * - On DRM Radeon, implicit sync is required, but its support was removed in the common Mesa WSI
+    *   in August 2025 in https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/36783
+    */
+   /* TODO(Triang3l): Revisit direct presentation. Software presentation has a severe performance
+    * impact.
+    */
+   struct wsi_device_options const device_options = {.sw_device = true};
    VkResult result = wsi_device_init(
       &physical_device->wsi_device, terakan_physical_device_to_handle(physical_device),
       terakan_wsi_proc_addr, &physical_device->vk.instance->alloc, -1, NULL, &device_options);
@@ -53,13 +62,6 @@ terakan_wsi_init(struct terakan_physical_device * const physical_device)
    }
 
    physical_device->vk.wsi_device = &physical_device->wsi_device;
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-   /* As of April 2024, the DXGI path uses Direct3D 12, which is not available on TeraScale.
-    * Until a more direct solution is implemented, present via copying to the host.
-    */
-   physical_device->wsi_device.sw = true;
-#endif
 
    return VK_SUCCESS;
 }
