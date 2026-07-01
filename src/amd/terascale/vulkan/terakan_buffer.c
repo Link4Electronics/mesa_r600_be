@@ -71,7 +71,8 @@ terakan_buffer_create_storage_buffer_descriptor(
    if (!terakan_descriptor_create_for_storage_buffer(
           buffer->bo, buffer->va + buffer_info->offset,
           vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range),
-          container_of(buffer->vk.base.device->physical, struct terakan_physical_device const, vk),
+          container_of(buffer->vk.base.device->physical, struct terakan_physical_device const, vk)
+             ->tiling_info.pipe_interleave_bytes_log2,
           resource_out, color_out)) {
       return NULL;
    }
@@ -304,9 +305,10 @@ terakan_CreateBufferView(VkDevice const deviceHandle,
           */
 
          if (format_info.supports_cb_color && pCreateInfo->offset % bytes_per_element == 0) {
-            terakan_color_descriptor_calculate_buffer_base_pitch_slice_view_dim(
+            terakan_color_descriptor_calculate_buffer_base_view_dim(
                &buffer_view->color, va, buffer_view->vk.elements, bytes_per_element,
-               terakan_device_physical_device(device), true);
+               terakan_device_physical_device(device)->tiling_info.pipe_interleave_bytes_log2,
+               true);
             buffer_view->color.info = S_028C70_ENDIAN(endian_swap) |
                                       S_028C70_FORMAT(format_info.format) |
                                       S_028C70_NUMBER_TYPE(format_info.number_type) |

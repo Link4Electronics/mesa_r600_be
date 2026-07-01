@@ -50,6 +50,9 @@ amd_terascale_common_files = files(
   '../../../gallium/drivers/r600/r600_isa.h',
   '../../../gallium/drivers/r600/r600_shader_common.h',
   '../../../gallium/drivers/r600/r700_asm.c',
+  'nir/terascale_nir.h',
+  'nir/terascale_nir_lower_sin_cos.c',
+  'nir/terascale_nir_lower_tex.c',
   'terascale_device_name.c',
   'terascale_device_name.h',
   'terascale_format.c',
@@ -59,6 +62,7 @@ amd_terascale_common_files = files(
 
 amd_terascale_common_includes = [
   inc_amd_common,
+  inc_compiler,
   inc_util,
 ]
 
@@ -69,6 +73,7 @@ libamd_terascale_common = static_library(
   dependencies : [
     idep_amd_terascale_registers,
     idep_mesautil,
+    idep_nir,
   ],
   gnu_symbol_visibility : 'hidden',
 )

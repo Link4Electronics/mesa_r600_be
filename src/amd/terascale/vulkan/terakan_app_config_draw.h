@@ -484,7 +484,7 @@ struct terakan_app_config_draw {
       struct terakan_app_config_draw_cb_color_rtv rtv[TERAKAN_COLOR_HW_RTV_COUNT];
 
       struct {
-         uint8_t rtv_dsb_uncompacted_exports;
+         struct terakan_shader_rtv_mapping rtv_mapping;
       } from_apply_sq_pgm_fragment;
 
       struct {

@@ -29,13 +29,16 @@
 #include <stdint.h>
 
 nir_def *
-terakan_nir_load_raw_resource_buffer(nir_builder * const b, unsigned const num_components,
+terakan_nir_load_raw_resource_buffer(nir_builder * const builder, unsigned const num_components,
                                      unsigned const bit_size, enum gl_access_qualifier const access,
                                      unsigned const resource_index_base,
                                      nir_def * const resource_index, unsigned byte_address_base,
                                      nir_def * byte_address)
 {
    assert(bit_size == 8 || bit_size == 16 || bit_size == 32);
+
+   assert(num_components > 0u);
+   assert(num_components <= 4u);
 
    /* According to testing on Barts, 8_8_8 and 16_16_16 buffer fetches return completely invalid
     * values.
@@ -66,15 +69,15 @@ terakan_nir_load_raw_resource_buffer(nir_builder * const b, unsigned const num_c
    /* Apply the base to the address source if it's too large to be specified in the fetch
     * instruction.
     */
-   if (byte_address_base > UINT16_MAX) {
-      byte_address = nir_iadd(b, byte_address, nir_imm_int(b, (int)byte_address_base));
+   if (byte_address_base > 0xFFFFu) {
+      byte_address = nir_iadd(builder, byte_address, nir_imm_int(builder, (int)byte_address_base));
       byte_address_base = 0;
    }
 
-   return nir_u2uN(b,
+   return nir_u2uN(builder,
                    nir_load_buffer_resource_r600(
-                      b, num_components, 32, resource_index, byte_address, .access = access,
-                      .id_base = resource_index_base, .base = byte_address_base, .component = 0,
+                      builder, num_components, 32, resource_index, byte_address, .access = access,
+                      .binding = resource_index_base, .base = byte_address_base, .component = 0,
                       .format = formats[ffs(bit_size / 8) - 1][num_components - 1]),
                    bit_size);
 }

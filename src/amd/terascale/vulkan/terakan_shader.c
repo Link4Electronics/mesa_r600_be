@@ -29,10 +29,13 @@
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
 #include "terakan_physical_device.h"
+#include "terakan_pipeline_layout.h"
 
+#include "amd/terascale/common/nir/terascale_nir.h"
 #include "amd/terascale/common/terascale_wddm.h"
 #include "compiler/glsl_types.h"
 #include "gallium/drivers/r600/evergreend.h"
+#include "gallium/drivers/r600/sfn/sfn_nir.h"
 #include "gallium/drivers/r600/sfn/sfn_nir_lower_tex.h"
 #include "spirv/nir_spirv.h"
 #include "util/bitscan.h"
@@ -104,31 +107,41 @@ struct terakan_shader_ring const terakan_shader_rings[TERAKAN_SHADER_RING_INDEX_
       },
 };
 
-/* From gl_nir_linker.c. */
-static void
-terakan_nir_shared_type_info(struct glsl_type const * const type, unsigned * const size,
-                             unsigned * const align)
-{
-   assert(glsl_type_is_vector_or_scalar(type));
-   uint32_t const comp_size = glsl_type_is_boolean(type) ? 4 : glsl_get_bit_size(type) / 8;
-   unsigned const length = glsl_get_vector_elements(type);
-   *size = comp_size * length;
-   *align = comp_size * (length == 3 ? 4 : length);
-}
+/* New version. */
 
 nir_shader *
-terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const spirv_size_bytes,
-                            uint32_t const * const spirv, mesa_shader_stage const stage,
-                            char const * const entrypoint,
-                            VkSpecializationInfo const * const specialization_info)
+terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t const spirv_size_bytes,
+                                uint32_t const * const spirv, mesa_shader_stage const stage,
+                                char const * const entrypoint,
+                                VkSpecializationInfo const * const specialization_info)
 {
    struct terakan_physical_device const * const physical_device =
       terakan_device_physical_device(device);
 
+   /* Get the initial, largely not backend-specific NIR.
+    *
+    * After this point, the shader will still use variable derefs for I/O, bindings, and even local
+    * variables.
+    *
+    * However, importantly, the shader's structure will be different from the original SPIR-V in the
+    * following ways:
+    * - Functions will be inlined, and there will be one return from the entry point.
+    * - Constant initializers of variables will be lowered to store instructions.
+    * - Structure copying, and per-member I/O structures, will be split.
+    * - Dead I/O variables will be coarsely removed (in a way mostly sufficient for knowing the
+    *   output usage).
+    * - `invariant` will be propagated.
+    */
+
+   /* TODO(Triang3l): All `vk_pipeline_shader_stage_to_nir` and `vk_shader_to_nir` functionality
+    * (primarily `vk_set_subgroup_size` when relevant).
+    */
+
    static struct spirv_to_nir_options const spirv_options = {
       .environment = NIR_SPIRV_VULKAN,
 
-      /* TODO(Triang3l): Capabilities when supported and tested. */
+      /* TODO(Triang3l): `amd_gcn_shader` when 64-bit integers (for `TimeAMD`) are supported. */
+      /* TODO(Triang3l): `amd_shader_explicit_vertex_parameter` when supported and tested. */
 
       .ubo_addr_format = nir_address_format_32bit_index_offset,
       .ssbo_addr_format = nir_address_format_32bit_index_offset,
@@ -139,273 +152,344 @@ terakan_shader_spirv_to_nir(struct terakan_device * const device, size_t const s
       .min_ssbo_alignment = sizeof(uint32_t),
    };
 
-   nir_shader * nir =
+   nir_shader * const nir =
       vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint, specialization_info,
                       &spirv_options, &physical_device->nir_options, false, NULL);
-
-   /* SFN expects certain fragment shader system values to be accessed via load_input rather than
-    * the system value load intrinsics, make sure that's the case before nir_lower_system_values is
-    * done that would otherwise generate system value load intrinsics.
-    */
-
-   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
-      struct nir_lower_sysvals_to_varyings_options const lower_sysvals_to_varyings_options = {
-         .frag_coord = true,
-         .front_face = true,
-         .point_coord = true,
-      };
-      NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &lower_sysvals_to_varyings_options);
+   if (unlikely(nir == NULL)) {
+      return NULL;
    }
 
-   /* Assign meanings and indices to variables in cases that don't depend on the actual executable
-    * code once all variables are set up (including via nir_lower_sysvals_to_varyings).
+   /*
+    * Input and output lowering.
+    *
+    * In SPIR-V, input and output variables may be accessed arbitrarily, and their types may be
+    * composite (mapped accordingly to the "Location and Component Assignment" section of the
+    * "Shader Interfaces" chapter of the Vulkan specification).
+    *
+    * SFN instead expects load / store intrinsics each working with a 32-bit value vector with up to
+    * 4 components, corresponding to a single `Location` - therefore, arrays (unless explicitly
+    * supported by SFN), structures and matrices must be lowered to individual vectors.
+    *
+    * Specifically, SFN compiles those intrinsics into the following:
+    * - Software vertex shader input: GPR read (arrays with indirect indexing are supported by SFN).
+    * - User-defined tessellation patch data (after TeraScale-specific lowering): LDS access.
+    * - Tessellation factors (after TeraScale-specific lowering): LDS access (for output, additional
+    *   instructions reading the factors from the LDS and writing them using the GDS clause
+    *   `TF_WRITE` operation are emitted by the lowering).
+    * - Hardware export shader output and geometry shader I/O: ring buffer item memory access (for
+    *   GS inputs specifically, arrays with indirect indexing are supported by SFN).
+    * - Last pre-rasterization stage output: Normal export (no indirect indexing in the hardware).
+    * - Fragment shader:
+    *   - User-defined input:
+    *     - R8xx/R9xx: Interpolation instructions (no indirect indexing in the hardware).
+    *     - R6xx/R7xx: GPR read.
+    *   - System value input: GPR read, potentially additional ALU instructions.
+    *   - Output: Normal export (no indirect indexing in the hardware).
     */
 
+   /* Lower system values that are never represented by system varyings. */
+   NIR_PASS(_, nir, nir_lower_system_values);
+
    if (nir->info.stage != MESA_SHADER_COMPUTE) {
-      if (nir->info.stage == MESA_SHADER_VERTEX) {
-         nir_foreach_shader_in_variable (var, nir) {
-            assert(var->data.location >= VERT_ATTRIB_GENERIC0);
-            var->data.driver_location = var->data.location - VERT_ATTRIB_GENERIC0;
-         }
-      } else {
+      if (nir->info.stage == MESA_SHADER_FRAGMENT) {
+         /* Point coordinates are interpolated, convert them to a varying before the rest of the
+          * interpolated varying lowerings.
+          */
+         static nir_lower_sysvals_to_varyings_options const lower_sysvals_to_varyings_options = {
+            .point_coord = true,
+         };
+         NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &lower_sysvals_to_varyings_options);
+      }
+
+      /* Assign driver locations, used by SFN to specify the hardware locations, to input and output
+       * variables passed between shader stages (for vertex input and fragment shader output, the
+       * assignment is different and is done separately).
+       * This assignment must be done before `nir_lower_io_passes` because it sets the driver
+       * locations for variables, not the bases for load / store intrinsics.
+       * Linkage (`nir_opt_varyings`) may change the load / store intrinsic bases later via
+       * `nir_recompute_io_bases`.
+       */
+      /* TODO(Triang3l): Possibly pack `VARYING_SLOT_LAYER` and `VARYING_SLOT_VIEWPORT` into a
+       * single vec4 passed to the fragment shader, to reduce the vec4 padding that needs to be
+       * taken into account in the component count limits.
+       */
+      /* TODO(Triang3l): When the fragment shader is unlinked, pass clip and cull distance `param`s
+       * to the fragment shader (but not `pos`) as separate, because in fragment shaders, the
+       * presence or absence of built-in variables doesn't affect interface matching, and if the
+       * last pre-rasterization stage outputs both clip and cull distances, but the fragment shader
+       * uses only cull distances without clip distances, the cull distances are read from the wrong
+       * components.
+       */
+      if (nir->info.stage != MESA_SHADER_VERTEX) {
          nir_assign_io_var_locations(nir, nir_var_shader_in);
       }
-      /* Fragment shader outputs are compacted in the end, not assigning locations here. */
       if (nir->info.stage != MESA_SHADER_FRAGMENT) {
          nir_assign_io_var_locations(nir, nir_var_shader_out);
       }
+
+      /* Lower deref accesses to load / store intrinsics, including handling indirect indexing and
+       * 64-bit inputs and outputs, additionally with the preferred optimizations.
+       */
+      NIR_PASS(_, nir, nir_opt_combine_stores, nir_var_shader_out);
+      if (!nir->info.io_lowered) {
+         nir_lower_io_passes(nir, false);
+      }
    }
 
-   /* Make sure output writes are done only once, so they can be treated as exports, and also make
-    * fragment inputs interpolated once.
+   /*
+    * Lowerings of bindings, to the extent to which linkage still can optimize them.
     */
 
-   if (nir->info.stage != MESA_SHADER_COMPUTE) {
-      nir_lower_io_vars_to_temporaries(nir, nir_shader_get_entrypoint(nir),
-                                       nir->info.stage == MESA_SHADER_FRAGMENT
-                                          ? nir_var_shader_out
-                                          : nir_var_shader_in | nir_var_shader_out);
-   }
-
-   /* Lower interface and binding derefs. */
-
-   NIR_PASS(_, nir, nir_lower_system_values);
-   /* TODO(Triang3l): Lower compute system values with the correct options. */
-
-   if (nir->info.stage == MESA_SHADER_COMPUTE) {
-      NIR_PASS(_, nir, nir_lower_vars_to_explicit_types, nir_var_mem_shared,
-               terakan_nir_shared_type_info);
-   }
-
-   assert(spirv_options.ubo_addr_format == nir_address_format_32bit_index_offset);
-   assert(spirv_options.ssbo_addr_format == nir_address_format_32bit_index_offset);
+   /* Lower access to buffers via derefs to intrinsics expected by the further binding lowerings. */
    NIR_PASS(_, nir, nir_lower_explicit_io, nir_var_mem_ubo | nir_var_mem_ssbo,
             nir_address_format_32bit_index_offset);
+   NIR_PASS(_, nir, nir_lower_explicit_io, nir_var_mem_push_const, nir_address_format_32bit_offset);
 
-   assert(spirv_options.push_const_addr_format == nir_address_format_32bit_offset);
-   assert(spirv_options.shared_addr_format == nir_address_format_32bit_offset);
-   NIR_PASS(
-      _, nir, nir_lower_explicit_io,
-      nir_var_mem_push_const | (nir->info.stage == MESA_SHADER_COMPUTE ? nir_var_mem_shared : 0),
-      nir_address_format_32bit_offset);
+   /* After lowering buffer accesses to explicit intrinsics, split them into scalar accesses, to be
+    * vectorized later according to the backend access requirements and to the post-link demand.
+    */
+   NIR_PASS(_, nir, nir_lower_io_to_scalar,
+            nir_var_mem_ubo | nir_var_mem_ssbo | nir_var_mem_push_const, NULL, NULL);
 
-   /* Lower basic instructions that won't be generated by other lowerings. */
+   /* Prepare for optimizations that may involve dependency chains.
+    * Specifically currently, this is done for:
+    * - `optimize_txd` in `nir_lower_tex`.
+    *   - Doesn't need copy propagation by itself due to `nir_scalar_resolved` as of August 22,
+    *     2026, but needs `nir_opt_cse` to make sure the texture coordinates and the derivatives are
+    *     for the same value in the trivial cases where this optimization may be done, and doing
+    *     copy propagation to prepare for common subexpression elimination.
+    * - Everything that's done after this function, especially that may have effect on the pipeline
+    *   configuration demand.
+    */
+   NIR_PASS(_, nir, nir_lower_vars_to_ssa);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
+   NIR_PASS(_, nir, nir_opt_dce);
+   NIR_PASS(_, nir, nir_opt_cse);
 
-   NIR_PASS(_, nir, terakan_nir_lower_sin_cos);
+   /* Lower texture instructions. */
+   static nir_lower_tex_options const lower_tex_options = {
+      .lower_invalid_implicit_lod = true,
+      .optimize_txd = true,
+   };
+   NIR_PASS(_, nir, nir_lower_tex, &lower_tex_options);
+   NIR_PASS(_, nir, terascale_nir_lower_tex);
+
+   /* Lower Vulkan descriptor intrinsics to the format expected by the further binding lowerings. */
+   terakan_nir_lower_vulkan_resource_index_passes(nir);
+
+   /*
+    * Lowering of I/O instructions that may be added during binding lowering.
+    */
+
+   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
+      /* Take the reciprocal of the W of the position loaded by the SPI for `gl_FragCoord.w` after
+       * the lowerings potentially loading `gl_FragCoord`.
+       */
+      /* TODO(Triang3l): Implement the system value load intrinsics directly in SFN, and enable
+       * options like `GLSLFragCoordIsSysVal` in Gallium. This will also make it possible to replace
+       * `nir_lower_fragcoord_wtrans`, which must not be called multiple times, with
+       * `nir_frag_coord_use_w_rcp`.
+       */
+      NIR_PASS(_, nir, nir_lower_fragcoord_wtrans);
+   }
+
+   /*
+    * Lowerings of ALU instructions that may not be inserted by further lowerings and optimizations,
+    * from more complex to more primitive.
+    */
+
+   /* Floating-point. */
+
+   NIR_PASS(_, nir, terascale_nir_lower_sin_cos_to_wrapped_normalized_r789xx);
+
+   if (!nir->info.flrp_lowered) {
+      NIR_PASS(_, nir, nir_lower_flrp, 16 | 32 | 64, false);
+      nir->info.flrp_lowered = true;
+   }
+
+   /* Integer. */
+
+   NIR_PASS(_, nir, nir_opt_idiv_const, 32);
+   static nir_lower_idiv_options const lower_idiv_options = {};
+   NIR_PASS(_, nir, nir_lower_idiv, &lower_idiv_options);
+
+   NIR_PASS(_, nir, nir_lower_alu_width, NULL, NULL);
+   /* Includes lowering of instruction produced by `nir_lower_alu_width`. */
+   NIR_PASS(_, nir, nir_lower_pack);
 
    return nir;
 }
 
-/* `data` points to `nir_variable_mode robust_modes`. */
-static bool
-terakan_nir_should_vectorize_load_store(unsigned const align_mul, unsigned const align_offset,
-                                        unsigned const bit_size, unsigned const num_components,
-                                        int64_t hole_size, nir_intrinsic_instr * const low,
-                                        UNUSED nir_intrinsic_instr * const high, void * const data)
+static int
+terakan_nir_type_size_io_vec4(glsl_type const * const type, UNUSED bool const bindless)
 {
-   /* TODO(Triang3l): Don't vectorize kcache loads, and also don't combine kcache and resource loads
-    * (such as when the constant address of `high` is above the maximum kcache buffer size).
-    */
-
-   if (low->intrinsic == nir_intrinsic_store_ssbo) {
-      /* Storage buffer UAVs always use TERASCALE_FORMAT_INDEX_32 or STORE_BYTE / STORE_SHORT. */
-      return false;
-   }
-
-   /* Vectorization of buffer resource fetches. */
-
-   if (num_components > 4 || hole_size != 0) {
-      return false;
-   }
-
-   unsigned const vector_bytes = bit_size / 8u * num_components;
-
-   if (bit_size < 32) {
-      /* According to testing on Barts, 8_8_8 and 16_16_16 buffer fetches return completely invalid
-       * values.
-       */
-      if (num_components == 3) {
-         return false;
-      }
-
-      /* According to testing on Barts, the hardware implicitly rounds the address down to the
-       * alignment requirement, which is min(bytes per element, 4), matching the alignment
-       * restriction described in "4.4.6 Element Alignment" of the Direct3D 11.3 Functional
-       * Specification.
-       */
-      if (nir_combined_align(align_mul, align_offset) < MIN2(vector_bytes, 4u)) {
-         return false;
-      }
-   }
-
-   /* Prior to R9xx, according to testing on Barts, for elements larger than 4 bytes, bounds
-    * checking only considers the first 4 bytes, and if they are within the buffer size, the entire
-    * element is fetched. This may result in data outside the memory range bound to the buffer being
-    * loaded, which is not allowed with robustBufferAccess, so vectorize beyond 4 bytes only if it
-    * can be assumed that out-of-bounds access must not happen. On R9xx, according to testing on
-    * Devastator, bounds checking is performed for the full element size, not just for up to the
-    * first 4 bytes.
-    */
-   /* TODO(Triang3l): Vectorize resource loads on R9xx (use different callback functions depending
-    * on the architecture generation).
-    */
-   if (vector_bytes > 4) {
-      nir_variable_mode const robust_modes = *(nir_variable_mode const *)data;
-      switch (low->intrinsic) {
-      case nir_intrinsic_load_ubo:
-         if (robust_modes & nir_var_mem_ubo) {
-            return false;
-         }
-         break;
-      case nir_intrinsic_load_ssbo:
-         if (robust_modes & nir_var_mem_ssbo) {
-            return false;
-         }
-         break;
-      default:
-         break;
-      }
-   }
-
-   return true;
+   return (int)glsl_count_attribute_slots(type, false);
 }
 
-void
-terakan_shader_lower_and_optimize_post_link(
-   nir_shader * const nir, struct terakan_pipeline_layout const * const pipeline_layout,
-   struct terakan_shader_sqk_usage * const sqk_usage,
-   BITSET_WORD * const uavs_for_mutable_resources_needed,
-   uint32_t * const driver_push_constants_used, uint8_t * const rtv_dsb_uncompacted_exports_out)
+static void
+terakan_nir_type_size_align_scratch(glsl_type const * const type, unsigned * const size,
+                                    unsigned * const alignment)
 {
-   bool progress;
-
-   /* Finally eliminate all dead code that may have effect on lowerings below and on analysis within
-    * SFN, so that the demands of the shader can be estimated as accurately as possible.
-    *
-    * SFN also needs SSA, local variables need to be lowered to SSA, and the stores left after the
-    * lowering need to be cleaned up, at some point.
-    * Do that as part of the DCE loop, so that DCE works accurately through variable access, and can
-    * provide feedback to dead variable removal.
-    * Note that while the shader has functions inlined as part of SPIR-V to NIR conversion,
-    * nir_var_shader_temp may be generated by passes like nir_lower_io_vars_to_temporaries.
-    * They must be lowered to nir_var_function_temp for this cleanup to work.
+   /* TODO(Triang3l): More compact scratch allocation, taking the `MEM_SCRATCH` instruction encoding
+    * into account.
     */
+   *size = glsl_count_vec4_slots(type, false, false);
+   *alignment = 1;
+}
 
-   NIR_PASS(_, nir, nir_lower_global_vars_to_local);
-   NIR_PASS(_, nir, nir_lower_vars_to_ssa);
-   do {
-      progress = false;
-      NIR_PASS(progress, nir, nir_remove_dead_variables, nir_var_function_temp, NULL);
-      NIR_PASS(progress, nir, nir_opt_dce);
-      NIR_PASS(progress, nir, nir_opt_dead_cf);
-   } while (progress);
+struct terakan_nir_lower_and_optimize_post_link_result
+terakan_nir_lower_and_optimize_post_link(
+   nir_shader * const nir,
+   struct terakan_nir_lower_and_optimize_post_link_options const * const options)
+{
+   /* Validate the options. */
 
-   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
-      /* For fragment data location compaction. */
-      NIR_PASS(_, nir, nir_remove_dead_variables, nir_var_shader_in, NULL);
+   assert(!(nir->info.stage == MESA_SHADER_VERTEX && options->next_stage != MESA_SHADER_TESS_CTRL &&
+            options->next_stage != MESA_SHADER_GEOMETRY &&
+            options->next_stage != MESA_SHADER_FRAGMENT));
+   assert(
+      !(nir->info.stage == MESA_SHADER_TESS_CTRL && options->next_stage != MESA_SHADER_TESS_EVAL));
+   assert(!(nir->info.stage == MESA_SHADER_TESS_EVAL &&
+            options->next_stage != MESA_SHADER_GEOMETRY &&
+            options->next_stage != MESA_SHADER_FRAGMENT));
+   assert(
+      !(nir->info.stage == MESA_SHADER_GEOMETRY && options->next_stage != MESA_SHADER_FRAGMENT));
+   assert(!(nir->info.stage == MESA_SHADER_FRAGMENT && options->next_stage != MESA_SHADER_NONE));
+   assert(!(nir->info.stage == MESA_SHADER_COMPUTE && options->next_stage != MESA_SHADER_NONE));
+
+   struct terakan_nir_lower_and_optimize_post_link_result result = {};
+
+   if (nir->info.stage != MESA_SHADER_COMPUTE) {
+      /*
+       * Input and output lowering that may depend on linkage.
+       */
+
+      /* Make sure dead I/O code is eliminated before lowerings contributing to I/O demand. */
+      /* TODO(Triang3l): Should be done if `nir_opt_varyings` doesn't progress probably, research
+       * carefully.
+       */
+      NIR_PASS(_, nir, nir_opt_dce);
+
+      /* Assign driver locations, used by SFN to specify the hardware locations, to I/O loads and
+       * stores not covered by `nir_assign_io_var_locations`, after unused I/O accesses are
+       * eliminated (as the assigned locations may be compacted).
+       */
+      if (nir->info.stage == MESA_SHADER_VERTEX) {
+         NIR_PASS(_, nir, terakan_nir_assign_vs_input_load_driver_locations_and_sanitize);
+      } else if (nir->info.stage == MESA_SHADER_FRAGMENT) {
+         NIR_PASS(_, nir, terakan_nir_assign_fs_output_store_driver_locations_and_sanitize,
+                  &result.rtv_mapping);
+      }
    }
 
-   /* Compact fragment data output locations.
-    * See the description of `terakan_nir_compact_rtv_dsb_exports`.
+   /*
+    * Lowerings of bindings and everything that contributes to the SQK usage.
     */
 
-   uint8_t rtv_dsb_uncompacted_exports = 0b0;
-   NIR_PASS(_, nir, terakan_nir_compact_rtv_dsb_exports, &rtv_dsb_uncompacted_exports);
-   if (rtv_dsb_uncompacted_exports_out != NULL) {
-      *rtv_dsb_uncompacted_exports_out = rtv_dsb_uncompacted_exports;
-   }
-
-   /* Assign gl_frag_result values to variables after the fragment data location compaction has
-    * remapped the locations to the hardware values.
+   /* Lower texture, sampler and image derefs to the format needed by `terakan_nir_lower_bindings`,
+    * with a single flattened index, for which constant propagation can also be performed.
     */
+   NIR_PASS(_, nir, terakan_nir_lower_tex_image_deref_to_vulkan_resource_index);
 
-   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
-      nir_assign_io_var_locations(nir, nir_var_shader_out);
-   }
-
-   /* Lower texture operations. */
-
-   NIR_PASS(_, nir, r600_nir_lower_cube_to_2darray);
-
-   /* Vectorize loads that will be lowered to typed buffer load (vertex fetch) instructions, but
-    * first lower all loads to scalar to make sure hardware constraints for vectorizing are taken
-    * into account. Also, lower SSBO stores to scalar because the hardware instruction stores one
-    * element.
+   /* Propagate resource addressing constants.
+    * A copy propagation loop requires dead code elimination. Here it also eliminates dead code that
+    * may demand SQK.
     */
-
-   nir_load_store_vectorize_options load_store_vectorize_options = {
-      .callback = terakan_nir_should_vectorize_load_store,
-      .modes = nir_var_mem_ubo | nir_var_mem_push_const | nir_var_mem_ssbo,
+   {
+      bool progress;
+      do {
+         progress = false;
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_dce);
+         NIR_PASS(progress, nir, nir_opt_constant_folding);
+      } while (progress);
    };
-   NIR_PASS(_, nir, nir_lower_io_to_scalar, load_store_vectorize_options.modes, NULL, NULL);
-   /* TODO(Triang3l): VK_EXT_pipeline_robustness. */
-   if (pipeline_layout->vk.base.device->enabled_features.robustBufferAccess) {
-      load_store_vectorize_options.robust_modes |= nir_var_mem_ubo | nir_var_mem_ssbo;
+
+   /* Finally lower bindings to backend instructions referencing SQK at hardware register indices.
+    */
+   struct terakan_nir_shader_uav_usage uav_usage = {};
+   if (nir->info.stage == MESA_SHADER_FRAGMENT || nir->info.stage == MESA_SHADER_COMPUTE) {
+      NIR_PASS(_, nir, terakan_nir_gather_uav_usage, options->get_binding_functions,
+               options->get_binding_functions_data,
+               nir->info.stage == MESA_SHADER_FRAGMENT
+                  ? util_bitcount(
+                       terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(result.rtv_mapping))
+                  : 0u,
+               &uav_usage);
+      result.uav_usage = uav_usage.usage;
    }
-   load_store_vectorize_options.cb_data = &load_store_vectorize_options.robust_modes;
-   NIR_PASS(_, nir, nir_opt_load_store_vectorize, &load_store_vectorize_options);
+   NIR_PASS(_, nir, terakan_nir_lower_bindings, options->get_binding_functions,
+            options->get_binding_functions_data, options->robust_buffer_access_2,
+            options->physical_device, &uav_usage, &result.sqk_usage,
+            &result.driver_push_constants_used);
 
-   /* Lower bindings according to the pipeline layout.
-    * In fragment shaders, this is done after compacting the RTV and DSB exports as UAVs must be
-    * placed above color attachments.
+   /* TODO(Triang3l): `nir_opt_offsets` (implement for R600 intrinsics). */
+
+   /*
+    * I/O lowerings that need to be done after various binding lowerings, and that also potentially
+    * benefit from optimizations like dead code elimination after binding lowerings.
     */
 
-   NIR_PASS(
-      _, nir, terakan_nir_lower_bindings, pipeline_layout, sqk_usage,
-      nir->info.stage == MESA_SHADER_FRAGMENT ? util_bitcount(rtv_dsb_uncompacted_exports) : 0,
-      uavs_for_mutable_resources_needed, driver_push_constants_used);
+   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
+      /* Convert fragment shader system value inputs to explicitly loaded varyings where expected by
+       * SFN (in part because prior to R8xx, GPRs [0, 31] were preloaded with both interpolated
+       * varyings and all used system values, so they needed to share indexing).
+       *
+       * Various lowerings may produce system value load intrinsics, so this is done at the end.
+       *
+       * Point coordinates have already been lowered early because they're interpolated.
+       */
+      /* TODO(Triang3l): Implement the system value load intrinsics directly in SFN, and enable
+       * options like `GLSLFragCoordIsSysVal` in Gallium.
+       */
+      static nir_lower_sysvals_to_varyings_options const lower_sysvals_to_varyings_options = {
+         .frag_coord = true,
+         .front_face = true,
+         .layer_id = true,
+         .view_index = true,
+      };
+      NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &lower_sysvals_to_varyings_options);
+      /* Convert the newly created variable deref loads to explicit loads.
+       * `nir_lower_io_use_interpolated_input_intrinsics` should not be used for them, as they're
+       * either autogenerated or integers.
+       */
+      /* TODO(Triang3l): `nir_lower_io_vars_to_temporaries` interaction - would it be beneficient?
+       */
+      NIR_PASS(_, nir, nir_lower_io, nir_var_shader_in, terakan_nir_type_size_io_vec4, 0);
+      NIR_PASS(_, nir, terakan_nir_assign_fs_layer_view_input_load_driver_locations);
+   }
 
-   /* Perform lowerings on the level of basic building blocks after the interface has been set up.
+   /*
+    * General representation lowering and optimization.
     */
 
-   /* TODO(Triang3l): Invoke nir_lower_fragcoord_wtrans when r600_lower_and_optimize_nir is removed.
+   /* Make non-reduction ALU operations scalar as expected by SFN and for less constrained
+    * optimizations.
     */
-
-   assert(nir->options->lower_to_scalar);
-   NIR_PASS(_, nir, nir_lower_alu_to_scalar, nir->options->lower_to_scalar_filter, NULL);
+   NIR_PASS(_, nir, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
    NIR_PASS(_, nir, nir_lower_phis_to_scalar, NULL, NULL);
 
-   /* Everything lowered by nir_lower_alu is supported natively as of this writing. */
-
-   NIR_PASS(_, nir, nir_lower_pack);
-
-   nir_lower_idiv_options lower_idiv_options = {};
-   NIR_PASS(_, nir, nir_lower_idiv, &lower_idiv_options);
-
-   /* Includes both mandatory lowerings and optimizations. */
-   NIR_PASS(_, nir, nir_opt_algebraic);
-
-   if (!nir->info.flrp_lowered) {
-      assert(nir->options->lower_flrp16 && nir->options->lower_flrp32 &&
-             nir->options->lower_flrp64);
-      bool lower_flrp_progress = false;
-      NIR_PASS(lower_flrp_progress, nir, nir_lower_flrp, 16 | 32 | 64, false);
-      if (lower_flrp_progress) {
-         NIR_PASS(_, nir, nir_opt_constant_folding);
-      }
-      /* Nothing should rematerialize any flrps, so we only need to do this lowering once. */
-      nir->info.flrp_lowered = true;
+   while (r600_optimize_nir_once(nir)) {
    }
+
+   /* Convert booleans to integers when nothing may insert comparisons or selections anymore. */
+   NIR_PASS(_, nir, nir_lower_bool_to_int32);
+
+   /* Place large temporary arrays in the scratch buffer. The scratch buffer has a large performance
+    * and memory cost compared to registers, thus it should be avoided where possible, and there's
+    * not much that can be done from the optimization perspective with scratch variables, so this is
+    * done last.
+    */
+   NIR_PASS(_, nir, nir_lower_vars_to_scratch, 64, terakan_nir_type_size_align_scratch,
+            terakan_nir_type_size_align_scratch);
+
+   NIR_PASS(_, nir, nir_lower_locals_to_regs, 32);
+   NIR_PASS(_, nir, nir_convert_from_ssa, true, false);
+
+   /* Final cleanup. */
+   NIR_PASS(_, nir, nir_opt_dce);
+
+   return result;
 }
 
 void

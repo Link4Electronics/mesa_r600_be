@@ -899,7 +899,7 @@ terakan_CreateQueryPool(VkDevice const deviceHandle,
     * writes of them have been fully confirmed, and also to make sure that any sample values that
     * the device can write are considered valid.
     */
-   VkDeviceSize bo_size =
+   VkDeviceSize const bo_size =
       (VkDeviceSize)(sizeof(uint64_t) * samples_size_counters + sizeof(uint32_t)) *
       pCreateInfo->queryCount;
 
@@ -929,21 +929,8 @@ terakan_CreateQueryPool(VkDevice const deviceHandle,
       query_pool->copy_dst_result_size_counters = 1;
    }
 
-   /* UAVs with 4 bytes per element will be used for accumulation of samples from multiple indirect
-    * buffers.
-    */
-   unsigned const uav_bytes_per_element = sizeof(uint32_t);
-   if (physical_device->submission_info_gfx.buffer_uav_validated_as_image) {
-      uint32_t const uav_size_granularity =
-         uav_bytes_per_element *
-         terakan_format_pitch_alignment_linear_surfels(
-            uav_bytes_per_element, physical_device->tiling_info.pipe_interleave_bytes_log2);
-      bo_size = ALIGN_POT(bo_size, (VkDeviceSize)uav_size_granularity);
-   }
    result = device->platform_fn->bo->allocate_device_memory(
-      device, bo_size,
-      1u << terakan_color_descriptor_buffer_uav_base_granularity_log2(uav_bytes_per_element,
-                                                                      physical_device),
+      device, bo_size, 1u << physical_device->tiling_info.pipe_interleave_bytes_log2,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
          VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
       0, pAllocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &query_pool->bo);

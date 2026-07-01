@@ -192,16 +192,6 @@ terakan_AllocateMemory(VkDevice const deviceHandle,
     */
    VkDeviceSize bo_size =
       ALIGN_POT(device_memory->vk.size, (VkDeviceSize)TERAKAN_KCACHE_HW_LINE_BYTES);
-   if (physical_device->submission_info_gfx.buffer_uav_validated_as_image) {
-      /* Make it possible to create buffer UAVs at any location in the BO as long as the BO-relative
-       * base address is specified at the granularity of the minimum LINEAR_ALIGNED pitch for the
-       * element size, with offsetting done in shaders.
-       * The maximum value `terakan_format_pitch_alignment_linear_surfels` may return is 64 elements
-       * of 16 bytes each - 1024 bytes, which is larger than the maximum possible pipe interleave
-       * (512 bytes).
-       */
-      bo_size = ALIGN_POT(bo_size, (VkDeviceSize)(sizeof(uint32_t) * 4 * 64));
-   }
 
    VkMemoryPropertyFlags const memory_property_flags =
       physical_device->memory_properties.memoryTypes[device_memory->vk.memory_type_index]

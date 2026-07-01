@@ -42,7 +42,7 @@ struct terakan_descriptor_set_layout_binding {
     * vkUpdateDescriptorSets should start the update at the next binding with nonzero
     * descriptor_count.
     */
-   uint16_t descriptor_count;
+   uint8_t descriptor_count;
 
    /* UINT16_MAX if not using an immutable sampler or dynamic offset. */
    uint16_t first_immutable_sampler_or_dynamic_offset;

@@ -142,10 +142,6 @@ def intrinsic(name, src_comp=[], dest_comp=-1, indices=[],
 # a constant 'base' value which is added to the offset.
 index("int", "base")
 
-# Generally instructions that take an ID can encode the constant ID or a
-# constant base value which is added to the ID argument.
-index("unsigned", "id_base")
-
 # For store instructions, a writemask for the store.
 index("unsigned", "write_mask")
 
@@ -449,7 +445,7 @@ index("unsigned", "mega_fetch_count_r600")
 index("unsigned", "uav_op_r600")
 
 # UAV IMMED resource index base for uav_returning_instr_r600.
-index("unsigned", "uav_return_id_base_r600")
+index("unsigned", "uav_return_binding_r600")
 
 intrinsic("nop", flags=[CAN_ELIMINATE])
 
@@ -2052,48 +2048,49 @@ load("r600_per_vertex_input", [1], [BASE, RANGE, COMPONENT, DEST_TYPE, IO_SEMANT
 
 # Load from a vertex fetch resource.
 # Reorderability depends on ACCESS_CAN_REORDER.
-# src[] = { buffer index offset relative to ID_BASE, element index }
+# src[] = { buffer resource index offset relative to BINDING, element index }
 # Relevant ACCESS: NON_UNIFORM, CAN_REORDER, INCLUDE_HELPERS
-# ID_BASE = buffer index base
+# BINDING = buffer resource index base
 # BASE = data additional 16-bit offset in bytes
 # FORMAT = data format, or PIPE_FORMAT_NONE to use the format from the fetch constant
 # FLAGS = R600_NIR_LOAD_BUFFER_RESOURCE_FLAG_*
 load("buffer_resource_r600", src_comp=[1, 1],
-     indices=[ACCESS, ID_BASE, BASE, COMPONENT, FORMAT, MEGA_FETCH_COUNT_R600, FLAGS],
+     indices=[ACCESS, BINDING, BASE, COMPONENT, FORMAT, MEGA_FETCH_COUNT_R600, FLAGS],
      flags=[CAN_ELIMINATE])
 
 # Load from a texture resource.
-# src[] = { texture index offset relative to ID_BASE, XYZ coordinates and LOD }
+# src[] = { texture resource index offset relative to BINDING, XYZ coordinates and LOD }
 # Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
-# ID_BASE = buffer index base
+# BINDING = texture resource index base
 load("texture_resource_r600", src_comp=[1, 4],
-     indices=[ACCESS, ID_BASE, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
+     indices=[ACCESS, BINDING, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
 
 # Load from a constant cache (kcache) buffer.
-# src[] = { buffer index offset relative to ID_BASE }
+# src[] = { constant cache buffer index offset relative to BINDING }
 # Relevant ACCESS: NON_UNIFORM
-# ID_BASE = buffer index base
+# BINDING = constant cache buffer index base
 # BASE = data address in vec4 elements
-load("kcache_r600", src_comp=[1], indices=[ACCESS, ID_BASE, BASE, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
+load("kcache_r600", src_comp=[1], indices=[ACCESS, BINDING, BASE, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
 
 # src[] = {
-#    UAV index offset relative to ID_BASE,
+#    UAV MRT index offset relative to BINDING,
 #    address,
 #    value for non-NOP operations,
-#    value to compare to for CMPXCHG operations,
+#    value to compare to for CMPXCHG operations or mask for MSKOR,
 # }
 # For sources that aren't needed, pass any value (such as undef).
 # uav_op_r600 must be a non-RTN one.
 # Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+# BINDING = UAV MRT index base
 intrinsic("uav_instr_r600", src_comp=[1, -1, -1, 1], bit_sizes=[32, 32, 32, 32],
-          indices=[UAV_OP_R600, ACCESS, ID_BASE])
+          indices=[UAV_OP_R600, ACCESS, BINDING])
 
 # Like uav_instr_r600, but for operations that return a value.
 # uav_op_r600 must be an RTN one.
 # The last source is the index in the IMMED buffer.
 intrinsic("uav_returning_instr_r600", dest_comp=0, src_comp=[1, -1, -1, 1, 1],
           bit_sizes=[32, 32, 32, 32, 32, 32],
-          indices=[UAV_OP_R600, ACCESS, ID_BASE, UAV_RETURN_ID_BASE_R600, MEGA_FETCH_COUNT_R600])
+          indices=[UAV_OP_R600, ACCESS, BINDING, UAV_RETURN_BINDING_R600, MEGA_FETCH_COUNT_R600])
 
 # AMD GCN/RDNA specific intrinsics
 

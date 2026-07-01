@@ -37,62 +37,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
-unsigned
-terakan_color_descriptor_buffer_uav_base_granularity_log2(
-   unsigned const bytes_per_element, struct terakan_physical_device const * const physical_device)
-{
-   if (physical_device->submission_info_gfx.buffer_uav_validated_as_image) {
-      /* Device memory BO sizes (whole BO sizes, not buffer memory requirements) are rounded to make
-       * sure a LINEAR_ALIGNED color target with any element size and the smallest possible
-       * PITCH_TILE_MAX and SLICE_TILE_MAX is in bounds as long as the BO-relative base address is
-       * also rounded. This value is never smaller than the pipe interleave.
-       */
-      return util_logbase2(
-         bytes_per_element *
-         terakan_format_pitch_alignment_linear_surfels(
-            bytes_per_element, physical_device->tiling_info.pipe_interleave_bytes_log2));
-   }
-
-   /* Alignment requirement for LINEAR_ALIGNED, which is the array mode required for buffer UAVs. */
-   return physical_device->tiling_info.pipe_interleave_bytes_log2;
-}
-
 void
-terakan_color_descriptor_calculate_buffer_pitch_slice(
-   struct terakan_color_descriptor * const descriptor, unsigned const bytes_per_element,
-   struct terakan_physical_device const * const physical_device)
-{
-   /* PITCH_TILE_MAX and SLICE_TILE_MAX are ignored by the hardware for buffers, and PITCH_TILE_MAX
-    * can't store large buffer sizes, but DRM Radeon 2.50.0 validates the surface size based on
-    * PITCH_TILE_MAX and SLICE_TILE_MAX regardless of whether the color surface is a buffer UAV.
-    * Provide the smallest valid values.
-    */
-   uint32_t const pitch_elements = terakan_format_pitch_alignment_linear_surfels(
-      bytes_per_element, physical_device->tiling_info.pipe_interleave_bytes_log2);
-   descriptor->pitch = S_028C64_PITCH_TILE_MAX(pitch_elements / 8 - 1);
-   descriptor->slice = S_028C68_SLICE_TILE_MAX(pitch_elements / 64 - 1);
-}
-
-void
-terakan_color_descriptor_calculate_buffer_base_pitch_slice_dim_offset(
+terakan_color_descriptor_calculate_buffer_base_dim_offset(
    struct terakan_color_descriptor * const descriptor, uint64_t const va,
    VkDeviceSize const elements, unsigned const bytes_per_element,
-   struct terakan_physical_device const * const physical_device,
-   uint32_t * const base_granularity_offset_bytes_out)
+   unsigned const pipe_interleave_bytes_log2, uint32_t * const alignment_offset_bytes_out)
 {
-   unsigned const base_granularity_log2 =
-      terakan_color_descriptor_buffer_uav_base_granularity_log2(bytes_per_element, physical_device);
-   uint64_t const va_granularity_aligned = va >> base_granularity_log2 << base_granularity_log2;
-   descriptor->base = (uint32_t)(va_granularity_aligned >> 8);
+   uint64_t const va_aligned = va >> pipe_interleave_bytes_log2 << pipe_interleave_bytes_log2;
+   descriptor->base = (uint32_t)(va_aligned >> 8);
 
-   terakan_color_descriptor_calculate_buffer_pitch_slice(descriptor, bytes_per_element,
-                                                         physical_device);
-
-   uint32_t const base_granularity_offset_bytes = (uint32_t)(va - va_granularity_aligned);
-   *base_granularity_offset_bytes_out = base_granularity_offset_bytes;
+   uint32_t const alignment_offset_bytes = (uint32_t)(va - va_aligned);
+   *alignment_offset_bytes_out = alignment_offset_bytes;
 
    assert(elements != 0);
-   descriptor->dim = (uint32_t)(base_granularity_offset_bytes / bytes_per_element + elements - 1);
+   descriptor->dim = (uint32_t)(alignment_offset_bytes / bytes_per_element + elements - 1u);
 }
 
 struct terakan_resource_descriptor
@@ -178,11 +136,11 @@ terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * const bo,
 }
 
 bool
-terakan_descriptor_create_for_storage_buffer(
-   struct terakan_bo const * const bo, uint64_t const va, VkDeviceSize const range,
-   struct terakan_physical_device const * const physical_device,
-   struct terakan_resource_descriptor * const resource_out,
-   struct terakan_color_descriptor * const color_out)
+terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * const bo, uint64_t const va,
+                                             VkDeviceSize const range,
+                                             unsigned const pipe_interleave_bytes_log2,
+                                             struct terakan_resource_descriptor * const resource_out,
+                                             struct terakan_color_descriptor * const color_out)
 {
    assert((va & (sizeof(uint32_t) - 1)) == 0);
    assert(range != VK_WHOLE_SIZE);
@@ -205,8 +163,9 @@ terakan_descriptor_create_for_storage_buffer(
          [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
       }};
 
-   terakan_color_descriptor_calculate_buffer_base_pitch_slice_view_dim(
-      color_out, va, range_aligned / sizeof(uint32_t), sizeof(uint32_t), physical_device, false);
+   terakan_color_descriptor_calculate_buffer_base_view_dim(
+      color_out, va, range_aligned / sizeof(uint32_t), sizeof(uint32_t), pipe_interleave_bytes_log2,
+      false);
    color_out->info = S_028C70_ENDIAN(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32
                                                           : TERASCALE_ENDIAN_SWAP_NONE) |
                      S_028C70_FORMAT(TERASCALE_FORMAT_INDEX_32) |

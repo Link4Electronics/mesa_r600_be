@@ -237,6 +237,9 @@ terakan_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       layout_binding->descriptor_type = binding_type;
 
       uint32_t const binding_descriptor_count = create_info_binding->descriptorCount;
+      if (unlikely(binding_descriptor_count > UINT8_MAX)) {
+         goto too_many_descriptors_destroy;
+      }
       layout_binding->descriptor_count = binding_descriptor_count;
 
       /* Write the offsets used in descriptor updating regardless of the descriptor type.
@@ -322,6 +325,7 @@ terakan_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    uint16_t next_shader_range_index = 0;
 
    /* Resource ranges. */
+   /* TODO(Triang3l): Cleanup `mesa_shader_stage` and `VkShaderStageFlags` usage. */
    unsigned remaining_stages = (unsigned)stages_with_resources;
    while (remaining_stages) {
       int const stage_index = u_bit_scan(&remaining_stages);
@@ -346,9 +350,7 @@ terakan_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             continue;
          }
 
-         if ((stage_flag == VK_SHADER_STAGE_FRAGMENT_BIT
-                 ? TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL
-                 : TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL) -
+         if (terakan_resource_range_mutable_max_count((mesa_shader_stage)stage_index) -
                 stage_resource_count <
              binding->descriptor_count) {
             goto too_many_descriptors_destroy;

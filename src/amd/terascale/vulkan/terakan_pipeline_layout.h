@@ -24,6 +24,8 @@
 #ifndef TERAKAN_PIPELINE_LAYOUT_H
 #define TERAKAN_PIPELINE_LAYOUT_H
 
+#include "nir/terakan_nir.h"
+
 #include "compiler/shader_enums.h"
 #include "vk_pipeline_layout.h"
 
@@ -52,6 +54,10 @@ struct terakan_pipeline_layout {
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_pipeline_layout, vk.base, VkPipelineLayout,
                                VK_OBJECT_TYPE_PIPELINE_LAYOUT)
+
+/* The callback data is the `terakan_pipeline_layout` pointer. */
+extern struct terakan_nir_get_pipeline_layout_binding_functions const
+   terakan_pipeline_layout_get_binding_functions;
 
 struct terakan_device;
 

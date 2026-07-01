@@ -188,21 +188,11 @@ terakan_device_init(struct terakan_device * const device,
       device->uav_immediate_va_shr8[element_bytes_log2] += uav_immediate_bo_va_shr8;
    }
 
-   /* Accessed via query sampling (never larger than a kcache line), kcache, and a UAV with 4 bytes
-    * per element.
-    */
-   unsigned const query_accumulator_uav_bytes_per_element = sizeof(uint32_t);
-   unsigned const query_accumulator_uav_base_granularity_log2 =
-      terakan_color_descriptor_buffer_uav_base_granularity_log2(
-         query_accumulator_uav_bytes_per_element, physical_device);
+   /* Accessed via query sampling (never larger than a kcache line), kcache, and a UAV. */
    result = device->platform_fn->bo->allocate_device_memory(
-      device,
-      ALIGN_POT(TERAKAN_KCACHE_HW_LINE_BYTES,
-                query_accumulator_uav_bytes_per_element *
-                   terakan_format_pitch_alignment_linear_surfels(
-                      query_accumulator_uav_bytes_per_element,
-                      physical_device->tiling_info.pipe_interleave_bytes_log2)),
-      1u << MAX2(TERAKAN_KCACHE_HW_LINE_BYTES_LOG2, query_accumulator_uav_base_granularity_log2),
+      device, TERAKAN_KCACHE_HW_LINE_BYTES,
+      1u << MAX2(TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
+                 physical_device->tiling_info.pipe_interleave_bytes_log2),
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
       &device->query_accumulator_bo);
    if (result != VK_SUCCESS) {

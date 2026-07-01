@@ -673,7 +673,7 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
                                               AluInstr::write));
       }
    } else {
-      unsigned compare_value_component_index =
+      unsigned compare_value_or_mask_component_index =
          shader.chip_class() == ISA_CC_CAYMAN ? 2 : 3;
 
       value_component_mask = 0b0;
@@ -686,9 +686,10 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
       auto op_non_rtn = static_cast<ERatOp>(static_cast<unsigned>(op) & 0x1F);
       if (op_non_rtn != ERatOp::NOP) {
          value_component_mask |= BITFIELD_BIT(0);
+         /* TODO(Triang3l): Verify the component index for the MSKOR mask. */
          if (op_non_rtn == ERatOp::CMPXCHG_INT || op_non_rtn == ERatOp::CMPXCHG_FLT ||
-             op_non_rtn == ERatOp::CMPXCHG_FDENORM) {
-            value_component_mask |= BITFIELD_BIT(compare_value_component_index);
+             op_non_rtn == ERatOp::CMPXCHG_FDENORM || op_non_rtn == ERatOp::MSKOR) {
+            value_component_mask |= BITFIELD_BIT(compare_value_or_mask_component_index);
          }
       }
 
@@ -720,9 +721,9 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
                                               AluInstr::write));
       }
       /* Value to compare to. */
-      if (value_component_mask & BITFIELD_BIT(compare_value_component_index)) {
+      if (value_component_mask & BITFIELD_BIT(compare_value_or_mask_component_index)) {
          shader.emit_instruction(new AluInstr(op1_mov,
-                                              value[compare_value_component_index],
+                                              value[compare_value_or_mask_component_index],
                                               vf.src(intrin->src[3], 0),
                                               AluInstr::write));
       }
@@ -730,8 +731,8 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
 
    /* UAV index. */
 
-   unsigned uav_base = nir_intrinsic_id_base(intrin);
-   unsigned immed_base = op_returns ? nir_intrinsic_uav_return_id_base_r600(intrin) : 0;
+   unsigned uav_base = nir_intrinsic_binding(intrin);
+   unsigned immed_base = op_returns ? nir_intrinsic_uav_return_binding_r600(intrin) : 0;
    PRegister uav_offset = nullptr;
    const nir_const_value *uav_offset_const = nir_src_as_const_value(intrin->src[0]);
    if (uav_offset_const != nullptr) {

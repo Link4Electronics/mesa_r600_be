@@ -40,7 +40,7 @@ extern "C" {
 #endif
 
 enum terakan_push_constants_driver_index {
-   TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_BASE_GRANULARITY_OFFSET,
+   TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET,
 
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID,
 
@@ -56,7 +56,7 @@ struct terakan_push_constants_driver {
     * For storage buffers, in bytes.
     * For texel buffers, in elements.
     */
-   uint32_t buffer_uav_base_granularity_offset[TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT];
+   uint32_t buffer_uav_alignment_offset[TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT];
 
    uint32_t draw_id;
 };

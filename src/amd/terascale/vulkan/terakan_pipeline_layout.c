@@ -38,12 +38,19 @@
 #include "util/macros.h"
 #include "util/u_math.h"
 #include "vk_alloc.h"
+#include "vk_enum_to_str.h"
 #include "vk_log.h"
+#include "vk_util.h"
 
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+/* Note that for logging, the device object rather than the pipeline layout object must be used,
+ * because a pipeline layout object may be created internally by the driver, and thus not have its
+ * handle known to the application, in cases such as `vkCreateShadersEXT`.
+ */
 
 VKAPI_ATTR void VKAPI_CALL
 terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
@@ -249,6 +256,161 @@ terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
    }
 }
 
+/* `compatible_types` must be terminated with `VK_DESCRIPTOR_TYPE_MAX_ENUM`, and the first element
+ * must most unambiguously describe the expected descriptor type since it's used for logging.
+ */
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_binding(nir_binding const * const binding,
+                                    mesa_shader_stage const stage,
+                                    struct terakan_pipeline_layout const * const pipeline_layout,
+                                    VkDescriptorType const * const compatible_types)
+{
+   if (unlikely(binding->desc_set >= pipeline_layout->vk.set_count)) {
+      vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
+              "Descriptor set %u doesn't exist in the pipeline layout (contains %" PRIu32
+              " descriptor sets)",
+              binding->desc_set, pipeline_layout->vk.set_count);
+      return terakan_nir_pipeline_layout_binding_empty;
+   }
+   struct terakan_descriptor_set_layout const * const descriptor_set_layout =
+      container_of(pipeline_layout->vk.set_layouts[binding->desc_set],
+                   struct terakan_descriptor_set_layout const, vk);
+
+   if (unlikely(binding->binding >= descriptor_set_layout->binding_count)) {
+      vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
+              "Descriptor set %u binding %u doesn't exist in the descriptor set layout (contains "
+              "%zu bindings)",
+              binding->desc_set, binding->binding, descriptor_set_layout->binding_count);
+      return terakan_nir_pipeline_layout_binding_empty;
+   }
+   struct terakan_descriptor_set_layout_binding const * const descriptor_set_binding =
+      &descriptor_set_layout->bindings[binding->binding];
+
+   /* If a `terakan_descriptor_set_layout_binding` has 0 descriptors, its fields may be
+    * uninitialized. The inclusive array index range would also be impossible to calculate.
+    */
+   if (unlikely(descriptor_set_binding->descriptor_count == 0)) {
+      vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
+              "Descriptor set %u binding %u doesn't contain any descriptors", binding->desc_set,
+              binding->binding);
+      return terakan_nir_pipeline_layout_binding_empty;
+   }
+
+   if (unlikely(!(descriptor_set_binding->stage_flags & mesa_to_vk_shader_stage(stage)))) {
+      vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
+              "Descriptor set %u binding %u can't be accessed in a %s shader", binding->desc_set,
+              binding->binding, _mesa_shader_stage_to_string(stage));
+      return terakan_nir_pipeline_layout_binding_empty;
+   }
+
+   struct terakan_nir_pipeline_layout_binding pipeline_layout_binding =
+      terakan_nir_pipeline_layout_binding_empty;
+   pipeline_layout_binding.array_size = descriptor_set_binding->descriptor_count;
+   struct terakan_pipeline_layout_set * const hw_descriptor_set_layout =
+      &pipeline_layout->sets[binding->desc_set];
+   /* TODO(Triang3l): Kcache when allocation is set up. */
+   if (terakan_descriptor_type_has_sampler(descriptor_set_binding->descriptor_type)) {
+      pipeline_layout_binding.sampler_base =
+         hw_descriptor_set_layout->first_shader_samplers[stage] +
+         descriptor_set_binding->first_shader_samplers[stage];
+   }
+   if (terakan_descriptor_type_has_resource(descriptor_set_binding->descriptor_type)) {
+      pipeline_layout_binding.resource_base =
+         hw_descriptor_set_layout->first_shader_resources[stage] +
+         descriptor_set_binding->first_shader_resources[stage];
+   }
+
+   /* Return the binding if the type is compatible. */
+   for (VkDescriptorType const * compatible_type_ptr = compatible_types;
+        *compatible_type_ptr != VK_DESCRIPTOR_TYPE_MAX_ENUM; ++compatible_type_ptr) {
+      if (descriptor_set_binding->descriptor_type == *compatible_type_ptr) {
+         return pipeline_layout_binding;
+      }
+   }
+   vk_loge(
+      VK_LOG_OBJS(pipeline_layout->vk.base.device),
+      "Descriptor set %u binding %u has type %s, which is incompatible with a shader binding with "
+      "type %s",
+      binding->desc_set, binding->binding,
+      vk_DescriptorType_to_str(descriptor_set_binding->descriptor_type),
+      vk_DescriptorType_to_str(*compatible_types));
+   return terakan_nir_pipeline_layout_binding_empty;
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_sampler_binding(nir_binding const * const binding,
+                                            mesa_shader_stage const stage,
+                                            void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_SAMPLER,
+                                                       VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_sampled_image_binding(nir_binding const * const binding,
+                                                  mesa_shader_stage const stage,
+                                                  void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {
+      VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_storage_image_binding(nir_binding const * const binding,
+                                                  mesa_shader_stage const stage,
+                                                  void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_storage_texel_buffer_binding(nir_binding const * const binding,
+                                                         mesa_shader_stage const stage,
+                                                         void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_uniform_buffer_binding(nir_binding const * const binding,
+                                                   mesa_shader_stage const stage,
+                                                   void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
+terakan_pipeline_layout_get_storage_buffer_binding(nir_binding const * const binding,
+                                                   mesa_shader_stage const stage,
+                                                   void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                                       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+struct terakan_nir_get_pipeline_layout_binding_functions const
+   terakan_pipeline_layout_get_binding_functions = {
+      .sampler = terakan_pipeline_layout_get_sampler_binding,
+      .sampled_image = terakan_pipeline_layout_get_sampled_image_binding,
+      .storage_image = terakan_pipeline_layout_get_storage_image_binding,
+      .storage_texel_buffer = terakan_pipeline_layout_get_storage_texel_buffer_binding,
+      .uniform_buffer = terakan_pipeline_layout_get_uniform_buffer_binding,
+      .storage_buffer = terakan_pipeline_layout_get_storage_buffer_binding,
+};
+
 VkResult
 terakan_pipeline_layout_create(struct terakan_device * const device,
                                VkPipelineLayoutCreateInfo const * const create_info,
@@ -285,16 +447,14 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
 
       unsigned remaining_stages = (unsigned)stage_mask;
       while (remaining_stages) {
-         unsigned const stage_index = u_bit_scan(&remaining_stages);
+         mesa_shader_stage const stage_index = vk_to_mesa_shader_stage(
+            (VkShaderStageFlagBits)BITFIELD_BIT(u_bit_scan(&remaining_stages)));
          struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[stage_index];
 
          uint8_t const first_mutable_shader_resource =
             next_first_mutable_shader_resources[stage_index];
-         if (((VkShaderStageFlags)1 << stage_index == VK_SHADER_STAGE_FRAGMENT_BIT
-                 ? TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL
-                 : TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL) -
-                first_mutable_shader_resource <
+         if (terakan_resource_range_mutable_max_count(stage_index) - first_mutable_shader_resource <
              set_layout_shader->resource_count) {
             goto too_many_descriptors;
          }

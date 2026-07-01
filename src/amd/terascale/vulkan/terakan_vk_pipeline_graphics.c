@@ -51,6 +51,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* TODO(Triang3l): Remove the testing code. */
+#include <stdio.h>
+
 /* Note that when using pipeline objects, it's assumed that static state is the fastest path.
  * Therefore, for applying the pipeline state, to check if state is static, using conditionals
  * rather than a callback array, because the former are expected to be cheaper.
@@ -1100,6 +1103,8 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
 
    /* Compile the shaders. */
 
+   struct terakan_physical_device const * const physical_device =
+      terakan_device_physical_device(device);
    struct terakan_pipeline_layout const * const pipeline_layout =
       terakan_pipeline_layout_from_handle(create_info->layout);
 
@@ -1108,29 +1113,75 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
          vk_to_mesa_shader_stage((VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index));
       struct shader_create_data const * const shader_data = &shaders_create_data[shader_stage];
 
-      nir_shader * const nir = terakan_shader_spirv_to_nir(
+      nir_shader * const nir = terakan_nir_from_spirv_pre_link(
          device, shader_data->spirv_size_bytes, shader_data->spirv, shader_stage,
          shader_data->info->pName, shader_data->info->pSpecializationInfo);
-      if (nir == NULL) {
+      if (unlikely(nir == NULL)) {
          result = vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
          goto fail_shaders;
       }
 
+      struct terakan_nir_lower_and_optimize_post_link_options post_link_lowering_options = {
+         .get_binding_functions = &terakan_pipeline_layout_get_binding_functions,
+         .get_binding_functions_data = pipeline_layout,
+
+         /* TODO(Triang3l): `VK_EXT_pipeline_robustness`. */
+         .robust_buffer_access_2 = device->vk.enabled_features.robustBufferAccess2,
+
+         .physical_device = physical_device,
+      };
+
+      switch (shader_stage) {
+      case MESA_SHADER_VERTEX:
+         if (pipeline->shader_stages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) {
+            post_link_lowering_options.next_stage = MESA_SHADER_TESS_CTRL;
+         } else if (pipeline->shader_stages & VK_SHADER_STAGE_GEOMETRY_BIT) {
+            post_link_lowering_options.next_stage = MESA_SHADER_GEOMETRY;
+         } else {
+            post_link_lowering_options.next_stage = MESA_SHADER_FRAGMENT;
+         }
+         break;
+      case MESA_SHADER_TESS_CTRL:
+         post_link_lowering_options.next_stage = MESA_SHADER_TESS_EVAL;
+         break;
+      case MESA_SHADER_TESS_EVAL:
+         if (pipeline->shader_stages & VK_SHADER_STAGE_GEOMETRY_BIT) {
+            post_link_lowering_options.next_stage = MESA_SHADER_GEOMETRY;
+         } else {
+            post_link_lowering_options.next_stage = MESA_SHADER_FRAGMENT;
+         }
+         break;
+      case MESA_SHADER_GEOMETRY:
+         post_link_lowering_options.next_stage = MESA_SHADER_FRAGMENT;
+         break;
+      default:
+         post_link_lowering_options.next_stage = MESA_SHADER_NONE;
+         break;
+      }
+
+      struct terakan_nir_lower_and_optimize_post_link_result const
+         lower_and_optimize_post_link_result =
+            terakan_nir_lower_and_optimize_post_link(nir, &post_link_lowering_options);
+
       struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
-
-      shader->push_constants_usage.app_extent_bytes =
-         pipeline_layout->shader_app_push_constants_extents_bytes[shader_stage];
-
-      terakan_shader_lower_and_optimize_post_link(
-         nir, pipeline_layout, &shader->sqk_usage, shader->uavs_for_mutable_resources_needed,
-         &shader->push_constants_usage.driver_constants, &shader->fs.rtv_dsb_uncompacted_exports);
-
+      union r600_shader_key shader_key = {};
       /* TODO(Triang3l): Construct the shader key from the NIR and, when available, the pipeline
        * state.
        */
-      union r600_shader_key shader_key = {};
+
+      shader->sqk_usage = lower_and_optimize_post_link_result.sqk_usage;
+
+      shader->push_constants_usage.driver_constants =
+         lower_and_optimize_post_link_result.driver_push_constants_used;
+      shader->push_constants_usage.app_extent_bytes =
+         pipeline_layout->shader_app_push_constants_extents_bytes[shader_stage];
+
+      shader->uav_usage = lower_and_optimize_post_link_result.uav_usage;
+
       if (shader_stage == MESA_SHADER_FRAGMENT) {
-         shader_key.ps.nr_cbufs = util_bitcount(shader->fs.rtv_dsb_uncompacted_exports);
+         shader->fs.rtv_mapping = lower_and_optimize_post_link_result.rtv_mapping;
+         shader_key.ps.nr_cbufs = util_bitcount(
+            terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(shader->fs.rtv_mapping));
       }
 
       result = terakan_shader_impl_compile(shader, device, &shader_key, nir, allocator);
@@ -1148,10 +1199,9 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    if (fetch_shader_is_static) {
       pipeline->vertex_input.sq_pgm_fetch.layout.attributes_used =
          pipeline->shaders[MESA_SHADER_VERTEX].vs.vertex_attributes_needed;
-      terakan_vertex_input_create_fs_code(&pipeline->vertex_input.sq_pgm_fetch.layout,
-                                          terakan_device_physical_device(device)->chip_info.is_r9xx,
-                                          &pipeline->vertex_input.sq_pgm_fetch.resource_usage,
-                                          &fetch_shader_code);
+      terakan_vertex_input_create_fs_code(
+         &pipeline->vertex_input.sq_pgm_fetch.layout, physical_device->chip_info.is_r9xx,
+         &pipeline->vertex_input.sq_pgm_fetch.resource_usage, &fetch_shader_code);
       fetch_shader_is_no_operation =
          terakan_vertex_input_fs_code_is_no_operation(&fetch_shader_code);
    }

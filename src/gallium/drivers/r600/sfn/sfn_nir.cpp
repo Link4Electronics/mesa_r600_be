@@ -614,8 +614,8 @@ r600_opt_indirect_fbo_loads(nir_shader *shader)
    return r600::OptIndirectUBOLoads().run(shader);
 }
 
-static bool
-optimize_once(nir_shader *shader)
+extern "C" bool
+r600_optimize_nir_once(nir_shader *shader)
 {
    bool progress = false;
    NIR_PASS(progress, shader, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
@@ -737,7 +737,7 @@ r600_finalize_nir_common(nir_shader *nir, enum amd_gfx_level gfx_level)
    if (gfx_level == CAYMAN)
       NIR_PASS(_, nir, r600_legalize_image_load_store);
 
-   while (optimize_once(nir))
+   while (r600_optimize_nir_once(nir))
       ;
 }
 
@@ -797,7 +797,7 @@ r600_lower_and_optimize_nir(nir_shader *sh,
    r600::sort_uniforms(sh);
    NIR_PASS(_, sh, r600_nir_fix_kcache_indirect_access);
 
-   while (optimize_once(sh))
+   while (r600_optimize_nir_once(sh))
       ;
 
 
@@ -909,13 +909,13 @@ r600_lower_and_optimize_nir(nir_shader *sh,
       NIR_PASS(_, sh, r600::r600_split_64bit_uniforms_and_ubo);
       NIR_PASS(_, sh, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
       NIR_PASS(_, sh, nir_lower_phis_to_scalar, NULL, NULL);
-      while (optimize_once(sh))
+      while (r600_optimize_nir_once(sh))
          ;
       NIR_PASS(_, sh, r600::r600_nir_64_to_vec2, gfx_level >= CAYMAN);
    }
 
    /* Lower to scalar to let some optimization work out better */
-   while (optimize_once(sh))
+   while (r600_optimize_nir_once(sh))
       ;
 
    if (lower_64bit)
@@ -931,7 +931,7 @@ r600_lower_and_optimize_nir(nir_shader *sh,
             r600_get_scratch_size_align,
             r600_get_scratch_size_align);
 
-   while (optimize_once(sh))
+   while (r600_optimize_nir_once(sh))
       ;
 
    if ((sh->info.bit_sizes_float | sh->info.bit_sizes_int) & 64)

@@ -1792,7 +1792,7 @@ Shader::emit_load_buffer_resource(nir_intrinsic_instr *instr)
 
    auto coord = vf.src(instr->src[1], 0)->as_register();
 
-   unsigned resource_base = nir_intrinsic_id_base(instr);
+   unsigned resource_base = nir_intrinsic_binding(instr);
    PRegister resource_offset = nullptr;
    const nir_const_value *resource_offset_const = nir_src_as_const_value(instr->src[0]);
    if (resource_offset_const != nullptr) {
@@ -1882,7 +1882,7 @@ Shader::emit_load_texture_resource(nir_intrinsic_instr *instr)
 
    auto coord = vf.src_vec4(instr->src[1], pin_group);
 
-   unsigned resource_base = nir_intrinsic_id_base(instr);
+   unsigned resource_base = nir_intrinsic_binding(instr);
    PRegister resource_offset = nullptr;
    const nir_const_value *resource_offset_const = nir_src_as_const_value(instr->src[0]);
    if (resource_offset_const != nullptr) {
@@ -1912,7 +1912,7 @@ Shader::emit_load_kcache(nir_intrinsic_instr *instr)
 {
    ValueFactory& vf = value_factory();
 
-   unsigned bank_base = nir_intrinsic_id_base(instr);
+   unsigned bank_base = nir_intrinsic_binding(instr);
    PVirtualValue bank_offset = nullptr;
    const nir_const_value *bank_offset_const = nir_src_as_const_value(instr->src[0]);
    if (bank_offset_const != nullptr) {

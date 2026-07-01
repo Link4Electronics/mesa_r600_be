@@ -26,7 +26,6 @@
 
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
-#include "terakan_pipeline_layout.h"
 #include "terakan_push_constants.h"
 
 #include "gallium/drivers/r600/eg_sq.h"
@@ -314,6 +313,82 @@ struct terakan_shader_sqk_usage {
    BITSET_DECLARE(resources_uncached, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
 };
 
+struct terakan_shader_uav_usage {
+   /* The actual `CB_COLOR` indices of UAVs are the counts of set bits prior to the bit for the
+    * given index of the resource corresponding to the UAV in the mutable resource range, and for
+    * fragment shaders, the number of set bits in `rtv_dsb_uncompacted_exports` is added (but not
+    * for the `IMMED` buffer read resource index) to them.
+    * Expected to be padded to the bitset size with zero bits, so it can be used in `memcmp`.
+    */
+   BITSET_DECLARE(uavs_for_mutable_resources_needed,
+                  MAX2(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL,
+                       TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL));
+};
+
+/* Information about the mapping between application and hardware RTV indices.
+ *
+ * Unlike in Direct3D 11.0 with `OMSetRenderTargetsAndUnorderedAccessViews`, in Vulkan, color
+ * attachment output locations are unrelated to storage bindings. The only limitation shared by them
+ * is `maxFragmentCombinedOutputResources`, but it applies only to the total count, not to the
+ * locations.
+ * It's not possible to fill holes in RTV outputs with UAVs because:
+ * - According to Radeon Evergreen / Northern Islands Acceleration, "all RAT MRTs must be assigned
+ *   to higher number MRTs than normal rendering MRTs";
+ * - Even if UAVs between RTVs were allowed in the hardware, UAV bindings may be arrays with
+ *   indirect indexing, in which case it may be desirable to always place them in contiguous MRT
+ *   ranges, instead of splitting them using additional logic in both the emitted shader code and
+ *   the binding architecture if there's no hole large enough.
+ *
+ * Therefore, in Terakan, application color attachment output locations are compacted when hardware
+ * RTV indices are calculated.
+ *
+ * The compaction also reduces `SQ_PGM_EXPORTS_PS.EXPORT_COLORS` and the number of RTVs enabled in
+ * `CB_SHADER_MASK` (according to the Gallium AMD drivers, unused attachments still need to be
+ * enabled in `CB_SHADER_MASK` to prevent hangs).
+ *
+ * For dual-source blending, the second source is taken from the MRT 1 export in the hardware, whose
+ * value may come from either:
+ * - The `layout(location = 0, index = 1)` output, which is the correct way of specifying the second
+ *   blend factor in Vulkan and OpenGL, or:
+ * - The `layout(location = 1)` output, which is incorrect in Vulkan and OpenGL, but is used in some
+ *   applications, as it happens to work on various drivers, and is the way the second blend factor
+ *   is set in Direct3D.
+ *
+ * With one color attachment output and dual-source blending, therefore, UAV MRT indices must not be
+ * smaller than 2 - this is why `maxFragmentCombinedOutputResources` is limited to 11 rather than to
+ * all 12 MRTs.
+ * Otherwise, UAV MRT indices must not be smaller than `util_bitcount(rtv_uncompacted_exports)`.
+ * The current convention in Terakan is that UAV MRTs are placed immediately after RTV and DSB MRTs.
+ *
+ * Advanced blending equation feedback loop resources may share the resource range with UAV IMMED
+ * buffers. However, in order to keep the length of the range 11 rather than 12 (to make it possible
+ * to provide one more mutable-type resource descriptor to the application), the
+ * `layout(location = 0, index = 1)` dual-source blending factor must not occupy space in the range.
+ * The current convention in Terakan, for simplicity and to reduce register changes when the color
+ * attachment MRT count is changed, is to place UAV IMMED resources upward at the beginning of the
+ * range, and the advanced blending equation feedback loop resources downward at the end.
+ */
+struct terakan_shader_rtv_mapping {
+   uint8_t rtv_uncompacted_exports;
+   bool dual_source_blend_via_location_0_index_1;
+};
+
+static inline bool
+terakan_shader_rtv_mapping_equal(struct terakan_shader_rtv_mapping const a,
+                                 struct terakan_shader_rtv_mapping const b)
+{
+   return a.rtv_uncompacted_exports == b.rtv_uncompacted_exports &&
+          a.dual_source_blend_via_location_0_index_1 == b.dual_source_blend_via_location_0_index_1;
+}
+
+static inline uint8_t
+terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(
+   struct terakan_shader_rtv_mapping const rtv_mapping)
+{
+   return rtv_mapping.rtv_uncompacted_exports |
+          (rtv_mapping.dual_source_blend_via_location_0_index_1 ? 0b10u : 0u);
+}
+
 /* Shader implementation common for both pipelines (to be used in a pipeline-cached wrapper) and
  * shader objects (for an uncached wrapper implementing VkShaderEXT).
  */
@@ -327,17 +402,7 @@ struct terakan_shader_impl {
 
    struct terakan_shader_sqk_usage sqk_usage;
 
-   /* The actual `CB_COLOR` indices of UAVs are the counts of set bits prior to the bit for the
-    * given index of the resource corresponding to the UAV in the mutable resource range, and for
-    * fragment shaders, the number of set bits in `rtv_dsb_uncompacted_exports` is added (but not
-    * for the `IMMED` buffer read resource index) to them.
-    * `TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL` bits are valid in fragment shaders,
-    * `TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL` bits are valid in compute shaders.
-    * Padded to `BITSET_WORD` with zero bits, can be used in `memcmp`.
-    */
-   BITSET_DECLARE(uavs_for_mutable_resources_needed,
-                  MAX2(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL,
-                       TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL));
+   struct terakan_shader_uav_usage uav_usage;
 
    struct {
       uint32_t vertex_attributes_needed;
@@ -347,7 +412,7 @@ struct terakan_shader_impl {
       /* DUAL_EXPORT_ENABLE specifies only whether it can potentially be enabled for the shader. */
       uint32_t db_shader_control;
 
-      uint8_t rtv_dsb_uncompacted_exports;
+      struct terakan_shader_rtv_mapping rtv_mapping;
    } fs;
 
    struct r600_shader shader;
@@ -355,11 +420,52 @@ struct terakan_shader_impl {
 
 struct terakan_device;
 
+/* TODO(Triang3l): Replace the old version with the new. */
+/* Converts SPIR-V to NIR and performs pre-link lowerings. */
+nir_shader * terakan_nir_from_spirv_pre_link(struct terakan_device * device,
+                                             size_t spirv_size_bytes, uint32_t const * spirv,
+                                             mesa_shader_stage stage, char const * entrypoint,
+                                             VkSpecializationInfo const * specialization_info);
+
+struct terakan_nir_get_pipeline_layout_binding_functions;
+struct terakan_physical_device;
+
+struct terakan_nir_lower_and_optimize_post_link_options {
+   /* Must be set to the next graphics stage for pre-rasterization stages, or to `MESA_SHADER_NONE`
+    * for other stages.
+    * If this is the last pre-rasterization stage, the next stage must be `MESA_SHADER_FRAGMENT`
+    * regardless of whether the fragment shader is actually present (if it's not, varyings may be
+    * eliminated by linkage prior to the call if desired).
+    */
+   mesa_shader_stage next_stage;
+
+   struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions;
+   void const * get_binding_functions_data;
+
+   bool robust_buffer_access_2;
+
+   struct terakan_physical_device const * physical_device;
+};
+
+struct terakan_nir_lower_and_optimize_post_link_result {
+   struct terakan_shader_sqk_usage sqk_usage;
+   uint32_t driver_push_constants_used;
+
+   struct terakan_shader_rtv_mapping rtv_mapping;
+
+   struct terakan_shader_uav_usage uav_usage;
+};
+
+struct terakan_nir_lower_and_optimize_post_link_result terakan_nir_lower_and_optimize_post_link(
+   nir_shader * nir, struct terakan_nir_lower_and_optimize_post_link_options const * options);
+
 /* Converts SPIR-V to NIR and performs pre-link lowerings. */
 nir_shader * terakan_shader_spirv_to_nir(struct terakan_device * device, size_t spirv_size_bytes,
                                          uint32_t const * spirv, mesa_shader_stage stage,
                                          char const * entrypoint,
                                          VkSpecializationInfo const * specialization_info);
+
+struct terakan_pipeline_layout;
 
 void terakan_shader_lower_and_optimize_post_link(
    nir_shader * nir, struct terakan_pipeline_layout const * pipeline_layout,

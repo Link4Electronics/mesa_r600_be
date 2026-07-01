@@ -1140,26 +1140,26 @@ terakan_app_config_draw_apply_sq_pgm_fragment(
    terakan_hw_config_sqk_set_usage_fs(&command_writer->hw_config_sqk,
                                       fs != NULL ? &fs->sqk_usage : NULL);
 
-   uint8_t const rtv_dsb_uncompacted_exports =
-      fs != NULL ? fs->fs.rtv_dsb_uncompacted_exports : 0b0;
+   struct terakan_shader_rtv_mapping const rtv_mapping =
+      fs != NULL ? fs->fs.rtv_mapping : (struct terakan_shader_rtv_mapping){};
 
    /* TODO(Triang3l): Update `ps_iter_full_sample_shading`. */
 
    TERAKAN_APP_CONFIG_DRAW_ASSERT_MAY_DEPEND_ON(CB_COLOR_RTV_AND_BLEND_CONTROL, SQ_PGM_FRAGMENT);
-   if (config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment
-          .rtv_dsb_uncompacted_exports != rtv_dsb_uncompacted_exports) {
-      config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment
-         .rtv_dsb_uncompacted_exports = rtv_dsb_uncompacted_exports;
+   if (!terakan_shader_rtv_mapping_equal(
+          config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment.rtv_mapping,
+          rtv_mapping)) {
+      config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment.rtv_mapping = rtv_mapping;
       terakan_app_config_draw_set_pending(
          config, TERAKAN_APP_CONFIG_DRAW_ENTRY_CB_COLOR_RTV_AND_BLEND_CONTROL);
    }
 
    TERAKAN_APP_CONFIG_DRAW_ASSERT_MAY_DEPEND_ON(CB_COLOR_UAV_AND_UNUSED_MRT, SQ_PGM_FRAGMENT);
-   uint8_t const rtv_dsb_export_count = util_bitcount(rtv_dsb_uncompacted_exports);
-   static BITSET_WORD const
-      uav_empty_bitset[BITSET_WORDS(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL)];
-   BITSET_WORD const * const uav_used =
-      fs != NULL ? fs->uavs_for_mutable_resources_needed : uav_empty_bitset;
+   uint8_t const rtv_dsb_export_count =
+      util_bitcount(terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(rtv_mapping));
+   static struct terakan_shader_uav_usage const empty_uav_usage = {};
+   struct terakan_shader_uav_usage const * const uav_used =
+      fs != NULL ? &fs->uav_usage : &empty_uav_usage;
    size_t const uav_bitset_size =
       sizeof(BITSET_WORD) * BITSET_WORDS(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL);
    if (config->cb_color_uav_and_unused_mrt_.from_apply_sq_pgm_fragment.rtv_dsb_export_count !=
@@ -1629,6 +1629,181 @@ terakan_app_config_draw_apply_cb_rop3(struct terakan_gfx_command_writer * const 
    }
 }
 
+struct terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_accum {
+   uint32_t hw_cb_target_mask;
+   uint8_t export_formats_used;
+   uint32_t color_blend_factors_used;
+   uint32_t alpha_blend_factors_used;
+};
+
+static void
+terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_target(
+   struct terakan_gfx_command_writer * const command_writer, unsigned const hw_rtv_index,
+   unsigned const app_rtv_index, bool const dual_source_blend_allowed,
+   struct terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_accum * const accum)
+{
+   struct terakan_app_config_draw * const app_config = &command_writer->app_config_draw;
+   struct terakan_hw_config_draw * const hw_config = &command_writer->hw_config_draw;
+
+   if (!(app_config->cb_color_rtv_and_blend_control_.write_enable_mask &
+         BITFIELD_BIT(app_rtv_index))) {
+      goto unbind;
+   }
+
+   struct terakan_app_config_draw_cb_color_rtv const * const rtv =
+      &app_config->cb_color_rtv_and_blend_control_.rtv[app_rtv_index];
+   if (!terakan_color_descriptor_is_bound(rtv->bo, &rtv->color)) {
+      goto unbind;
+   }
+
+   uint8_t const format_export_mask = terakan_app_config_draw_cb_color_rtv_format_export_mask(rtv);
+   uint8_t const write_mask =
+      (app_config->cb_color_rtv_and_blend_control_.write_component_mask >> (4u * app_rtv_index)) &
+      format_export_mask;
+   if (!write_mask) {
+      goto unbind;
+   }
+
+   /* #MemoryIntegrity: Don't allow color targets not compatible with the current rasterization
+    * sample count and depth / stencil target sample count. Prior to R9xx,
+    * `PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES` also directly specifies the depth / stencil and color
+    * target sample count. Expecting that the descriptor inside the driver has the sample count
+    * specified regardless of the architecture generation.
+    */
+   uint8_t const rtv_samples_log2 = G_028C74_NUM_SAMPLES(rtv->color.attrib);
+   if (terakan_gfx_command_writer_physical_device(command_writer)->chip_info.is_r9xx) {
+      if (rtv_samples_log2 > app_config->cb_color_rtv_and_blend_control_
+                                .from_apply_db_depth_stencil_buffer.sample_count_limit_log2 ||
+          G_028C74_NUM_FRAGMENTS(rtv->color.attrib) <
+             app_config->cb_color_rtv_and_blend_control_.from_apply_db_eqaa.min_fragments_log2_r9xx) {
+         goto unbind;
+      }
+   } else {
+      if (rtv_samples_log2 != app_config->cb_color_rtv_and_blend_control_
+                                 .from_apply_db_depth_stencil_buffer.sample_count_limit_log2) {
+         goto unbind;
+      }
+   }
+
+   /* The color target needs to be bound. */
+
+   /* Along with the components in the write mask, enable components missing from the format to
+    * more clearly specify that the destination data for those components isn't needed for write
+    * masking purposes.
+    */
+   accum->hw_cb_target_mask |= (uint32_t)(write_mask | (format_export_mask ^ 0xFu))
+                               << (4u * app_rtv_index);
+   accum->export_formats_used |= (uint8_t)1 << G_028C70_SOURCE_FORMAT(rtv->color.info);
+   terakan_hw_config_draw_set_cb_color(hw_config, hw_rtv_index, rtv->bo, &rtv->color, &rtv->meta);
+
+   uint32_t hw_blend_control = 0;
+   uint32_t const app_blend_control = rtv->blend_control;
+   if (G_028780_BLEND_CONTROL_ENABLE(app_blend_control) &&
+       !G_028C70_BLEND_BYPASS(rtv->color.info) &&
+       !app_config->cb_color_rtv_and_blend_control_.from_apply_cb_rop3.blend_disable) {
+      hw_blend_control = S_028780_BLEND_CONTROL_ENABLE(true) | S_028780_SEPARATE_ALPHA_BLEND(true);
+
+      if (write_mask & 0b0111) {
+         uint32_t const comb_fcn = G_028780_COLOR_COMB_FCN(app_blend_control);
+         hw_blend_control |= S_028780_COLOR_COMB_FCN(comb_fcn);
+         if (terakan_hw_config_draw_cb_blend_control_comb_fcn_uses_factors(comb_fcn)) {
+            uint32_t src_factor = G_028780_COLOR_SRCBLEND(app_blend_control);
+            uint32_t dest_factor = G_028780_COLOR_DESTBLEND(app_blend_control);
+            if (!dual_source_blend_allowed) {
+               /* Disable dual-source blending for targets not supporting it. */
+               if (BITFIELD_BIT(src_factor) &
+                   TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
+                  src_factor = V_028780_BLEND_ZERO;
+               }
+               if (BITFIELD_BIT(dest_factor) &
+                   TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
+                  dest_factor = V_028780_BLEND_ZERO;
+               }
+            }
+            hw_blend_control |=
+               S_028780_COLOR_SRCBLEND(src_factor) | S_028780_COLOR_DESTBLEND(dest_factor);
+            accum->color_blend_factors_used |= BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor);
+         } else {
+            hw_blend_control |= S_028780_COLOR_SRCBLEND(V_028780_BLEND_ONE) |
+                                S_028780_COLOR_DESTBLEND(V_028780_BLEND_ZERO);
+         }
+      }
+
+      if (write_mask & 0b1000) {
+         uint32_t const app_blend_control_alpha =
+            app_blend_control << (G_028780_SEPARATE_ALPHA_BLEND(app_blend_control) ? 0 : 16);
+         uint32_t const comb_fcn = G_028780_ALPHA_COMB_FCN(app_blend_control_alpha);
+         hw_blend_control |= S_028780_ALPHA_COMB_FCN(comb_fcn);
+         if (terakan_hw_config_draw_cb_blend_control_comb_fcn_uses_factors(comb_fcn)) {
+            /* `terakan_hw_config_draw_cb_blend_control_color_factors_for_color_alpha` not applied,
+             * because it's expected to have been applied by the client (while creating the pipeline
+             * object, for instance).
+             */
+            uint32_t src_factor = G_028780_ALPHA_SRCBLEND(app_blend_control_alpha);
+            uint32_t dest_factor = G_028780_ALPHA_DESTBLEND(app_blend_control_alpha);
+            if (!dual_source_blend_allowed) {
+               /* Disable dual-source blending for targets not supporting it. */
+               if (BITFIELD_BIT(src_factor) &
+                   TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
+                  src_factor = V_028780_BLEND_ZERO;
+               }
+               if (BITFIELD_BIT(dest_factor) &
+                   TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
+                  dest_factor = V_028780_BLEND_ZERO;
+               }
+            }
+            hw_blend_control |=
+               S_028780_ALPHA_SRCBLEND(src_factor) | S_028780_ALPHA_DESTBLEND(dest_factor);
+            accum->alpha_blend_factors_used |= BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor);
+         } else {
+            hw_blend_control |= S_028780_ALPHA_SRCBLEND(V_028780_BLEND_ONE) |
+                                S_028780_ALPHA_DESTBLEND(V_028780_BLEND_ZERO);
+         }
+      } else {
+         /* Replicate the color blend equation into alpha if it's not written, for
+          * the optimizations below to handle further.
+          */
+         hw_blend_control |= (hw_blend_control & BITFIELD_MASK(13)) << 16;
+      }
+
+      if (!(write_mask & 0b0111)) {
+         /* Replicate the alpha blend equation into color if it's not written, for the optimizations
+          * below to handle further.
+          */
+         hw_blend_control |= (hw_blend_control >> 16) & BITFIELD_MASK(13);
+      }
+
+      /* For simplicity, removing the separate alpha blend flag later, but initially
+       * always enabling it.
+       */
+      assert(G_028780_SEPARATE_ALPHA_BLEND(hw_blend_control));
+      if (unlikely(hw_blend_control ==
+                      (S_028780_COLOR_SRCBLEND(V_028780_BLEND_ONE) |
+                       S_028780_COLOR_COMB_FCN(V_028780_COMB_DST_PLUS_SRC) |
+                       S_028780_COLOR_DESTBLEND(V_028780_BLEND_ZERO) |
+                       S_028780_ALPHA_SRCBLEND(V_028780_BLEND_ONE) |
+                       S_028780_ALPHA_COMB_FCN(V_028780_COMB_DST_PLUS_SRC) |
+                       S_028780_ALPHA_DESTBLEND(V_028780_BLEND_ZERO) |
+                       S_028780_SEPARATE_ALPHA_BLEND(true) | S_028780_BLEND_CONTROL_ENABLE(true)) &&
+                   G_028C70_SIMPLE_FLOAT(rtv->color.info))) {
+         /* Disable blending if it's no-operation. */
+         hw_blend_control = 0;
+      } else {
+         if (!((hw_blend_control ^ (hw_blend_control >> 16)) & BITFIELD_MASK(13))) {
+            /* Same equation used for color and alpha, or either is not written. */
+            hw_blend_control &= C_028780_SEPARATE_ALPHA_BLEND;
+         }
+      }
+   }
+   terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_index, hw_blend_control);
+
+   return;
+
+unbind:
+   terakan_hw_config_draw_set_cb_color_unbound(hw_config, hw_rtv_index, V_028C70_EXPORT_4C_16BPC);
+   terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_index, 0);
+}
+
 static void
 terakan_app_config_draw_apply_cb_color_rtv_and_blend_control(
    struct terakan_gfx_command_writer * const command_writer)
@@ -1636,220 +1811,62 @@ terakan_app_config_draw_apply_cb_color_rtv_and_blend_control(
    struct terakan_app_config_draw * const app_config = &command_writer->app_config_draw;
    struct terakan_hw_config_draw * const hw_config = &command_writer->hw_config_draw;
 
-   bool const is_r9xx =
-      terakan_gfx_command_writer_physical_device(command_writer)->chip_info.is_r9xx;
+   struct terakan_shader_rtv_mapping const rtv_mapping =
+      app_config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment.rtv_mapping;
 
-   /* The hardware color target indices are compacted, the application ones aren't. */
-   unsigned hw_rtv_count = 0;
-   uint32_t hw_cb_target_mask = 0b0;
+   /* Render target 0. */
+   struct terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_accum accum = {};
+   if (rtv_mapping.rtv_uncompacted_exports & 0b1) {
+      terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_target(
+         command_writer, 0, 0,
+         rtv_mapping.dual_source_blend_via_location_0_index_1 ||
+            (rtv_mapping.rtv_uncompacted_exports & 0b10) != 0,
+         &accum);
+   }
 
-   bool dual_source_blend = false;
-
-   uint32_t color_blend_factors_used = 0b0, alpha_blend_factors_used = 0b0;
-
-   bool export_128bpp = false;
-
-   u_foreach_bit (app_rtv_index, app_config->cb_color_rtv_and_blend_control_
-                                    .from_apply_sq_pgm_fragment.rtv_dsb_uncompacted_exports) {
-      struct terakan_app_config_draw_cb_color_rtv const * const rtv =
-         &app_config->cb_color_rtv_and_blend_control_.rtv[app_rtv_index];
-      if (!dual_source_blend && terakan_color_descriptor_is_bound(rtv->bo, &rtv->color) &&
-          (app_config->cb_color_rtv_and_blend_control_.write_enable_mask &
-           BITFIELD_BIT(app_rtv_index))) {
-         uint8_t const rtv_format_export_mask =
-            terakan_app_config_draw_cb_color_rtv_format_export_mask(rtv);
-         uint8_t const rtv_write_mask =
-            (app_config->cb_color_rtv_and_blend_control_.write_component_mask >>
-             (4 * app_rtv_index)) &
-            rtv_format_export_mask;
-         if (rtv_write_mask) {
-            /* #MemoryIntegrity: Don't allow color targets not compatible with the current
-             * rasterization sample count and depth / stencil target sample count. Prior to R9xx,
-             * `PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES` also directly specifies the depth / stencil and
-             * color target sample count. Expecting that the descriptor inside the driver has the
-             * sample count specified regardless of the architecture generation.
-             */
-            uint8_t const rtv_samples_log2 = G_028C74_NUM_SAMPLES(rtv->color.attrib);
-            if (is_r9xx ? rtv_samples_log2 <=
-                                app_config->cb_color_rtv_and_blend_control_
-                                   .from_apply_db_depth_stencil_buffer.sample_count_limit_log2 &&
-                             G_028C74_NUM_FRAGMENTS(rtv->color.attrib) >=
-                                app_config->cb_color_rtv_and_blend_control_.from_apply_db_eqaa
-                                   .min_fragments_log2_r9xx
-                        : rtv_samples_log2 ==
-                             app_config->cb_color_rtv_and_blend_control_
-                                .from_apply_db_depth_stencil_buffer.sample_count_limit_log2) {
-               /* The color target needs to be bound. */
-
-               terakan_hw_config_draw_set_cb_color(hw_config, hw_rtv_count, rtv->bo, &rtv->color,
-                                                   &rtv->meta);
-
-               /* Along with the components in the write mask, enable components missing from the
-                * format to more clearly specify that the destination data for those components
-                * isn't needed for write masking purposes.
-                */
-               hw_cb_target_mask |= (rtv_write_mask | (rtv_format_export_mask ^ 0xF))
-                                    << (4 * app_rtv_index);
-
-               uint32_t hw_blend_control = 0;
-               if (!app_config->cb_color_rtv_and_blend_control_.from_apply_cb_rop3.blend_disable &&
-                   !G_028C70_BLEND_BYPASS(rtv->color.info)) {
-                  uint32_t const app_blend_control = rtv->blend_control;
-                  if (G_028780_BLEND_CONTROL_ENABLE(app_blend_control)) {
-                     hw_blend_control =
-                        S_028780_BLEND_CONTROL_ENABLE(true) | S_028780_SEPARATE_ALPHA_BLEND(true);
-
-                     bool const dual_source_blend_allowed =
-                        app_rtv_index == 0 &&
-                        (app_config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment
-                            .rtv_dsb_uncompacted_exports &
-                         0b10) != 0;
-
-                     if (rtv_write_mask & 0b0111) {
-                        uint32_t const comb_fcn = G_028780_COLOR_COMB_FCN(app_blend_control);
-                        hw_blend_control |= S_028780_COLOR_COMB_FCN(comb_fcn);
-                        if (terakan_hw_config_draw_cb_blend_control_comb_fcn_uses_factors(
-                               comb_fcn)) {
-                           uint32_t src_factor = G_028780_COLOR_SRCBLEND(app_blend_control);
-                           uint32_t dest_factor = G_028780_COLOR_DESTBLEND(app_blend_control);
-                           if (dual_source_blend_allowed) {
-                              if ((BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor)) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 dual_source_blend = true;
-                              }
-                           } else {
-                              /* Disable dual-source blending for targets not supporting it. */
-                              if (BITFIELD_BIT(src_factor) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 src_factor = V_028780_BLEND_ZERO;
-                              }
-                              if (BITFIELD_BIT(dest_factor) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 dest_factor = V_028780_BLEND_ZERO;
-                              }
-                           }
-                           hw_blend_control |= S_028780_COLOR_SRCBLEND(src_factor) |
-                                               S_028780_COLOR_DESTBLEND(dest_factor);
-                           color_blend_factors_used |=
-                              BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor);
-                        } else {
-                           hw_blend_control |= S_028780_COLOR_SRCBLEND(V_028780_BLEND_ONE) |
-                                               S_028780_COLOR_DESTBLEND(V_028780_BLEND_ZERO);
-                        }
-                     }
-
-                     if (rtv_write_mask & 0b1000) {
-                        uint32_t const app_blend_control_alpha =
-                           app_blend_control
-                           << (G_028780_SEPARATE_ALPHA_BLEND(app_blend_control) ? 0 : 16);
-                        uint32_t const comb_fcn = G_028780_ALPHA_COMB_FCN(app_blend_control_alpha);
-                        hw_blend_control |= S_028780_ALPHA_COMB_FCN(comb_fcn);
-                        if (terakan_hw_config_draw_cb_blend_control_comb_fcn_uses_factors(
-                               comb_fcn)) {
-                           /* terakan_hw_config_draw_cb_blend_control_color_factors_for_color_alpha
-                            * not applied, because it's expected to have been applied by the client
-                            * (while creating the pipeline object, for instance).
-                            */
-                           uint32_t src_factor = G_028780_ALPHA_SRCBLEND(app_blend_control_alpha);
-                           uint32_t dest_factor = G_028780_ALPHA_DESTBLEND(app_blend_control_alpha);
-                           if (dual_source_blend_allowed) {
-                              if ((BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor)) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 dual_source_blend = true;
-                              }
-                           } else {
-                              /* Disable dual-source blending for targets not supporting it. */
-                              if (BITFIELD_BIT(src_factor) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 src_factor = V_028780_BLEND_ZERO;
-                              }
-                              if (BITFIELD_BIT(dest_factor) &
-                                  TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
-                                 dest_factor = V_028780_BLEND_ZERO;
-                              }
-                           }
-                           hw_blend_control |= S_028780_ALPHA_SRCBLEND(src_factor) |
-                                               S_028780_ALPHA_DESTBLEND(dest_factor);
-                           alpha_blend_factors_used |=
-                              BITFIELD_BIT(src_factor) | BITFIELD_BIT(dest_factor);
-                        } else {
-                           hw_blend_control |= S_028780_ALPHA_SRCBLEND(V_028780_BLEND_ONE) |
-                                               S_028780_ALPHA_DESTBLEND(V_028780_BLEND_ZERO);
-                        }
-                     } else {
-                        /* Replicate the color blend equation into alpha if it's not written, for
-                         * the optimizations below to handle further.
-                         */
-                        hw_blend_control |= (hw_blend_control & BITFIELD_MASK(13)) << 16;
-                     }
-
-                     if (!(rtv_write_mask & 0b0111)) {
-                        /* Replicate the alpha blend equation into color if it's not written, for
-                         * the optimizations below to handle further.
-                         */
-                        hw_blend_control |= (hw_blend_control >> 16) & BITFIELD_MASK(13);
-                     }
-
-                     /* For simplicity, removing the separate alpha blend flag later, but initially
-                      * always enabling it.
-                      */
-                     assert(G_028780_SEPARATE_ALPHA_BLEND(hw_blend_control));
-                     if (unlikely(hw_blend_control ==
-                                     (S_028780_COLOR_SRCBLEND(V_028780_BLEND_ONE) |
-                                      S_028780_COLOR_COMB_FCN(V_028780_COMB_DST_PLUS_SRC) |
-                                      S_028780_COLOR_DESTBLEND(V_028780_BLEND_ZERO) |
-                                      S_028780_ALPHA_SRCBLEND(V_028780_BLEND_ONE) |
-                                      S_028780_ALPHA_COMB_FCN(V_028780_COMB_DST_PLUS_SRC) |
-                                      S_028780_ALPHA_DESTBLEND(V_028780_BLEND_ZERO) |
-                                      S_028780_SEPARATE_ALPHA_BLEND(true) |
-                                      S_028780_BLEND_CONTROL_ENABLE(true)) &&
-                                  G_028C70_SIMPLE_FLOAT(rtv->color.info))) {
-                        /* Disable blending if it's no-operation. */
-                        hw_blend_control = 0;
-                     } else {
-                        if (!((hw_blend_control ^ (hw_blend_control >> 16)) & BITFIELD_MASK(13))) {
-                           /* Same equation used for color and alpha, or either is not written. */
-                           hw_blend_control &= C_028780_SEPARATE_ALPHA_BLEND;
-                        }
-                     }
-                  }
-               }
-               terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_count,
-                                                           hw_blend_control);
-
-               if (G_028C70_SOURCE_FORMAT(rtv->color.info) == V_028C70_EXPORT_4C_32BPC) {
-                  export_128bpp = true;
-               }
-
-               ++hw_rtv_count;
-               continue;
-            }
-         }
+   /* Render targets 1... */
+   uint8_t const rtv_dsb_uncompacted_exports =
+      terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(rtv_mapping);
+   if ((accum.color_blend_factors_used | accum.alpha_blend_factors_used) &
+       TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_SRC1) {
+      /* Dual-source blending allowed and used - write only to RTV 0, and set the format of the RTV
+       * export 1 to that of the RTV 0 as expected by the hardware.
+       */
+      assert(!(~rtv_dsb_uncompacted_exports & 0b11));
+      terakan_hw_config_draw_set_cb_color_unbound(hw_config, 1, ffs(accum.export_formats_used) - 1);
+      terakan_hw_config_draw_set_cb_blend_control(hw_config, 1, 0);
+      u_foreach_bit (app_rtv_index, rtv_dsb_uncompacted_exports & ~(uint8_t)0b11) {
+         unsigned const hw_rtv_index =
+            util_bitcount(rtv_dsb_uncompacted_exports & BITFIELD_MASK(app_rtv_index));
+         terakan_hw_config_draw_set_cb_color_unbound(hw_config, hw_rtv_index,
+                                                     V_028C70_EXPORT_4C_16BPC);
+         terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_index, 0);
       }
-
-      /* The color target doesn't need to be bound. */
-      terakan_hw_config_draw_set_cb_color_unbound(
-         hw_config, hw_rtv_count,
-         hw_rtv_count == 1 && dual_source_blend
-            ? G_028C70_SOURCE_FORMAT(app_config->cb_color_rtv_and_blend_control_.rtv[0].color.info)
-            : V_028C70_EXPORT_4C_16BPC);
-      terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_count, 0);
-      ++hw_rtv_count;
+   } else {
+      u_foreach_bit (app_rtv_index, rtv_dsb_uncompacted_exports & ~(uint8_t)0b1) {
+         terakan_app_config_draw_apply_cb_color_rtv_and_blend_control_target(
+            command_writer,
+            util_bitcount(rtv_dsb_uncompacted_exports & BITFIELD_MASK(app_rtv_index)),
+            app_rtv_index, false, &accum);
+      }
    }
 
    /* Disable blending for unused RTVs. */
-   for (; hw_rtv_count < TERAKAN_COLOR_HW_RTV_COUNT; ++hw_rtv_count) {
-      terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_count, 0);
+   for (unsigned hw_rtv_index = util_bitcount(rtv_dsb_uncompacted_exports);
+        hw_rtv_index < TERAKAN_COLOR_HW_RTV_COUNT; ++hw_rtv_index) {
+      terakan_hw_config_draw_set_cb_blend_control(hw_config, hw_rtv_index, 0);
    }
 
-   terakan_hw_config_draw_set_cb_target_mask(hw_config, hw_cb_target_mask);
+   terakan_hw_config_draw_set_cb_target_mask(hw_config, accum.hw_cb_target_mask);
 
    TERAKAN_APP_CONFIG_DRAW_ASSERT_MAY_DEPEND_ON(CB_BLEND_CONSTANTS, CB_COLOR_RTV_AND_BLEND_CONTROL);
    bool const blend_constants_rgb_used =
-      (color_blend_factors_used & TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST_COLOR) != 0;
+      (accum.color_blend_factors_used &
+       TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST_COLOR) != 0;
    bool const blend_constants_alpha_used =
-      (color_blend_factors_used & TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST_ALPHA) ||
-      (alpha_blend_factors_used & TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST);
+      (accum.color_blend_factors_used &
+       TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST_ALPHA) ||
+      (accum.alpha_blend_factors_used & TERAKAN_HW_CONFIG_DRAW_CB_BLEND_CONTROL_FACTORS_CONST);
    if (app_config->cb_blend_constants_.from_apply_cb_color_rtv_and_blend_control
              .constants_rgb_used != blend_constants_rgb_used ||
        app_config->cb_blend_constants_.from_apply_cb_color_rtv_and_blend_control
@@ -1863,7 +1880,7 @@ terakan_app_config_draw_apply_cb_color_rtv_and_blend_control(
    }
 
    TERAKAN_APP_CONFIG_DRAW_ASSERT_MAY_DEPEND_ON(CB_COLOR_CONTROL, CB_COLOR_RTV_AND_BLEND_CONTROL);
-   bool const any_rtv_written = hw_cb_target_mask != 0b0;
+   bool const any_rtv_written = accum.hw_cb_target_mask != 0b0;
    if (app_config->cb_color_control_.from_apply_cb_color_rtv_and_blend_control.any_rtv_written !=
        any_rtv_written) {
       app_config->cb_color_control_.from_apply_cb_color_rtv_and_blend_control.any_rtv_written =
@@ -1873,6 +1890,8 @@ terakan_app_config_draw_apply_cb_color_rtv_and_blend_control(
    }
 
    TERAKAN_APP_CONFIG_DRAW_ASSERT_MAY_DEPEND_ON(DB_SHADER_CONTROL, CB_COLOR_RTV_AND_BLEND_CONTROL);
+   bool const export_128bpp =
+      (accum.export_formats_used & BITFIELD_BIT(V_028C70_EXPORT_4C_32BPC)) != 0;
    if (app_config->db_shader_control_.from_apply_cb_color_rtv_and_blend_control.rtv_128bpp_export !=
        export_128bpp) {
       app_config->db_shader_control_.from_apply_cb_color_rtv_and_blend_control.rtv_128bpp_export =
@@ -1913,13 +1932,13 @@ terakan_app_config_draw_apply_cb_color_uav_and_unused_mrt(
             &app_config->cb_color_uav_and_unused_mrt_.uav[uav_uncompacted_index];
 
          if (G_028C70_RESOURCE_TYPE(uav->color.info) == V_028C70_BUFFER) {
-            uint32_t * const uav_base_granularity_offset_constant =
+            uint32_t * const uav_alignment_offset_constant =
                &command_writer->push_constants_state.driver_constants
-                   .buffer_uav_base_granularity_offset[uav_count];
-            if (*uav_base_granularity_offset_constant != uav->color.view) {
-               *uav_base_granularity_offset_constant = uav->color.view;
-               command_writer->push_constants_state.driver_constants_modified |= BITFIELD_BIT(
-                  TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_BASE_GRANULARITY_OFFSET);
+                   .buffer_uav_alignment_offset[uav_count];
+            if (*uav_alignment_offset_constant != uav->color.view) {
+               *uav_alignment_offset_constant = uav->color.view;
+               command_writer->push_constants_state.driver_constants_modified |=
+                  BITFIELD_BIT(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET);
             }
             /* The driver-internal `view` field of the descriptor will be eliminated by `hw_config`.
              */
@@ -2223,8 +2242,8 @@ terakan_app_config_draw_reset(struct terakan_app_config_draw * config)
 
    config->sq_pgm_fragment_ = NULL;
    config->db_eqaa_.from_apply_sq_pgm_fragment.ps_iter_full_sample_shading = false;
-   config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment.rtv_dsb_uncompacted_exports =
-      0b0;
+   config->cb_color_rtv_and_blend_control_.from_apply_sq_pgm_fragment.rtv_mapping =
+      (struct terakan_shader_rtv_mapping){};
    config->cb_color_uav_and_unused_mrt_.from_apply_sq_pgm_fragment.rtv_dsb_export_count = 0;
    BITSET_ZERO(config->cb_color_uav_and_unused_mrt_.from_apply_sq_pgm_fragment.uav_used);
    config->db_shader_control_.from_apply_sq_pgm_fragment.db_shader_control =

@@ -27,6 +27,7 @@
 #include "terakan_bo.h"
 
 #include "amd/terascale/common/terascale_format.h"
+#include "compiler/shader_enums.h"
 #include "gallium/drivers/r600/eg_sq.h"
 #include "gallium/drivers/r600/evergreend.h"
 
@@ -164,6 +165,9 @@ struct terakan_resource_descriptor {
  * bindings, but different color output counts, not offsetting immediate buffer resource indices by
  * the color output count unlike UAV indices themselves.
  */
+/* TODO(Triang3l): Place advanced blending equation feedback loop resources downward at the end of
+ * this range, describe that in the comment, and change the name to include that.
+ */
 #define TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_PIXEL                                            \
    (TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE - TERAKAN_COLOR_UAV_COUNT_PIXEL)
 #define TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_COMPUTE                                          \
@@ -197,6 +201,13 @@ static_assert(
 #define TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE                                       \
    (TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL * 5 +                                       \
     TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL)
+
+static inline uint8_t
+terakan_resource_range_mutable_max_count(mesa_shader_stage const stage)
+{
+   return stage == MESA_SHADER_FRAGMENT ? TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL
+                                        : TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL;
+}
 
 /* SQ_VTX_CONSTANT doesn't have words 5 and 6, so using word 5 for the BO priority. */
 #define TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD 5
@@ -240,10 +251,6 @@ struct terakan_sampler_descriptor {
  * - `ATTRIB.NUM_SAMPLES` and `ATTRIB.NUM_FRAGMENTS` are always configured on all architecture
  *   generations, primarily for ensuring that the desired multisampling configuration is allowed.
  */
-/* TODO(Triang3l): Revisit `buffer_uav_validated_as_image`. If it's not needed (UAVs are not tracked
- * by DRM Radeon because they're not in `CB_TARGET_MASK`), remove it completely from the driver.
- * Otherwise expand the comment about `VIEW` for buffers.
- */
 struct terakan_color_descriptor {
    uint32_t base;
    uint32_t pitch;
@@ -260,36 +267,25 @@ struct terakan_color_descriptor {
     S_028C70_RESOURCE_TYPE(V_028C70_BUFFER))
 #define TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB (S_028C74_NON_DISP_TILING_ORDER(true))
 
-struct terakan_physical_device;
-
-/* May increase as `bytes_per_element` grows. */
-unsigned terakan_color_descriptor_buffer_uav_base_granularity_log2(
-   unsigned bytes_per_element, struct terakan_physical_device const * physical_device);
-
-void terakan_color_descriptor_calculate_buffer_pitch_slice(
-   struct terakan_color_descriptor * descriptor, unsigned bytes_per_element,
-   struct terakan_physical_device const * physical_device);
-
-void terakan_color_descriptor_calculate_buffer_base_pitch_slice_dim_offset(
+void terakan_color_descriptor_calculate_buffer_base_dim_offset(
    struct terakan_color_descriptor * descriptor, uint64_t va, VkDeviceSize elements,
-   unsigned bytes_per_element, struct terakan_physical_device const * physical_device,
-   uint32_t * base_granularity_offset_bytes_out);
+   unsigned bytes_per_element, unsigned pipe_interleave_bytes_log2,
+   uint32_t * alignment_offset_bytes_out);
 
 static inline void
-terakan_color_descriptor_calculate_buffer_base_pitch_slice_view_dim(
+terakan_color_descriptor_calculate_buffer_base_view_dim(
    struct terakan_color_descriptor * const descriptor, uint64_t const va,
    VkDeviceSize const elements, unsigned const bytes_per_element,
-   struct terakan_physical_device const * const physical_device,
-   bool const base_granularity_offset_in_elements)
+   unsigned const pipe_interleave_bytes_log2, bool const alignment_offset_in_elements)
 {
-   uint32_t base_granularity_offset;
-   terakan_color_descriptor_calculate_buffer_base_pitch_slice_dim_offset(
-      descriptor, va, elements, bytes_per_element, physical_device, &base_granularity_offset);
-   if (base_granularity_offset_in_elements) {
-      base_granularity_offset /= bytes_per_element;
+   uint32_t alignment_offset;
+   terakan_color_descriptor_calculate_buffer_base_dim_offset(
+      descriptor, va, elements, bytes_per_element, pipe_interleave_bytes_log2, &alignment_offset);
+   if (alignment_offset_in_elements) {
+      alignment_offset /= bytes_per_element;
    }
    /* Used by the driver, must be zeroed before being passed to the hardware. */
-   descriptor->view = base_granularity_offset;
+   descriptor->view = alignment_offset;
 }
 
 /* If `bo` is NULL, `descriptor` is ignored. */
@@ -438,10 +434,11 @@ terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * bo, uint6
                                              VkDeviceSize range,
                                              struct terakan_resource_descriptor * resource_out);
 
-bool terakan_descriptor_create_for_storage_buffer(
-   struct terakan_bo const * bo, uint64_t va, VkDeviceSize range,
-   struct terakan_physical_device const * physical_device,
-   struct terakan_resource_descriptor * resource_out, struct terakan_color_descriptor * color_out);
+bool terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * bo, uint64_t va,
+                                                  VkDeviceSize range,
+                                                  unsigned pipe_interleave_bytes_log2,
+                                                  struct terakan_resource_descriptor * resource_out,
+                                                  struct terakan_color_descriptor * color_out);
 
 #ifdef __cplusplus
 }

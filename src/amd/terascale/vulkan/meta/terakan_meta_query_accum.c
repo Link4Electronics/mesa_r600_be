@@ -967,16 +967,17 @@ terakan_meta_query_accum(
               TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_INFO_CONST_FIELDS,
       .attrib = TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB,
    };
-   uint32_t dst_uav_base_granularity_offset_bytes;
-   terakan_color_descriptor_calculate_buffer_base_pitch_slice_dim_offset(
+   uint32_t dst_uav_alignment_offset_bytes;
+   terakan_color_descriptor_calculate_buffer_base_dim_offset(
       &dst_uav, dst_uav_va, dst_uav_dwords, sizeof(uint32_t),
-      terakan_gfx_command_writer_physical_device(command_writer),
-      &dst_uav_base_granularity_offset_bytes);
+      terakan_gfx_command_writer_physical_device(command_writer)
+         ->tiling_info.pipe_interleave_bytes_log2,
+      &dst_uav_alignment_offset_bytes);
    terakan_meta_config_draw_set_cb_uav(command_writer, 0, dst_uav_bo, &dst_uav);
 
    /* Make R0.X the index of the first counter within the aligned UAV. */
    terakan_meta_config_draw_set_vgt_index_offset(
-      command_writer, dst_uav_base_granularity_offset_bytes / sizeof(uint32_t));
+      command_writer, dst_uav_alignment_offset_bytes / sizeof(uint32_t));
 
    terakan_meta_draw_auto(command_writer, 1, 1);
 }
