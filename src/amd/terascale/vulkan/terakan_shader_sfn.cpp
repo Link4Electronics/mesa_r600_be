@@ -207,9 +207,11 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
          }
       }
       db_shader_control |= S_02880C_DB_SOURCE_FORMAT(
-         db_shader_control & S_02880C_MASK_EXPORT_ENABLE(1)
-            ? (db_shader_control & S_02880C_Z_EXPORT_ENABLE(1) ? V_02880C_EXPORT_DB_FULL
-                                                               : V_02880C_EXPORT_DB_FOUR16)
+         db_shader_control & (S_02880C_COVERAGE_TO_MASK_ENABLE(1) | S_02880C_MASK_EXPORT_ENABLE(1))
+            ? (db_shader_control &
+                     (S_02880C_Z_EXPORT_ENABLE(1) | S_02880C_COVERAGE_TO_MASK_ENABLE(1))
+                  ? V_02880C_EXPORT_DB_FULL
+                  : V_02880C_EXPORT_DB_FOUR16)
             : V_02880C_EXPORT_DB_TWO);
       db_shader_control |= S_02880C_DUAL_EXPORT_ENABLE(
          G_02880C_DB_SOURCE_FORMAT(db_shader_control) != V_02880C_EXPORT_DB_FULL);
