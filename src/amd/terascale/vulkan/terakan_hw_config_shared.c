@@ -125,7 +125,7 @@ terakan_hw_config_shared_indirect_buffer_begun(
    terakan_hw_config_shared_emit_config_register(
       command_writer, R_008D8C_SQ_DYN_GPR_CNTL_PS_FLUSH_REQ, S_008D8C_DYN_GPR_ENABLE(true));
 
-   uint32_t const common_constant_config[] = {
+   static uint32_t const common_constant_config[] = {
       /* Remove LS and HS from one SIMD to work around a hardware bug according to the Gallium R600
        * driver.
        */

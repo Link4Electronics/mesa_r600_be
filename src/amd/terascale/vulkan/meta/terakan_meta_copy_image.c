@@ -223,7 +223,7 @@ terakan_CmdCopyImage2(VkCommandBuffer const commandBuffer,
       TERAKAN_BARRIER_ACTION_FLUSH_INV_CB_RTV_DATA |
       TERAKAN_BARRIER_ACTION_PARTIAL_FLUSH_CP_THROUGH_PS;
 
-   struct terakan_meta_config_draw_begin_options const meta_begin_options = {
+   static struct terakan_meta_config_draw_begin_options const meta_begin_options = {
       .vgt_primitive_type = V_008958_DI_PT_RECTLIST,
       .cb_and_db_shader_control_mode =
          TERAKAN_META_CONFIG_DRAW_BEGIN_CB_MODE_NORMAL_WITH_RTV_AND_DYNAMIC_DB_SHADER_CONTROL,

@@ -386,7 +386,7 @@ terakan_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const im
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
 
-   struct terakan_meta_config_draw_begin_options const meta_begin_options = {
+   static struct terakan_meta_config_draw_begin_options const meta_begin_options = {
       .vgt_primitive_type = V_008958_DI_PT_RECTLIST,
       .cb_and_db_shader_control_mode =
          TERAKAN_META_CONFIG_DRAW_BEGIN_CB_MODE_NORMAL_WITH_RTV_AND_DYNAMIC_DB_SHADER_CONTROL,
@@ -539,7 +539,7 @@ terakan_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t const 
    struct terakan_screen_rect const render_area =
       terakan_app_config_draw_get_pa_vport_render_area(&command_writer->app_config_draw);
 
-   struct terakan_meta_config_draw_begin_options const meta_begin_options = {
+   static struct terakan_meta_config_draw_begin_options const meta_begin_options = {
       .vgt_primitive_type = V_008958_DI_PT_RECTLIST,
       .cb_and_db_shader_control_mode = TERAKAN_META_CONFIG_DRAW_BEGIN_CB_MODE_DYNAMIC,
       .rasterization =

@@ -298,8 +298,8 @@ terakan_hw_config_draw_emit_constant(struct terakan_gfx_command_writer * const c
    PKT3(PKT3_SET_CONTEXT_REG, ((address_last) - (address_first)) / sizeof(uint32_t) + 1, 0),       \
       TERAKAN_CONTEXT_REG_OFFSET(address_first)
 
-   /* This array contains only compile-time constants to avoid copying. */
-   uint32_t const common_config[] = {
+   /* This array contains only compile-time constants. */
+   static uint32_t const common_config[] = {
       /* TODO(Triang3l): Expose DB and CB metadata configuration. */
       TERAKAN_HW_CONFIG_DRAW_EMIT_CONSTANT_SINGLE(R_028000_DB_RENDER_CONTROL, 0),
 
@@ -445,8 +445,8 @@ terakan_hw_config_draw_emit_constant(struct terakan_gfx_command_writer * const c
    }
 
    if (terakan_gfx_command_writer_physical_device(command_writer)->chip_info.is_r9xx) {
-      /* This array contains only compile-time constants to avoid copying. */
-      uint32_t const r9xx_config[] = {
+      /* This array contains only compile-time constants. */
+      static uint32_t const r9xx_config[] = {
          TERAKAN_HW_CONFIG_DRAW_EMIT_CONSTANT_SINGLE(CM_R_0286FC_SPI_LDS_MGMT, 0),
 
          /* PAL gives higher priority to samples with a shorter distance to the center, but
@@ -492,8 +492,8 @@ terakan_hw_config_draw_emit_constant(struct terakan_gfx_command_writer * const c
          terakan_gfx_command_writer_emit_done(command_writer, packet);
       }
    } else {
-      /* This array contains only compile-time constants to avoid copying. */
-      uint32_t const r8xx_config[] = {
+      /* This array contains only compile-time constants. */
+      static uint32_t const r8xx_config[] = {
          /* Workaround for hardware issues with dynamic GPRs - must set all limits to 240 (in units
           * of 8 registers) instead of 0.
           */

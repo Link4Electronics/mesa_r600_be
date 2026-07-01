@@ -924,7 +924,7 @@ terakan_meta_query_accum_begin(struct terakan_gfx_command_writer * const command
       return 0;
    }
 
-   struct terakan_meta_config_draw_begin_options const meta_begin_options = {
+   static struct terakan_meta_config_draw_begin_options const meta_begin_options = {
       .vgt_primitive_type = V_008958_DI_PT_POINTLIST,
       .vgt_index_offset_explicit = true,
       .cb_and_db_shader_control_mode = TERAKAN_META_CONFIG_DRAW_BEGIN_CB_MODE_NORMAL_UAV_ONLY,
