@@ -206,15 +206,19 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
             break;
          }
       }
-      db_shader_control |= S_02880C_DB_SOURCE_FORMAT(
-         db_shader_control & (S_02880C_COVERAGE_TO_MASK_ENABLE(1) | S_02880C_MASK_EXPORT_ENABLE(1))
-            ? (db_shader_control &
-                     (S_02880C_Z_EXPORT_ENABLE(1) | S_02880C_COVERAGE_TO_MASK_ENABLE(1))
-                  ? V_02880C_EXPORT_DB_FULL
-                  : V_02880C_EXPORT_DB_FOUR16)
-            : V_02880C_EXPORT_DB_TWO);
-      db_shader_control |= S_02880C_DUAL_EXPORT_ENABLE(
-         G_02880C_DB_SOURCE_FORMAT(db_shader_control) != V_02880C_EXPORT_DB_FULL);
+      bool const db_shader_export_used =
+         (db_shader_control &
+          ~(uint32_t)(C_02880C_Z_EXPORT_ENABLE & C_02880C_STENCIL_EXPORT_ENABLE &
+                      C_02880C_COVERAGE_TO_MASK_ENABLE & C_02880C_MASK_EXPORT_ENABLE)) != 0;
+      db_shader_control |=
+         S_02880C_DUAL_EXPORT_ENABLE(!db_shader_export_used) |
+         S_02880C_DB_SOURCE_FORMAT(db_shader_control & (S_02880C_COVERAGE_TO_MASK_ENABLE(1) |
+                                                        S_02880C_MASK_EXPORT_ENABLE(1))
+                                      ? (db_shader_control & (S_02880C_Z_EXPORT_ENABLE(1) |
+                                                              S_02880C_COVERAGE_TO_MASK_ENABLE(1))
+                                            ? V_02880C_EXPORT_DB_FULL
+                                            : V_02880C_EXPORT_DB_FOUR16)
+                                      : V_02880C_EXPORT_DB_TWO);
       /* See RadeonSI DB_SHADER_CONTROL setup for more details about the possible Z order and
        * EXEC_ON_* cases.
        * Not using ReZ currently due to unknown performance impact.
@@ -230,14 +234,12 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
       }
       shader->fs.db_shader_control = db_shader_control;
 
-      bool export_z = (db_shader_control &
-                       ~(uint32_t)(C_02880C_Z_EXPORT_ENABLE & C_02880C_STENCIL_EXPORT_ENABLE &
-                                   C_02880C_MASK_EXPORT_ENABLE)) != 0;
       /* Something must be exported, either at least one color or at least the DB export.
        * Explicitly ensuring that is not necessary in this code due to the + 1.
        */
       shader->static_state.stage.ps.sq_pgm_exports_ps =
-         S_02884C_EXPORT_COLORS(shader->shader.ps_export_highest + 1) | S_02884C_EXPORT_Z(export_z);
+         S_02884C_EXPORT_COLORS(shader->shader.ps_export_highest + 1) |
+         S_02884C_EXPORT_Z(db_shader_export_used);
 
       std::memset(shader->static_state.stage.ps.spi_ps_input_cntl, 0,
                   sizeof(shader->static_state.stage.ps.spi_ps_input_cntl));

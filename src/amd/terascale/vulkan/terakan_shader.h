@@ -264,8 +264,8 @@ extern struct terakan_shader_ring const terakan_shader_rings[TERAKAN_SHADER_RING
 /* `DB_SHADER_CONTROL` value when the pixel shader doesn't override the depth and stencil values,
  * coverage, and interaction with other DB functionality, and doesn't have memory side effects.
  * One of the use cases of this is drawing without an application-provided pixel shader.
- * Dual export is enabled because it's possible for the specified DB export format, though CB may
- * require it to be disabled (if any written RTV uses a 128bpp export format).
+ * Dual export is enabled because the DB shader export isn't used, though CB may require it to be
+ * disabled (if any written RTV uses a 128bpp export format).
  */
 #define TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY                                                  \
    (S_02880C_Z_ORDER(V_02880C_EARLY_Z_THEN_LATE_Z) | S_02880C_DUAL_EXPORT_ENABLE(1) |              \
