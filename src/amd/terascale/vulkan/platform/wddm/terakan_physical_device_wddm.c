@@ -270,7 +270,12 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
    SYSTEM_INFO system_info;
    GetSystemInfo(&system_info);
    result = terakan_physical_device_init(
-      &device->base, &instance->base, &terakan_physical_device_wddm_fn, adapter_desc->DeviceId,
+      &device->base, &instance->base, &terakan_physical_device_wddm_fn,
+      (struct terakan_physical_device_pci_device_id){
+         .device = (uint16_t)adapter_desc->DeviceId,
+         .subsystem_vendor = (uint16_t)adapter_desc->SubSysId,
+         .subsystem_device = (uint16_t)(adapter_desc->SubSysId >> 16),
+      },
       system_info.dwAllocationGranularity, (VkDeviceSize)adapter_desc->SharedSystemMemory,
       vram_bytes, vram_host_visible_bytes, UINT32_MAX & ~(system_info.dwAllocationGranularity - 1),
       system_info.dwAllocationGranularity, &tiling_info, &submission_info_gfx,

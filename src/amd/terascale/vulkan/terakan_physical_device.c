@@ -38,6 +38,7 @@
 #include "terakan_vk_state.h"
 #include "terakan_wsi.h"
 
+#include "amd/terascale/common/terascale_device_name.h"
 #include "compiler/shader_enums.h"
 #include "gallium/drivers/r600/evergreend.h"
 #include "gallium/drivers/r600/r600_isa.h"
@@ -78,50 +79,13 @@ terakan_physical_device_get_chip_family(uint32_t const pci_device_id)
    return chip_family;
 }
 
-char const *
-terakan_physical_device_chip_family_name(enum radeon_family const chip_family)
-{
-   switch (chip_family) {
-   case CHIP_CEDAR:
-      return "Cedar";
-   case CHIP_REDWOOD:
-      return "Redwood";
-   case CHIP_JUNIPER:
-      return "Juniper";
-   case CHIP_CYPRESS:
-      return "Cypress";
-   case CHIP_HEMLOCK:
-      return "Hemlock";
-   case CHIP_PALM:
-      return "Palm";
-   /* sumo_id.h DEVICE_ID_SUMO_SUPER_* correspond to CHIP_SUMO, non-SUPER are CHIP_SUMO2.
-    * SUMO also has more SIMDs, render backends and contexts.
-    */
-   case CHIP_SUMO:
-      return "SuperSumo";
-   case CHIP_SUMO2:
-      return "Sumo";
-   case CHIP_BARTS:
-      return "Barts";
-   case CHIP_TURKS:
-      return "Turks";
-   case CHIP_CAICOS:
-      return "Caicos";
-   case CHIP_CAYMAN:
-      return "Cayman";
-   case CHIP_ARUBA:
-      return "Aruba";
-   default:
-      assert(!"Unsupported GFX chip family");
-      return "Evergreen/Northern Islands";
-   }
-}
-
 void
 terakan_physical_device_chip_info_init(
-   uint32_t const pci_device_id, struct terakan_physical_device_chip_info * const chip_info_out)
+   struct terakan_physical_device_pci_device_id const pci_device_id,
+   struct terakan_physical_device_chip_info * const chip_info_out)
 {
-   enum radeon_family const chip_family = terakan_physical_device_get_chip_family(pci_device_id);
+   enum radeon_family const chip_family =
+      terakan_physical_device_get_chip_family(pci_device_id.device);
    assert(terakan_physical_device_is_chip_family_supported(chip_family));
 
    chip_info_out->pci_device_id = pci_device_id;
@@ -351,8 +315,10 @@ terakan_physical_device_chip_info_init(
       max_render_backends_per_se_log2 = 0;
       break;
    case CHIP_ARUBA:
-      if ((pci_device_id >= 0x9990 && pci_device_id <= 0x999B && pci_device_id != 0x9999) ||
-          pci_device_id == 0x99A0 || pci_device_id == 0x99A2 || pci_device_id == 0x99A4) {
+      if ((pci_device_id.device >= 0x9990 && pci_device_id.device <= 0x999B &&
+           pci_device_id.device != 0x9999) ||
+          pci_device_id.device == 0x99A0 || pci_device_id.device == 0x99A2 ||
+          pci_device_id.device == 0x99A4) {
          /* "Scrapper" chip family. */
          max_render_backends_per_se_log2 = 0;
       } else {
@@ -483,13 +449,28 @@ terakan_physical_device_get_capabilities(
     */
    properties_out->driverVersion = VK_MAKE_API_VERSION(0, 0, 0, 1);
    properties_out->vendorID = TERAKAN_PHYSICAL_DEVICE_VENDOR_ID_ATI;
-   properties_out->deviceID = chip_info->pci_device_id;
+   properties_out->deviceID = chip_info->pci_device_id.device;
    properties_out->deviceType = chip_info->has_dedicated_vram
                                    ? VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
                                    : VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-   snprintf(properties_out->deviceName, sizeof(properties_out->deviceName),
-            "AMD R%cxx %s (Terakan)", chip_info->is_r9xx ? '9' : '8',
-            terakan_physical_device_chip_family_name(chip_info->chip_family));
+
+   struct terascale_device_name const device_name = terascale_device_name_get(
+      chip_info->pci_device_id.device, chip_info->pci_device_id.subsystem_vendor,
+      chip_info->pci_device_id.subsystem_device);
+   if (likely(device_name.chip != NULL && device_name.product != NULL)) {
+      snprintf(properties_out->deviceName, sizeof(properties_out->deviceName), "AMD %s (%s)",
+               device_name.product, device_name.chip);
+   } else if (device_name.product != NULL) {
+      snprintf(properties_out->deviceName, sizeof(properties_out->deviceName), "AMD %s",
+               device_name.product);
+   } else if (device_name.chip != NULL) {
+      snprintf(properties_out->deviceName, sizeof(properties_out->deviceName), "AMD %s",
+               device_name.chip);
+   } else {
+      snprintf(properties_out->deviceName, sizeof(properties_out->deviceName), "AMD R%cxx",
+               chip_info->is_r9xx ? '9' : '8');
+   }
+
    /* TODO(Triang3l): pipelineCacheUUID when pipeline cache is implemented. */
 
    properties_out->maxImageDimension1D = TERAKAN_IMAGE_MAX_WIDTH_HEIGHT;
@@ -1079,8 +1060,9 @@ VkResult
 terakan_physical_device_init(
    struct terakan_physical_device * const device, struct terakan_instance * const instance,
    struct terakan_physical_device_platform_fn const * const platform_fn_static,
-   uint32_t const pci_device_id, VkDeviceSize const gtt_allocation_granularity,
-   VkDeviceSize const gtt_size, VkDeviceSize const vram_size, VkDeviceSize const vram_visible,
+   struct terakan_physical_device_pci_device_id const pci_device_id,
+   VkDeviceSize const gtt_allocation_granularity, VkDeviceSize const gtt_size,
+   VkDeviceSize const vram_size, VkDeviceSize const vram_visible,
    VkDeviceSize const max_memory_allocation_size, VkDeviceSize const min_memory_map_alignment,
    struct terakan_physical_device_tiling_info const * const tiling_info,
    struct terakan_physical_device_submission_info_gfx const * const submission_info_gfx,

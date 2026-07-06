@@ -44,6 +44,15 @@ extern "C" {
 
 #define TERAKAN_PHYSICAL_DEVICE_VENDOR_ID_ATI 0x1002
 
+struct terakan_physical_device_pci_device_id {
+   uint16_t device;
+   uint16_t subsystem_vendor;
+   uint16_t subsystem_device;
+};
+
+/* Accepts a 32-bit device ID since this is also used for filtering unsupported devices in
+ * platform-specific physical device enumeration.
+ */
 enum radeon_family terakan_physical_device_get_chip_family(uint32_t pci_device_id);
 
 static inline bool
@@ -52,10 +61,8 @@ terakan_physical_device_is_chip_family_supported(enum radeon_family const chip_f
    return chip_family >= CHIP_CEDAR && chip_family <= CHIP_ARUBA;
 }
 
-char const * terakan_physical_device_chip_family_name(enum radeon_family chip_family);
-
 struct terakan_physical_device_chip_info {
-   uint32_t pci_device_id;
+   struct terakan_physical_device_pci_device_id pci_device_id;
 
    enum radeon_family chip_family;
 
@@ -91,7 +98,7 @@ struct terakan_physical_device_chip_info {
 };
 
 void
-terakan_physical_device_chip_info_init(uint32_t pci_device_id,
+terakan_physical_device_chip_info_init(struct terakan_physical_device_pci_device_id pci_device_id,
                                        struct terakan_physical_device_chip_info * chip_info_out);
 
 struct terakan_physical_device_tiling_info {
@@ -217,7 +224,8 @@ void terakan_physical_device_destroy(struct vk_physical_device * device);
  */
 VkResult terakan_physical_device_init(
    struct terakan_physical_device * device, struct terakan_instance * instance,
-   struct terakan_physical_device_platform_fn const * platform_fn_static, uint32_t pci_device_id,
+   struct terakan_physical_device_platform_fn const * platform_fn_static,
+   struct terakan_physical_device_pci_device_id pci_device_id,
    VkDeviceSize gtt_allocation_granularity, VkDeviceSize gtt_size, VkDeviceSize vram_size,
    VkDeviceSize vram_visible, VkDeviceSize max_memory_allocation_size,
    VkDeviceSize min_memory_map_alignment,
