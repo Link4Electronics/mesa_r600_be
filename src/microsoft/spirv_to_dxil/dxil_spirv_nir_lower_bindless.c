@@ -50,6 +50,7 @@ load_vulkan_ssbo(nir_builder *b, unsigned buf_idx,
                                 nir_imm_int(b, 0),
                                 .desc_set = 0,
                                 .binding = buf_idx,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
    nir_def *descriptor =
       nir_load_vulkan_descriptor(b, 2, 32, res_index,

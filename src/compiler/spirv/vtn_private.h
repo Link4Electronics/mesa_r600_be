@@ -527,6 +527,11 @@ struct vtn_variable {
    unsigned descriptor_set;
    unsigned binding;
    bool explicit_binding;
+   /** The number of descriptors in the descriptor set binding accessible by
+    * dereferencing this variable, or 0 for unsized resource arrays or if the
+    * variable base type is not a bound resource.
+    */
+   unsigned descriptor_count;
    unsigned offset;
    unsigned input_attachment_index;
 

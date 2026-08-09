@@ -177,6 +177,7 @@ nir_load_store_vectorize_test::get_resource(uint32_t binding, bool ssbo)
       res, ssbo ? nir_descriptor_type_storage_buffer : nir_descriptor_type_uniform_buffer);
    nir_intrinsic_set_desc_set(res, 0);
    nir_intrinsic_set_binding(res, binding);
+   nir_intrinsic_set_desc_count(res, 1);
    nir_builder_instr_insert(b, &res->instr);
    res_map[binding] = &res->def;
    return &res->def;

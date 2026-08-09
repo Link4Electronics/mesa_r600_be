@@ -75,6 +75,7 @@ dzn_nir_create_bo_desc(nir_builder *b,
                                 nir_imm_int(b, 0),
                                 .desc_set = desc_set,
                                 .binding = binding,
+                                .desc_count = 1,
                                 .desc_type = desc_type);
 
    nir_def *desc =
@@ -817,6 +818,7 @@ load_dynamic_depth_bias(nir_builder *b, struct dzn_nir_point_gs_info *info)
       nir_imm_int(b, 0),
       .desc_set = info->runtime_data_cbv.register_space,
       .binding = info->runtime_data_cbv.base_shader_register,
+      .desc_count = 1,
       .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_desc = nir_load_vulkan_descriptor(

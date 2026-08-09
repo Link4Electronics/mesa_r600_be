@@ -38,6 +38,7 @@ get_set_event_cs(const nir_shader_compiler_options *options)
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 0,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    nir_def *offset =
@@ -62,6 +63,7 @@ get_wait_event_cs(const nir_shader_compiler_options *options)
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 0,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    nir_def *offset =

@@ -180,6 +180,41 @@ index("unsigned", "desc_set")
 # The Vulkan descriptor set binding for vulkan_resource_index intrinsic.
 index("unsigned", "binding")
 
+# Upper bound of descriptor indices in the binding addressable via the
+# `vulkan_resource_index` intrinsic, or 0 for unsized arrays of descriptors.
+#
+# Section "Allocation of Descriptor Sets" of the Vulkan 1.4.362 spec says:
+#
+#     "Descriptor sets containing undefined descriptors can still be bound and
+#     used, subject to the following conditions:
+#
+#       * [...]
+#       * For descriptor set bindings created without the
+#         `VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT` bit set, all descriptors
+#         in that binding that are statically used must have been populated
+#         before the descriptor set is consumed.
+#       * [...]
+#       * Entries that are not used by a pipeline can have undefined
+#         descriptors."
+#
+# If the shaders in the pipeline statically use fewer descriptors than the
+# `descriptorCount` field of the `VkDescriptorSetLayoutBinding`, the rest of the
+# descriptors in the binding in the descriptor set can be undefined, and when
+# consuming the descriptors, the driver must not assume that they have been
+# populated, and that their underlying resources or view objects haven't been
+# destroyed. Therefore, the driver needs to be aware of the upper bound of the
+# descriptors in the binding statically used by the shaders.
+#
+# Note that when there are multiple shader variables for the same descriptor set
+# layout binding, each of which may represent different descriptor counts, this
+# count is specified for the exact variable the `vulkan_resource_index` was
+# built from.
+#
+# This may also be set and interpreted in a driver-specific way for descriptors
+# of buffers internal to the driver, which may not necessarily be loaded from a
+# variable.
+index("unsigned", "desc_count")
+
 # Component offset
 index("unsigned", "component")
 
@@ -917,7 +952,7 @@ image("fragment_mask_load_amd", src_comp=[4], dest_comp=1, bit_sizes=[32], flags
 # corresponds to the tuple (set, binding, index) and computes an index
 # corresponding to tuple (set, binding, idx + src1).
 intrinsic("vulkan_resource_index", src_comp=[1], dest_comp=0,
-          indices=[DESC_SET, BINDING, DESC_TYPE, RESOURCE_TYPE],
+          indices=[DESC_SET, BINDING, DESC_COUNT, DESC_TYPE, RESOURCE_TYPE],
           flags=[CAN_ELIMINATE, CAN_REORDER])
 intrinsic("vulkan_resource_reindex", src_comp=[0, 1], dest_comp=0,
           indices=[DESC_TYPE], flags=[CAN_ELIMINATE, CAN_REORDER])

@@ -1559,6 +1559,7 @@ lower_ubo_array_one_to_static(struct nir_builder *b,
       nir_vulkan_resource_index(b, index->num_components, bit_size, zero,
                                 .desc_set = nir_intrinsic_desc_set(index),
                                 .binding = nir_intrinsic_binding(index),
+                                .desc_count = 1,
                                 .desc_type = nir_intrinsic_desc_type(index));
 
    nir_def_rewrite_uses(&index->def, dest);

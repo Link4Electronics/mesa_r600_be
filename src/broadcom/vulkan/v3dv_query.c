@@ -1458,6 +1458,7 @@ get_set_query_availability_cs(const nir_shader_compiler_options *options)
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 0,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    /* This assumes a local size of 1 and a horizontal-only dispatch. If we
@@ -1521,6 +1522,7 @@ get_reset_occlusion_query_cs(const nir_shader_compiler_options *options)
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 0,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    /* This assumes a local size of 1 and a horizontal-only dispatch. If we
@@ -1577,12 +1579,14 @@ get_copy_query_results_cs(const nir_shader_compiler_options *options,
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 0,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    nir_def *buf_out =
       nir_vulkan_resource_index(&b, 2, 32, nir_imm_int(&b, 0),
                                 .desc_set = 1,
                                 .binding = 0,
+                                .desc_count = 1,
                                 .desc_type = nir_descriptor_type_storage_buffer);
 
    /* Read push constants */

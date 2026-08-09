@@ -249,6 +249,7 @@ vtn_variable_resource_index(struct vtn_builder *b, struct vtn_variable *var,
    instr->src[0] = nir_src_for_ssa(desc_array_index);
    nir_intrinsic_set_desc_set(instr, var->descriptor_set);
    nir_intrinsic_set_binding(instr, var->binding);
+   nir_intrinsic_set_desc_count(instr, var->descriptor_count);
    nir_intrinsic_set_desc_type(instr, nir_desc_type_for_mode(b, var->mode));
    nir_intrinsic_set_resource_type(instr, var->var->data.resource_type);
 
@@ -2531,6 +2532,11 @@ vtn_create_variable(struct vtn_builder *b, struct vtn_value *val,
 
       if (glsl_type_is_image(glsl_without_array(var->var->type)))
          var->var->data.image.format = without_array->image_format;
+
+      /* For a resource variable, get the accessible descriptor count. */
+      var->descriptor_count = glsl_type_is_array(var->var->type)
+                                 ? glsl_get_aoa_size(var->var->type)
+                                 : 1u;
    }
 
    if (var->mode == vtn_variable_mode_function) {
