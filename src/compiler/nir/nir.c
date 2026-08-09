@@ -3051,6 +3051,9 @@ nir_chase_binding(nir_src rsrc)
             res.var = deref->var;
             res.desc_set = deref->var->data.descriptor_set;
             res.binding = deref->var->data.binding;
+            res.desc_count = glsl_type_is_array(deref->var->type)
+                                ? glsl_get_aoa_size(deref->var->type)
+                                : 1u;
             res.resource_type = deref->var->data.resource_type;
             return res;
          } else if (deref->deref_type == nir_deref_type_array && is_image) {
@@ -3103,6 +3106,7 @@ nir_chase_binding(nir_src rsrc)
        * example) but others just keep it around as a vec2 (v3dv).
        */
       res.binding = nir_src_comp_as_uint(rsrc, 0);
+      res.desc_count = 1;
       return res;
    }
 
@@ -3142,6 +3146,7 @@ nir_chase_binding(nir_src rsrc)
    res.success = true;
    res.desc_set = nir_intrinsic_desc_set(intrin);
    res.binding = nir_intrinsic_binding(intrin);
+   res.desc_count = nir_intrinsic_desc_count(intrin);
    res.resource_type = nir_intrinsic_resource_type(intrin);
    res.num_indices = 1;
    res.indices[0] = intrin->src[0];

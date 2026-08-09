@@ -3526,6 +3526,8 @@ typedef struct nir_binding {
    nir_variable *var;
    unsigned desc_set;
    unsigned binding;
+   /* desc_count is 0 for unsized arrays. */
+   unsigned desc_count;
    unsigned resource_type;
    unsigned num_indices;
    nir_src indices[4];
