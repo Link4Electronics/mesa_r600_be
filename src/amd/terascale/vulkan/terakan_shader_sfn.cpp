@@ -62,14 +62,8 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
 
    r600::init_pool();
 
-#if 0
-   r600_finalize_nir_common(nir, gfx_level);
-#endif
-   /* For r600_lower_and_optimize_nir, for fields like number bit sizes, and also for
-    * DB_SHADER_CONTROL in fragment shaders.
-    */
+   /* In particular, for `DB_SHADER_CONTROL` in fragment shaders. */
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
-   r600_lower_and_optimize_nir(nir, key, gfx_level, &so_info);
 
    r600::ShaderBindingLayout binding_layout;
    binding_layout.texture_resource_offset = 0;
