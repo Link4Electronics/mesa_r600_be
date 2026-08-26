@@ -401,6 +401,14 @@ Register::from_string(const std::string& s)
    return reg;
 }
 
+const std::array<RegisterVec4::Swizzle, 5> RegisterVec4::s_num_components_swizzles = {
+   Swizzle{7, 7, 7, 7},
+   Swizzle{0, 7, 7, 7},
+   Swizzle{0, 1, 7, 7},
+   Swizzle{0, 1, 2, 7},
+   Swizzle{0, 1, 2, 3},
+};
+
 RegisterVec4::RegisterVec4():
     m_sel(-1),
     m_swz({7, 7, 7, 7}),

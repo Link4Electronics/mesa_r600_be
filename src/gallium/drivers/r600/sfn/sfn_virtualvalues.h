@@ -258,6 +258,9 @@ operator<<(std::ostream& os, const InlineConstant& val)
 class RegisterVec4 {
 public:
    using Swizzle = std::array<uint8_t, 4>;
+
+   static const std::array<Swizzle, 5> s_num_components_swizzles;
+
    RegisterVec4();
    RegisterVec4(int sel,
                 bool is_ssa = false,

@@ -630,17 +630,12 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
 {
    auto& vf = shader.value_factory();
 
-   const RegisterVec4::Swizzle num_components_swizzles[] = {
-      {0, 7, 7, 7},
-      {0, 1, 7, 7},
-      {0, 1, 2, 7},
-      {0, 1, 2, 3},
-   };
-
    /* Coordinate vector. */
 
    unsigned coord_num_components = intrin->src[1].ssa->num_components;
-   auto coord = vf.temp_vec4(pin_chgr, num_components_swizzles[coord_num_components - 1]);
+   auto coord =
+      vf.temp_vec4(pin_chgr,
+                   RegisterVec4::s_num_components_swizzles[coord_num_components]);
    for (unsigned i = 0; i < coord_num_components; ++i) {
       shader.emit_instruction(new AluInstr(op1_mov,
                                            coord[i],
@@ -665,7 +660,8 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
       unsigned value_num_components = intrin->src[2].ssa->num_components;
       assert(value_num_components <= 4);
       value_component_mask = BITFIELD_MASK(value_num_components);
-      value = vf.temp_vec4(pin_chgr, num_components_swizzles[value_num_components - 1]);
+      value = vf.temp_vec4(pin_chgr,
+                           RegisterVec4::s_num_components_swizzles[value_num_components]);
       for (unsigned i = 0; i < value_num_components; ++i) {
          shader.emit_instruction(new AluInstr(op1_mov,
                                               value[i],
@@ -763,18 +759,18 @@ RatInstr::emit_uav_instr(nir_intrinsic_instr *intrin, Shader& shader)
    if (op_returns) {
       assert(intrin->def.num_components <= 4);
 
-      auto fetch_instr =
-         new FetchInstr(vc_fetch,
-                        vf.dest_vec4(intrin->def, pin_group),
-                        num_components_swizzles[intrin->def.num_components - 1],
-                        return_value_index->as_register(),
-                        0,
-                        no_index_offset,
-                        fmt_invalid,
-                        vtx_nf_norm,
-                        vtx_es_none,
-                        immed_base,
-                        uav_offset);
+      auto fetch_instr = new FetchInstr(
+         vc_fetch,
+         vf.dest_vec4(intrin->def, pin_group),
+         RegisterVec4::s_num_components_swizzles[intrin->def.num_components],
+         return_value_index->as_register(),
+         0,
+         no_index_offset,
+         fmt_invalid,
+         vtx_nf_norm,
+         vtx_es_none,
+         immed_base,
+         uav_offset);
       fetch_instr->set_fetch_flag(FetchInstr::use_const_field);
       fetch_instr->set_fetch_flag(FetchInstr::use_tc);
       fetch_instr->set_fetch_flag(FetchInstr::uncached);
@@ -815,22 +811,18 @@ RatInstr::emit_ssbo_load(nir_intrinsic_instr *intr, Shader& shader)
 
    const EVTXDataFormat formats[4] = {fmt_32, fmt_32_32, fmt_32_32_32, fmt_32_32_32_32};
 
-   RegisterVec4::Swizzle dest_swz[4] = {
-      {0, 7, 7, 7},
-      {0, 1, 7, 7},
-      {0, 1, 2, 7},
-      {0, 1, 2, 3}
-   };
-
-   int comp_idx = components - 1;
-
    auto [offset, res_offset] = shader.evaluate_resource_offset(intr, 0);
 
    auto res_id =
       R600_IMAGE_REAL_RESOURCE_OFFSET + offset + shader.get_dynamic_offset().ssbo_offset;
 
-   auto ir = new LoadFromBuffer(
-      dest, dest_swz[comp_idx], addr_temp, 0, res_id, res_offset, formats[comp_idx]);
+   auto ir = new LoadFromBuffer(dest,
+                                RegisterVec4::s_num_components_swizzles[components],
+                                addr_temp,
+                                0,
+                                res_id,
+                                res_offset,
+                                formats[components - 1]);
    ir->set_fetch_flag(FetchInstr::use_tc);
    ir->set_num_format(vtx_nf_int);
    if (shader.get_alt_const())
