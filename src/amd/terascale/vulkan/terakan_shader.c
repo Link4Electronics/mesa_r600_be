@@ -253,6 +253,7 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
 
    /* Prepare for optimizations that may involve dependency chains.
     * Specifically currently, this is done for:
+    * - Constant folding before `terascale_nir_lower_txb_to_txd` to eliminate zero LOD biases.
     * - `optimize_txd` in `nir_lower_tex`.
     *   - Doesn't need copy propagation by itself due to `nir_scalar_resolved` as of August 22,
     *     2026, but needs `nir_opt_cse` to make sure the texture coordinates and the derivatives are
@@ -262,11 +263,26 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
     *   configuration demand.
     */
    NIR_PASS(_, nir, nir_lower_vars_to_ssa);
-   NIR_PASS(_, nir, nir_opt_copy_prop);
-   NIR_PASS(_, nir, nir_opt_dce);
+   {
+      bool progress;
+      do {
+         progress = false;
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_dce);
+         NIR_PASS(progress, nir, nir_opt_constant_folding);
+      } while (progress);
+   };
    NIR_PASS(_, nir, nir_opt_cse);
 
    /* Lower texture instructions. */
+   if (nir->info.stage == MESA_SHADER_FRAGMENT) {
+      /* TODO(Triang3l): Pass for lowering constant LOD biases to fixed-point in `backend_flags`
+       * where the conversion is exact.
+       */
+      /* Lower LOD biases to derivative exponent biases when cube map coordinates are still in 3D.
+       */
+      NIR_PASS(_, nir, terascale_nir_lower_txb_to_txd);
+   }
    static nir_lower_tex_options const lower_tex_options = {
       .lower_invalid_implicit_lod = true,
       .optimize_txd = true,

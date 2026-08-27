@@ -32,8 +32,22 @@
 extern "C" {
 #endif
 
+/* TODO(Triang3l): Pass for lowering constant LOD biases to fixed-point in `backend_flags` where the
+ * conversion is exact.
+ */
+
+/* Lowers LOD biases to partial derivate exponent biases in texture sampling.
+ *
+ * Cube map coordinates must be in the 3D coordinate space, because 2D coordinates have
+ * discontinuities between faces.
+ */
+bool terascale_nir_lower_txb_to_txd(nir_shader *shader);
+
 /* Applies transformations to texture instructions, primarily to sampling coordinates, needed to use
  * the hardware texture instructions.
+ *
+ * `terascale_nir_lower_txb_to_txd` must be done beforehand.
+ *
  * This doesn't lower descriptor information queries, as that may depend on the bindings in the
  * shader ABI of the client API implementation.
  */

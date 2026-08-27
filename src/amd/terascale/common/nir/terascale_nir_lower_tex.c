@@ -31,6 +31,41 @@
 #include <stddef.h>
 
 static bool
+terascale_nir_lower_txb_to_txd_instr(nir_builder *const builder, nir_tex_instr *const tex,
+                                     UNUSED void *const callback_data)
+{
+   if (tex->op != nir_texop_txb) {
+      return false;
+   }
+
+   builder->cursor = nir_before_instr(&tex->instr);
+
+   nir_def *const derivative_scale = nir_fexp2(builder, nir_steal_tex_src(tex, nir_tex_src_bias));
+
+   nir_def *coord = nir_get_tex_src(tex, nir_tex_src_coord);
+   if (tex->is_array) {
+      assert(!tex->array_is_lowered_cube);
+      coord = nir_trim_vector(builder, coord, coord->num_components - 1u);
+   }
+
+   nir_tex_instr_add_src(tex, nir_tex_src_ddx,
+                         nir_fmul(builder, nir_ddx_coarse(builder, coord), derivative_scale));
+   nir_tex_instr_add_src(tex, nir_tex_src_ddy,
+                         nir_fmul(builder, nir_ddy_coarse(builder, coord), derivative_scale));
+
+   tex->op = nir_texop_txd;
+
+   return true;
+}
+
+bool
+terascale_nir_lower_txb_to_txd(nir_shader *const shader)
+{
+   return nir_shader_tex_pass(shader, terascale_nir_lower_txb_to_txd_instr,
+                              nir_metadata_control_flow, NULL);
+}
+
+static bool
 terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const tex,
                               UNUSED void *const callback_data)
 {
@@ -38,8 +73,11 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
 
    builder->cursor = nir_before_instr(&tex->instr);
 
-   if (tex->op == nir_texop_tex || tex->op == nir_texop_txb || tex->op == nir_texop_txl ||
-       tex->op == nir_texop_txd || tex->op == nir_texop_lod || tex->op == nir_texop_tg4) {
+   assert(tex->op != nir_texop_txb &&
+          "Texture sampling with LOD biasing must be lowered to partial derivative exponent "
+          "biasing before transforming cube map coordinates to 2D");
+   if (tex->op == nir_texop_tex || tex->op == nir_texop_txl || tex->op == nir_texop_txd ||
+       tex->op == nir_texop_lod || tex->op == nir_texop_tg4) {
       const int tex_coord_src_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
       assert(tex_coord_src_index >= 0);
       nir_src *const tex_coord_src = &tex->src[tex_coord_src_index].src;
