@@ -159,6 +159,7 @@ private:
       -> RegisterVec4;
 
    static bool emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader);
+   static bool emit_tex_sample(nir_tex_instr *tex, Shader& shader);
    static bool emit_tex_txs(nir_tex_instr *tex,
                             Inputs& src,
                             RegisterVec4::Swizzle dest_swz,
@@ -166,6 +167,9 @@ private:
    static bool emit_tex_lod(nir_tex_instr *tex, Inputs& src, Shader& shader);
    static bool
    emit_tex_texture_samples(nir_tex_instr *instr, Inputs& src, Shader& shader);
+   /* TODO(Triang3l): Remove `emit_lowered_tex` in favor of having `nir_tex_src_coord`
+    * rewritten by lowerings directly in the regular texture instructions.
+    */
    static bool emit_lowered_tex(nir_tex_instr *instr, Inputs& src, Shader& shader);
    static void emit_set_gradients(
       nir_tex_instr *tex, int texture_id, Inputs& src, TexInstr *irt, Shader& shader);

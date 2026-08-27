@@ -12,6 +12,8 @@
 #include "sfn_instr_fetch.h"
 #include "sfn_nir.h"
 
+#include "util/bitscan.h"
+
 namespace r600 {
 
 using std::string;
@@ -398,7 +400,7 @@ TexInstr::from_nir(nir_tex_instr *tex, Shader& shader)
       case nir_texop_texture_samples:
          return emit_tex_texture_samples(tex, src, shader);
       default:
-         return false;
+         return emit_tex_sample(tex, shader);
       }
    }
    return true;
@@ -601,6 +603,157 @@ TexInstr::emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader)
 
    shader.emit_instruction(ir);
 
+   return true;
+}
+
+bool
+TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
+{
+   nir_src *const lod_src =
+      tex->op == nir_texop_txl
+         ? &tex->src[nir_tex_instr_src_index(tex, nir_tex_src_lod)].src
+         : nullptr;
+   const bool lod_src_is_zero =
+      lod_src && nir_src_is_const(*lod_src) && nir_src_as_const_value(*lod_src)->u32 == 0;
+
+   Opcode opcode;
+   switch (tex->op) {
+   case nir_texop_tex:
+      opcode = tex->is_shadow ? sample_c : sample;
+      break;
+   case nir_texop_txl:
+      opcode = lod_src_is_zero ? (tex->is_shadow ? sample_c_lz : sample_lz)
+                               : (tex->is_shadow ? sample_c_l : sample_l);
+      break;
+   case nir_texop_txd:
+      opcode = tex->is_shadow ? sample_c_g : sample_g;
+      break;
+   default:
+      return false;
+   }
+
+   auto& vf = shader.value_factory();
+
+   const auto dst = vf.dest_vec4(tex->def, pin_group);
+
+   const int texture_offset_index =
+      nir_tex_instr_src_index(tex, nir_tex_src_texture_offset);
+   const int sampler_offset_index =
+      nir_tex_instr_src_index(tex, nir_tex_src_sampler_offset);
+
+   const int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   assert(coord_index >= 0);
+   nir_src& coord_src = tex->src[coord_index].src;
+
+   std::array<PVirtualValue, 4> hw_coord_components{};
+
+   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
+        ++component_index) {
+      hw_coord_components[component_index] = vf.src(coord_src, component_index);
+   }
+   if (tex->is_array && tex->sampler_dim == GLSL_SAMPLER_DIM_1D) {
+      /* The array index is always in Z. */
+      hw_coord_components[2] = hw_coord_components[1];
+      hw_coord_components[1] = nullptr;
+   }
+   /* TODO(Triang3l): Research array layer zeroing (ideally via `SRC_SEL`) when an array
+    * descriptor is used with a non-array image, if possible, or rather revisit descriptor
+    * dimensionality consistency (whether `TEX_DEPTH` and `BASE_ARRAY` are supported for
+    * non-array `DIM`).
+    */
+
+   /* The comparator is in Z when there's an explicit LOD, or in W otherwise. */
+   if (tex->is_shadow) {
+      hw_coord_components[3] =
+         vf.src(tex->src[nir_tex_instr_src_index(tex, nir_tex_src_comparator)], 0);
+   }
+   if (opcode == sample_l || opcode == sample_c_l) {
+      /* The explicit LOD is always in W. */
+      if (tex->is_shadow) {
+         /* The comparison value is in Z. */
+         assert(!hw_coord_components[2] &&
+                "Explicit LOD for shadow texture sampling must be lowered to gradients");
+         hw_coord_components[2] = hw_coord_components[3];
+      }
+      hw_coord_components[3] = vf.src(*lod_src, 0);
+   }
+
+   RegisterVec4::Swizzle hw_coord_swizzle{7, 7, 7, 7};
+   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
+        ++component_index) {
+      if (hw_coord_components[component_index]) {
+         hw_coord_swizzle[component_index] = component_index;
+      }
+   }
+   const auto hw_coord = shader.value_factory().temp_vec4(pin_group, hw_coord_swizzle);
+   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
+        ++component_index) {
+      if (hw_coord_components[component_index]) {
+         shader.emit_instruction(new AluInstr(op1_mov,
+                                              hw_coord[component_index],
+                                              hw_coord_components[component_index],
+                                              AluInstr::write));
+      }
+   }
+
+   const auto irt =
+      new TexInstr(opcode,
+                   dst,
+                   RegisterVec4::s_num_components_swizzles[tex->def.num_components],
+                   hw_coord,
+                   tex->texture_index + shader.binding_layout().texture_resource_offset,
+                   texture_offset_index >= 0
+                      ? vf.src(tex->src[texture_offset_index].src, 0)->as_register()
+                      : nullptr,
+                   tex->sampler_index,
+                   sampler_offset_index >= 0
+                      ? vf.src(tex->src[sampler_offset_index].src, 0)->as_register()
+                      : nullptr);
+
+   u_foreach_bit (flag, tex->backend_flags) {
+      irt->set_tex_flag(static_cast<Flags>(flag));
+   }
+
+   if (tex->sampler_dim == GLSL_SAMPLER_DIM_RECT) {
+      irt->set_tex_flag(x_unnormalized);
+      irt->set_tex_flag(y_unnormalized);
+   }
+   if (tex->is_array || tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE) {
+      irt->set_tex_flag(z_unnormalized);
+   }
+
+   const int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
+   if (offset_index >= 0) {
+      irt->set_coord_offsets(&tex->src[offset_index].src);
+   }
+
+   if (opcode == sample_g || opcode == sample_c_g) {
+      const RegisterVec4 empty_dst(0, false, {0, 0, 0, 0}, pin_group);
+      for (unsigned axis = 0; axis < 2; ++axis) {
+         nir_src& gradient_src =
+            tex->src[nir_tex_instr_src_index(tex,
+                                             axis ? nir_tex_src_ddy : nir_tex_src_ddx)]
+               .src;
+         const auto set_gradient_ir = new TexInstr(
+            axis ? set_gradient_v : set_gradient_h,
+            empty_dst,
+            {7, 7, 7, 7},
+            vf.src_vec4(
+               gradient_src,
+               pin_group,
+               RegisterVec4::s_num_components_swizzles[gradient_src.ssa->num_components]),
+            0,
+            nullptr);
+         set_gradient_ir->set_always_keep();
+         irt->add_prepare_instr(set_gradient_ir);
+      }
+      if (shader.last_txd()) {
+         irt->add_required_instr(shader.last_txd());
+      }
+      shader.set_last_txd(irt);
+   }
+
+   shader.emit_instruction(irt);
    return true;
 }
 
