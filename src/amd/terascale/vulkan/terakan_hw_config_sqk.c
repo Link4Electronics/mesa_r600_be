@@ -627,13 +627,11 @@ terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(
    config->draw_stages_pending_ = BITFIELD_MASK(MESA_SHADER_COMPUTE);
 
    /* Clearing all resources in a new indirect buffer to avoid emitting every unbound resource
-    * individually later, as the number of the resource registers is large.
-    * According to Radeon Evergreen / Northern Islands Acceleration, `SET_CTL_CONST` packets always
-    * have the shader type set to graphics.
-    */
-   /* TODO(Triang3l): Does `SQ_TEX_RESOURCE_CLEAR` for ~0 actually clear compute shader resources
-    * when the shader type in the header is set to graphics? However, `CLEAR_STATE` for compute will
-    * be done when acquiring a compute context anyway.
+    * individually later, as the number of resource registers is large.
+    * Radeon Evergreen / Northern Islands Acceleration says that `SET_CTL_CONST` packets always have
+    * the shader type set to graphics, and according to testing, even with the shader type in the
+    * packet header set to compute, `SQ_TEX_RESOURCE_CLEAR` for ~0 clears both graphics and compute
+    * resources.
     */
 
    config->vi_.resources_modified = config->vi_.resources_bound;
