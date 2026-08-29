@@ -91,6 +91,10 @@ struct terakan_physical_device_chip_info {
     * `SQ_THREAD_RESOURCE_MGMT` configuration from this structure.
     */
    uint32_t sq_pstmp_ring_bytes_per_item_dword_shr8;
+   /* `SQ_LSTMP_RING_SIZE` increment per `SQ_LSTMP_RING_ITEMSIZE` preferred for the
+    * `SQ_THREAD_RESOURCE_MGMT` configuration from this structure for compute shaders.
+    */
+   uint32_t sq_cstmp_ring_bytes_per_item_dword_shr8;
    /* Lanes * waves * shader engines. */
    uint32_t uav_immediate_size_elements;
 
@@ -135,6 +139,20 @@ struct terakan_physical_device_submission_info_gfx {
     * the MODE_CONTROL packet beforehand.
     */
    bool need_sq_alu_const_mode_control;
+
+   /* Whether submission validation in the kernel driver (such as DRM Radeon 2.51.0 without virtual
+    * memory) is unaware of the shader type specified in the header of context register setting
+    * packets (and also of the effects of the compute `CLEAR_STATE`), and:
+    * - `DB_Z_INFO` and `DB_STENCIL_INFO` must be initialized before compute (initially assumed
+    *   invalid in DRM Radeon 2.51.0).
+    * - `CB_TARGET_MASK` must be zeroed before compute, so that compute UAVs aren't validated as
+    *   RTVs (as that's what DRM Radeon 2.51.0 does, not supporting buffer UAVs correctly in the
+    *   validation).
+    * - `CB_COLOR` registers that have been set for compute must be re-emitted for graphics,
+    *   otherwise the tracking may wrongly assume that graphics MRTs were overwritten with compute
+    *   UAVs, and they are not always compatible with RTV validation (like buffer UAVs).
+    */
+   bool graphics_compute_context_tracking_shared;
 };
 
 struct terakan_physical_device;

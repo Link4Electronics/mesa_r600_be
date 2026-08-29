@@ -200,3 +200,58 @@ struct terakan_meta_shader const terakan_meta_dummy_opaque_ps = {
             },
       },
 };
+
+static uint32_t terakan_meta_dummy_empty_cs_r8xx[] = {
+   /* 0: Execute a NOP and end the program. */
+   0,
+   S_SQ_CF_WORD1_END_OF_PROGRAM(true) | EG_V_SQ_CF_WORD1_SQ_CF_INST_NOP,
+};
+
+static uint32_t terakan_meta_dummy_empty_cs_r9xx[] = {
+   /* 0: End the program. */
+   0,
+   CM_V_SQ_CF_WORD1_SQ_CF_INST_END,
+};
+
+struct terakan_meta_shader const terakan_meta_dummy_empty_cs = {
+   .r8xx =
+      {
+         .program = terakan_meta_dummy_empty_cs_r8xx,
+         .program_size_bytes = sizeof(terakan_meta_dummy_empty_cs_r8xx),
+         .static_registers =
+            {
+               .sq_pgm_resources =
+                  {
+                     TERAKAN_META_SQ_PGM_RESOURCES_COMMON,
+                     TERAKAN_META_SQ_PGM_RESOURCES_2_COMMON,
+                  },
+               .stage =
+                  {
+                     .cs =
+                        {
+                           .spi_compute_num_thread = {1, 1, 1},
+                        },
+                  },
+            },
+      },
+   .r9xx =
+      {
+         .program = terakan_meta_dummy_empty_cs_r9xx,
+         .program_size_bytes = sizeof(terakan_meta_dummy_empty_cs_r9xx),
+         .static_registers =
+            {
+               .sq_pgm_resources =
+                  {
+                     TERAKAN_META_SQ_PGM_RESOURCES_COMMON,
+                     TERAKAN_META_SQ_PGM_RESOURCES_2_COMMON,
+                  },
+               .stage =
+                  {
+                     .cs =
+                        {
+                           .spi_compute_num_thread = {1, 1, 1},
+                        },
+                  },
+            },
+      },
+};

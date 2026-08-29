@@ -454,6 +454,14 @@ struct vk_command_buffer_ops const terakan_command_buffer_ops = {
    .destroy = terakan_command_buffer_destroy,
 };
 
+static uint32_t const terakan_gfx_command_writer_compute_flush_and_dealloc_packets[] = {
+   PKT3(PKT3_EVENT_WRITE, 1 - 1, 0),
+   EVENT_TYPE(EVENT_TYPE_CS_PARTIAL_FLUSH) | EVENT_INDEX(4),
+
+   PKT3(PKT3_DEALLOC_STATE, 1 - 1, 0) | TERAKAN_PACKET3_COMPUTE,
+   0,
+};
+
 #ifdef TERAKAN_REGRESSION_TEST
 static void
 terakan_gfx_command_writer_reset_regression_test_indirect_buffer_splitting(
@@ -491,6 +499,17 @@ terakan_gfx_command_writer_end_indirect_buffer(
 
    command_writer->indirect_buffer->bo_reference_count =
       command_writer->base.bo_reference_writer.reference_count;
+
+   /* Replace unneeded finalizers with NOPs before moving finalizers. */
+   if (command_writer->compute_flush_and_dealloc_finalizer_r9xx != NULL &&
+       !command_writer->compute_context_allocated_in_indirect_buffer) {
+      /* The compute context has already been deallocated. */
+      for (size_t dword_index = 0;
+           dword_index < ARRAY_SIZE(terakan_gfx_command_writer_compute_flush_and_dealloc_packets);
+           ++dword_index) {
+         command_writer->compute_flush_and_dealloc_finalizer_r9xx[dword_index] = PKT_TYPE_S(2);
+      }
+   }
 
    struct terakan_device const * const device = terakan_gfx_command_writer_device(command_writer);
 
@@ -580,15 +599,140 @@ terakan_gfx_command_writer_emit_preamble(struct terakan_gfx_command_writer * con
       *packet++ = 1;
       terakan_gfx_command_writer_emit_done(command_writer, packet);
    }
+
+   if (submission_info_gfx->graphics_compute_context_tracking_shared) {
+      /* Initialize `DB_Z_INFO` and `DB_STENCIL_INFO`, which are initially considered invalid in DRM
+       * Radeon 2.51.0, to disabled before any `hw_config_draw` emissions or compute dispatches,
+       * because `hw_config_draw` won't be emitted for the latter, and thus if dispatches are done
+       * before any draws in the indirect buffer, these registers wouldn't have been set, and
+       * submission validation in the kernel driver would fail.
+       */
+      packet = terakan_gfx_command_writer_emit(
+         command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2 + 2);
+      if (unlikely(packet == NULL)) {
+         return;
+      }
+      *packet++ = PKT3(PKT3_SET_CONTEXT_REG, 2, 0);
+      *packet++ = TERAKAN_CONTEXT_REG_OFFSET(R_028040_DB_Z_INFO);
+      *packet++ = S_028040_FORMAT(V_028040_Z_INVALID);
+      *packet++ = S_028044_FORMAT(V_028044_STENCIL_INVALID);
+      terakan_gfx_command_writer_emit_done(command_writer, packet);
+   }
 }
 
 static void
-terakan_gfx_command_writer_emit_hw_config(
+terakan_gfx_command_writer_update_compute_context_and_emit_hw_config(
    struct terakan_gfx_command_writer * const command_writer,
    enum terakan_gfx_command_writer_emit_contents const contents)
 {
-   if (contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW) {
+   if (contents != TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW &&
+       contents != TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH) {
+      return;
+   }
+
+   /* Apply configuration that's safe to emit before `terakan_hw_config_shared`, because the latter
+    * may flush shader execution, potentially causing the command processor to wait and delaying the
+    * commands following the flush.
+    */
+   if (!command_writer->hw_config_sqk_initialized_in_indirect_buffer) {
+      command_writer->hw_config_sqk_initialized_in_indirect_buffer = true;
+      terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(command_writer);
+   }
+
+   if (contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH) {
+      terakan_hw_config_shared_compute_emit_modified(command_writer);
+
+      struct terakan_physical_device const * const physical_device =
+         terakan_gfx_command_writer_physical_device(command_writer);
+
+      if (!command_writer->compute_context_allocated_in_indirect_buffer) {
+         bool const emit_dealloc_finalizer =
+            physical_device->chip_info.is_r9xx &&
+            command_writer->compute_flush_and_dealloc_finalizer_r9xx == NULL;
+
+         uint32_t * packet = terakan_gfx_command_writer_emit(
+            command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG,
+            2u + (emit_dealloc_finalizer
+                     ? ARRAY_SIZE(terakan_gfx_command_writer_compute_flush_and_dealloc_packets)
+                     : 0u));
+         if (unlikely(packet == NULL)) {
+            return;
+         }
+         *packet++ = PKT3(PKT3_CLEAR_STATE, 1 - 1, 0) | TERAKAN_PACKET3_COMPUTE;
+         *packet++ = 0;
+         if (emit_dealloc_finalizer) {
+            command_writer->compute_flush_and_dealloc_finalizer_r9xx =
+               terakan_gfx_command_writer_add_finalizer(
+                  command_writer,
+                  ARRAY_SIZE(terakan_gfx_command_writer_compute_flush_and_dealloc_packets), 0, 0);
+            memcpy(command_writer->compute_flush_and_dealloc_finalizer_r9xx,
+                   terakan_gfx_command_writer_compute_flush_and_dealloc_packets,
+                   sizeof(terakan_gfx_command_writer_compute_flush_and_dealloc_packets));
+         }
+         terakan_gfx_command_writer_emit_done(command_writer, packet);
+         /* Set `compute_context_allocated_in_indirect_buffer` to true immediately after emitting
+          * `CLEAR_STATE` allocating the compute context, before making any other emissions, because
+          * this variable specifies that the context must be deallocated by the indirect buffer
+          * finalizer if the indirect buffer space is exhausted by subsequent emissions.
+          */
+         command_writer->compute_context_allocated_in_indirect_buffer = true;
+
+         terakan_hw_config_compute_state_cleared(&command_writer->hw_config_compute);
+         terakan_hw_config_compute_emit_constant(command_writer);
+
+         terakan_hw_config_sqk_compute_state_cleared(&command_writer->hw_config_sqk);
+      }
+
+      if (physical_device->submission_info_gfx.graphics_compute_context_tracking_shared &&
+          !command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer) {
+         /* Zero `CB_TARGET_MASK` to make sure compute UAVs aren't validated as RTVs due to a kernel
+          * driver bug. Done in the compute context to avoid interacting with graphics context
+          * allocation in the command processor when not necessary.
+          */
+
+         /* Make sure the graphics `CB_TARGET_MASK` is re-emitted when switching to graphics if it's
+          * not zero, so RTV validation works as usual for graphics, as it still may be useful for
+          * catching Terakan bugs.
+          */
+         terakan_hw_config_draw_set_cb_target_mask_modified_if_nonzero(
+            &command_writer->hw_config_draw);
+
+         uint32_t * packet = terakan_gfx_command_writer_emit(
+            command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2 + 1);
+         if (unlikely(packet == NULL)) {
+            return;
+         }
+         *packet++ = PKT3(PKT3_SET_CONTEXT_REG, 1, 0) | TERAKAN_PACKET3_COMPUTE;
+         *packet++ = TERAKAN_CONTEXT_REG_OFFSET(R_028238_CB_TARGET_MASK);
+         *packet++ = 0b0;
+         terakan_gfx_command_writer_emit_done(command_writer, packet);
+         command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer = true;
+      }
+
+      terakan_hw_config_compute_emit_modified(command_writer);
+
+      terakan_hw_config_sqk_emit_modified_for_compute(command_writer);
+   } else {
+      assert(contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW);
+
       terakan_hw_config_shared_draw_emit_modified(command_writer);
+
+      if (command_writer->compute_context_allocated_in_indirect_buffer &&
+          terakan_gfx_command_writer_physical_device(command_writer)->chip_info.is_r9xx) {
+         /* Deallocate the compute state context after `terakan_hw_config_shared_draw_emit_modified`
+          * since when switching from compute to graphics, it performs the `CS_PARTIAL_FLUSH` needed
+          * before deallocating.
+          */
+         uint32_t * packet = terakan_gfx_command_writer_emit(
+            command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2);
+         if (unlikely(packet == NULL)) {
+            return;
+         }
+         *packet++ = PKT3(PKT3_DEALLOC_STATE, 1 - 1, 0) | TERAKAN_PACKET3_COMPUTE;
+         *packet++ = 0;
+         terakan_gfx_command_writer_emit_done(command_writer, packet);
+         command_writer->compute_context_allocated_in_indirect_buffer = false;
+      }
 
       if (!command_writer->hw_config_draw_initialized_in_indirect_buffer) {
          command_writer->hw_config_draw_initialized_in_indirect_buffer = true;
@@ -597,11 +741,6 @@ terakan_gfx_command_writer_emit_hw_config(
       }
       terakan_hw_config_draw_emit_modified(command_writer);
 
-      if (!command_writer->hw_config_sqk_initialized_in_indirect_buffer) {
-         command_writer->hw_config_sqk_initialized_in_indirect_buffer = true;
-         terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(
-            command_writer);
-      }
       terakan_hw_config_sqk_emit_modified_for_draw(command_writer);
    }
 }
@@ -632,6 +771,7 @@ terakan_gfx_command_writer_emit_with_bo(struct terakan_gfx_command_writer * cons
              "buffer setup or by hardware state applying");
    } else {
       assert((contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW ||
+              contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH ||
               contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_OTHER) &&
              "`hw_config` emissions must be done only from within `hw_config` applying functions "
              "invoked from outer emissions");
@@ -662,7 +802,8 @@ terakan_gfx_command_writer_emit_with_bo(struct terakan_gfx_command_writer * cons
    }
 
 #ifdef TERAKAN_REGRESSION_TEST
-   if (contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW &&
+   if ((contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW ||
+        contents == TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH) &&
        command_writer->actions_before_next_regression_test_indirect_buffer_split >= 0) {
       if (command_writer->actions_before_next_regression_test_indirect_buffer_split == 0) {
          terakan_gfx_command_writer_end_indirect_buffer(command_writer);
@@ -674,7 +815,8 @@ terakan_gfx_command_writer_emit_with_bo(struct terakan_gfx_command_writer * cons
    if (command_writer->indirect_buffer != NULL) {
       if (!is_inner) {
          /* Apply the modified tracked configuration in the existing indirect buffer. */
-         terakan_gfx_command_writer_emit_hw_config(command_writer, contents);
+         terakan_gfx_command_writer_update_compute_context_and_emit_hw_config(command_writer,
+                                                                              contents);
       }
 
       if (command_writer->indirect_buffer != NULL &&
@@ -740,8 +882,13 @@ terakan_gfx_command_writer_emit_with_bo(struct terakan_gfx_command_writer * cons
 
       terakan_gfx_command_writer_emit_preamble(command_writer);
 
+      command_writer->compute_flush_and_dealloc_finalizer_r9xx = NULL;
+      command_writer->compute_context_allocated_in_indirect_buffer = false;
+
       command_writer->hw_config_draw_initialized_in_indirect_buffer = false;
       command_writer->hw_config_sqk_initialized_in_indirect_buffer = false;
+
+      command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer = false;
 
       terakan_hw_config_shared_indirect_buffer_begun(command_writer);
 
@@ -750,7 +897,8 @@ terakan_gfx_command_writer_emit_with_bo(struct terakan_gfx_command_writer * cons
       /* Apply the tracked configuration in the new (either the first, or after an overflow)
        * indirect buffer.
        */
-      terakan_gfx_command_writer_emit_hw_config(command_writer, contents);
+      terakan_gfx_command_writer_update_compute_context_and_emit_hw_config(command_writer,
+                                                                           contents);
 
       if (unlikely((command_writer->indirect_buffer_finalizer_prepend_ptr -
                     command_writer->indirect_buffer_append_ptr) < total_packet_dwords ||
@@ -999,14 +1147,20 @@ terakan_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
           sizeof(gfx_command_writer->active_query_counts));
    gfx_command_writer->active_pipelinestat_streamoutstats_query_count = 0;
 
+   gfx_command_writer->compute_flush_and_dealloc_finalizer_r9xx = NULL;
+   gfx_command_writer->compute_context_allocated_in_indirect_buffer = false;
+
    gfx_command_writer->hw_config_draw_initialized_in_indirect_buffer = false;
    gfx_command_writer->hw_config_sqk_initialized_in_indirect_buffer = false;
+
+   gfx_command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer = false;
 
    struct terakan_physical_device const * const physical_device =
       terakan_command_buffer_physical_device(command_buffer);
    terakan_hw_config_shared_reset(&gfx_command_writer->hw_config_shared,
                                   &physical_device->chip_info);
    terakan_hw_config_draw_reset(&gfx_command_writer->hw_config_draw);
+   terakan_hw_config_compute_reset(&gfx_command_writer->hw_config_compute);
    /* TODO(Triang3l): R9xx `USE_LS_CONSTS` (perform thorough testing, and provide a regression
     * testing flag for disabling).
     */
@@ -1027,6 +1181,8 @@ terakan_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
             BITFIELD64_BIT(TERAKAN_TEST_SHIFT_NO_ALPHA_TO_COVERAGE_DITHERING)
          ? TERAKAN_HW_CONFIG_DRAW_DB_ALPHA_TO_MASK_OFFSETS_REGULAR
          : TERAKAN_HW_CONFIG_DRAW_DB_ALPHA_TO_MASK_OFFSETS_DITHERED);
+
+   terakan_app_config_compute_reset(&gfx_command_writer->app_config_compute);
 
    /* Make the graphics state fully dynamic initially, as expected when drawing with shader objects,
     * because a pipeline object hasn't been bound yet.

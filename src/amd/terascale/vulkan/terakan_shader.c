@@ -29,7 +29,6 @@
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
 #include "terakan_physical_device.h"
-#include "terakan_pipeline_layout.h"
 
 #include "amd/terascale/common/nir/terascale_nir.h"
 #include "amd/terascale/common/terascale_wddm.h"
@@ -189,6 +188,11 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
 
    /* Lower system values that are never represented by system varyings. */
    NIR_PASS(_, nir, nir_lower_system_values);
+   if (nir->info.stage == MESA_SHADER_COMPUTE) {
+      /* May perform further lowerings of instructions produced by `nir_lower_system_values`. */
+      static nir_lower_compute_system_values_options const lower_compute_system_values_options = {};
+      NIR_PASS(_, nir, nir_lower_compute_system_values, &lower_compute_system_values_options);
+   }
 
    if (nir->info.stage != MESA_SHADER_COMPUTE) {
       if (nir->info.stage == MESA_SHADER_FRAGMENT) {
@@ -252,6 +256,7 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
             nir_var_mem_ubo | nir_var_mem_ssbo | nir_var_mem_push_const, NULL, NULL);
 
    /* Prepare for optimizations that may involve dependency chains.
+    *
     * Specifically currently, this is done for:
     * - Constant folding before `terascale_nir_lower_txb_to_txd` to eliminate zero LOD biases.
     * - `optimize_txd` in `nir_lower_tex`.
@@ -261,7 +266,12 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
     *     copy propagation to prepare for common subexpression elimination.
     * - Everything that's done after this function, especially that may have effect on the pipeline
     *   configuration demand.
+    *
+    * `nir_lower_global_vars_to_local` is needed because `nir_lower_vars_to_ssa` lowers
+    * `nir_var_function_temp`, not `nir_var_shader_temp` (and because functions are inlined, there's
+    * only one function).
     */
+   NIR_PASS(_, nir, nir_lower_global_vars_to_local);
    NIR_PASS(_, nir, nir_lower_vars_to_ssa);
    {
       bool progress;
@@ -506,6 +516,27 @@ terakan_nir_lower_and_optimize_post_link(
    NIR_PASS(_, nir, nir_opt_dce);
 
    return result;
+}
+
+void
+terakan_shader_impl_apply_lower_and_optimize_post_link_result(
+   struct terakan_shader_impl * const shader, union r600_shader_key * const shader_key,
+   struct terakan_nir_lower_and_optimize_post_link_result const * const result,
+   mesa_shader_stage const stage)
+{
+   shader->sqk_usage = result->sqk_usage;
+
+   shader->push_constants_usage.driver_constants = result->driver_push_constants_used;
+
+   shader->uav_usage = result->uav_usage;
+
+   if (stage == MESA_SHADER_FRAGMENT) {
+      shader->fs.rtv_mapping = result->rtv_mapping;
+      shader_key->ps.nr_cbufs = util_bitcount(
+         terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(shader->fs.rtv_mapping));
+   }
+
+   /* TODO(Triang3l): All shader key fields that can be obtained from NIR. */
 }
 
 void

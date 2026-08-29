@@ -73,6 +73,10 @@ enum terakan_meta_shader_index {
     * Used by `terakan_hw_config_draw` as the replacement for a NULL pixel shader.
     */
    TERAKAN_META_SHADER_DUMMY_OPAQUE_PS,
+   /* Terminates immediately.
+    * Used by `terakan_hw_config_compute` as the replacement for a NULL compute shader.
+    */
+   TERAKAN_META_SHADER_DUMMY_EMPTY_CS,
 
    /* Vertex index unpacked as X16Y16 into the position, Z = 0, W = 1.
     * Exports the instance ID as an integer in all components of the first parameter.

@@ -240,12 +240,23 @@ terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                         (uint32_t)(new_uav_va - new_uav_va_aligned) * uav_bytes_per_texel;
                      new_uav_color = &new_uav_color_with_dynamic_offset;
                   }
-                  terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
-                                                           shader_uav_index, set_uav->bo,
-                                                           new_uav_color);
+                  if (is_compute) {
+                     terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
+                                                             shader_uav_index, set_uav->bo,
+                                                             new_uav_color);
+                  } else {
+                     terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
+                                                              shader_uav_index, set_uav->bo,
+                                                              new_uav_color);
+                  }
                } else {
-                  terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
-                                                           shader_uav_index, NULL, NULL);
+                  if (is_compute) {
+                     terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
+                                                             shader_uav_index, NULL, NULL);
+                  } else {
+                     terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
+                                                              shader_uav_index, NULL, NULL);
+                  }
                }
                /* TODO(Triang3l): Apply UAV bindings to the compute stage. */
             }

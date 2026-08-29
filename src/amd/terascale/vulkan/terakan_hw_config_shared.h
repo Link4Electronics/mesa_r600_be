@@ -111,6 +111,10 @@ enum terakan_hw_config_shared_entry {
    TERAKAN_HW_CONFIG_SHARED_ENTRIES_COMPUTE_ONLY_FIRST =
       TERAKAN_HW_CONFIG_SHARED_ENTRIES_COMMON_COUNT - 1,
 
+   TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_START,
+
+   TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_THREAD_GROUP_SIZE,
+
    /* Requires `CS_PARTIAL_FLUSH` and, because the LS stage is shared, `VS_PARTIAL_FLUSH` before
     * emitting the base and size setting packets in the indirect buffer.
     */
@@ -164,6 +168,10 @@ struct terakan_hw_config_shared {
        * the next dispatch.
        */
       uint32_t entries_modified;
+
+      uint32_t vgt_compute_start[3];
+
+      uint32_t vgt_compute_thread_group_size;
 
       bool sq_ring_usage_lstmp;
    } compute_;
@@ -226,6 +234,34 @@ terakan_hw_config_shared_draw_set_vgt_num_instances(struct terakan_hw_config_sha
    config->draw_.vgt_num_instances = value;
    config->draw_.entries_modified |=
       BITFIELD_BIT(TERAKAN_HW_CONFIG_SHARED_ENTRY_DRAW_VGT_NUM_INSTANCES);
+}
+
+static inline void
+terakan_hw_config_shared_compute_set_vgt_compute_start(
+   struct terakan_hw_config_shared * const config, uint32_t const x, uint32_t const y,
+   uint32_t const z)
+{
+   if (config->compute_.vgt_compute_start[0] == x && config->compute_.vgt_compute_start[1] == y &&
+       config->compute_.vgt_compute_start[2] == z) {
+      return;
+   }
+   config->compute_.vgt_compute_start[0] = x;
+   config->compute_.vgt_compute_start[1] = y;
+   config->compute_.vgt_compute_start[2] = z;
+   config->compute_.entries_modified |=
+      BITFIELD_BIT(TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_START);
+}
+
+static inline void
+terakan_hw_config_shared_compute_set_vgt_compute_thread_group_size(
+   struct terakan_hw_config_shared * const config, uint32_t const value)
+{
+   if (config->compute_.vgt_compute_thread_group_size == value) {
+      return;
+   }
+   config->compute_.vgt_compute_thread_group_size = value;
+   config->compute_.entries_modified |=
+      BITFIELD_BIT(TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_THREAD_GROUP_SIZE);
 }
 
 static inline void
@@ -307,6 +343,9 @@ terakan_hw_config_shared_compute_set_sq_ring_usage_lstmp(
 void
 terakan_hw_config_shared_indirect_buffer_begun(struct terakan_gfx_command_writer * command_writer);
 
+/* `CS_PARTIAL_FLUSH` will be performed when switching from compute to graphics as part of this
+ * function, making it safe to `DEALLOC_STATE` after calling it in this case.
+ */
 void
 terakan_hw_config_shared_draw_emit_modified(struct terakan_gfx_command_writer * command_writer);
 void

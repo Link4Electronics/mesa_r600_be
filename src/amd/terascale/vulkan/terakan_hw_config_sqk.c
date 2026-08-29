@@ -657,6 +657,25 @@ terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(
    }
 }
 
+void
+terakan_hw_config_sqk_compute_state_cleared(struct terakan_hw_config_sqk * const config)
+{
+   struct terakan_hw_config_sqk_stage * const stage = &config->stages_[MESA_SHADER_COMPUTE];
+
+   stage->modified.kcache = 0b0;
+   for (unsigned kcache_buffer_index = 0; kcache_buffer_index < TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE;
+        ++kcache_buffer_index) {
+      if (terakan_hw_config_sqk_kcache_buffer_is_bound(&stage->kcache[kcache_buffer_index])) {
+         stage->modified.kcache |= BITFIELD_BIT(kcache_buffer_index);
+      }
+   }
+
+   /* For simplicity, not storing unbound or invalid samplers in `terakan_hw_config_sqk`. */
+   stage->modified.samplers = BITFIELD_MASK(TERAKAN_SAMPLER_HW_COUNT_PER_STAGE);
+
+   BITSET_COPY(stage->modified.resources, stage->resources_bound);
+}
+
 static void
 terakan_hw_config_sqk_emit_modified_kcache(struct terakan_gfx_command_writer * const command_writer,
                                            struct terakan_hw_config_sqk_stage * const stage,

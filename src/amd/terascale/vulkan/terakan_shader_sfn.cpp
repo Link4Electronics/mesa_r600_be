@@ -324,6 +324,13 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
       shader->static_state.stage.ps.cb_shader_mask = shader->shader.ps_color_export_mask;
    } break;
 
+   case MESA_SHADER_COMPUTE: {
+      for (unsigned dimension = 0; dimension < 3; ++dimension) {
+         shader->static_state.stage.cs.spi_compute_num_thread[dimension] =
+            nir->info.workgroup_size[dimension];
+      }
+   } break;
+
    default:
       break;
    }

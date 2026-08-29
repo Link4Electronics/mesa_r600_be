@@ -275,12 +275,13 @@ terakan_physical_device_chip_info_init(
       chip_info_out->wave_lanes_log2 = 6;
    }
 
-   /* For simplicity, don't track `NUM_PS_THREADS` changes - as of this writing, it's set to the
+   /* All R6xx-R9xx GPUs have at least 16-lane wavefronts, so it's safe to assume that the scratch
+    * ring buffer size is a multiple of 256 bytes if the wavefront count is a multiple of 8.
+    *
+    * For simplicity, don't track `NUM_PS_THREADS` changes - as of this writing, it's set to the
     * same value regardless of which pre-rasterization shader stages are active, but use the largest
     * out of the used options to avoid an implicit dependency on this.
     * R9xx doesn't have `SQ_THREAD_RESOURCE_MGMT`, use the maximum possible thread block count.
-    * All R6xx-R9xx GPUs have at least 16-lane wavefronts, so it's safe to assume that the scratch
-    * ring buffer size is a multiple of 256 bytes if the wavefront count is a multiple of 8.
     */
    chip_info_out->sq_pstmp_ring_bytes_per_item_dword_shr8 =
       (chip_info_out->is_r9xx
@@ -292,6 +293,8 @@ terakan_physical_device_chip_info_init(
                G_008C18_NUM_PS_THREADS(chip_info_out->sq_thread_resource_mgmt_ts_gs_r8xx[1][1][0])))
          << (2 + chip_info_out->wave_lanes_log2) >>
       8;
+   chip_info_out->sq_cstmp_ring_bytes_per_item_dword_shr8 =
+      chip_info_out->sq_max_threads_shr3 << (3 + 2 + chip_info_out->wave_lanes_log2) >> 8;
 
    /* A compute shader may occupy all the available threads. */
    /* TODO(Triang3l): See how MBCNT behaves on wave32 chips and possibly scale the wave ID by 32

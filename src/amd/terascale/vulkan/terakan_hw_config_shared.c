@@ -244,6 +244,32 @@ terakan_hw_config_shared_draw_emit_vgt_num_instances(
 }
 
 static void
+terakan_hw_config_shared_compute_emit_vgt_compute_start(
+   struct terakan_gfx_command_writer * const command_writer)
+{
+   uint32_t * packet = terakan_gfx_command_writer_emit(
+      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2 + 3);
+   if (unlikely(packet == NULL)) {
+      return;
+   }
+   *packet++ = PKT3(PKT3_SET_CONFIG_REG, 3, 0);
+   *packet++ = TERAKAN_CONFIG_REG_OFFSET(R_00899C_VGT_COMPUTE_START_X);
+   for (unsigned dimension = 0; dimension < 3; ++dimension) {
+      *packet++ = command_writer->hw_config_shared.compute_.vgt_compute_start[dimension];
+   }
+   terakan_gfx_command_writer_emit_done(command_writer, packet);
+}
+
+static void
+terakan_hw_config_shared_compute_emit_vgt_compute_thread_group_size(
+   struct terakan_gfx_command_writer * const command_writer)
+{
+   terakan_hw_config_shared_emit_config_register(
+      command_writer, R_0089AC_VGT_COMPUTE_THREAD_GROUP_SIZE,
+      command_writer->hw_config_shared.compute_.vgt_compute_thread_group_size);
+}
+
+static void
 terakan_hw_config_shared_draw_emit_sq_thread_stack_resource_mgmt(
    struct terakan_gfx_command_writer * const command_writer)
 {
@@ -264,6 +290,7 @@ terakan_hw_config_shared_draw_emit_sq_thread_stack_resource_mgmt(
           sizeof(uint32_t) * 3);
    packet += 3;
    terakan_gfx_command_writer_emit_done(command_writer, packet);
+   command_writer->hw_config_shared.draw_.sq_thread_stack_resource_mgmt.ps_modified = false;
 }
 
 static void
@@ -290,7 +317,6 @@ terakan_hw_config_shared_compute_emit_sq_thread_stack_resource_mgmt(
    *packet++ = 0;
    *packet++ = S_008C28_NUM_LS_STACK_ENTRIES(chip_info->sq_max_stack_entries);
    terakan_gfx_command_writer_emit_done(command_writer, packet);
-   command_writer->hw_config_shared.draw_.sq_thread_stack_resource_mgmt.ps_modified = false;
 }
 
 static void
@@ -483,6 +509,10 @@ static terakan_hw_config_shared_emit_function const terakan_hw_config_shared_com
          terakan_hw_config_shared_compute_emit_vgt_primitive_type,
       [TERAKAN_HW_CONFIG_SHARED_ENTRY_SQ_THREAD_STACK_RESOURCE_MGMT] =
          terakan_hw_config_shared_compute_emit_sq_thread_stack_resource_mgmt,
+      [TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_START] =
+         terakan_hw_config_shared_compute_emit_vgt_compute_start,
+      [TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_VGT_COMPUTE_THREAD_GROUP_SIZE] =
+         terakan_hw_config_shared_compute_emit_vgt_compute_thread_group_size,
       [TERAKAN_HW_CONFIG_SHARED_ENTRY_COMPUTE_SQ_RING_USAGE_LSTMP] =
          terakan_hw_config_shared_compute_emit_sq_ring_usage_lstmp,
 };
@@ -524,7 +554,7 @@ terakan_hw_config_shared_draw_emit_modified(struct terakan_gfx_command_writer * 
 
       /* Flush before changing the shader hardware resource allocation registers, as well as the
        * LS-related ones. This also makes it possible not to do compute partial flushes before
-       * switching to compute again later.
+       * switching to compute again later, and to `DEALLOC_STATE` after calling this function.
        */
       terakan_barrier_emit_actions_unconditionally(command_writer,
                                                    TERAKAN_BARRIER_ACTION_PARTIAL_FLUSH_CS);
@@ -667,6 +697,10 @@ terakan_hw_config_shared_reset(struct terakan_hw_config_shared * const config,
    config->draw_.vgt_num_instances = TERAKAN_HW_CONFIG_SHARED_DRAW_DEFAULT_VGT_NUM_INSTANCES;
 
    config->draw_.sq_ring_usage = 0b0;
+
+   memset(config->compute_.vgt_compute_start, 0, sizeof(config->compute_.vgt_compute_start));
+
+   config->compute_.vgt_compute_thread_group_size = 1;
 
    config->compute_.sq_ring_usage_lstmp = false;
 

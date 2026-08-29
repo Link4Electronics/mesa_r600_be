@@ -21,8 +21,6 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_app_config_draw.h"
-
 #include "terakan_command_buffer.h"
 #include "terakan_physical_device.h"
 
@@ -30,6 +28,7 @@
 #include "gallium/drivers/r600/evergreend.h"
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/u_math.h"
 
 #include <assert.h>
 #include <math.h>
@@ -94,7 +93,7 @@ terakan_app_config_draw_set_cb_color_uav(struct terakan_app_config_draw * const 
    assert(mutable_resource_index < TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL);
    if (terakan_color_descriptor_is_bound(bo, color)) {
       assert(G_028C70_RAT(color->info));
-      struct terakan_app_config_draw_cb_color_uav * const uav =
+      struct terakan_bo_and_color_descriptor * const uav =
          &config->cb_color_uav_and_unused_mrt_.uav[mutable_resource_index];
       if (BITSET_TEST(config->cb_color_uav_and_unused_mrt_.uav_bound, mutable_resource_index) &&
           uav->bo == bo &&
@@ -1928,7 +1927,7 @@ terakan_app_config_draw_apply_cb_color_uav_and_unused_mrt(
          TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_PIXEL + uav_count;
 
       if (BITSET_SET(app_config->cb_color_uav_and_unused_mrt_.uav_bound, uav_uncompacted_index)) {
-         struct terakan_app_config_draw_cb_color_uav const * const uav =
+         struct terakan_bo_and_color_descriptor const * const uav =
             &app_config->cb_color_uav_and_unused_mrt_.uav[uav_uncompacted_index];
 
          if (G_028C70_RESOURCE_TYPE(uav->color.info) == V_028C70_BUFFER) {

@@ -428,6 +428,16 @@ struct terakan_gfx_command_writer;
 void terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(
    struct terakan_gfx_command_writer * command_writer);
 
+/* Updates modification tracking to be consistent with the result of a `CLEAR_STATE` packet for
+ * compute.
+ *
+ * It's desirable that `terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer`
+ * is called earlier than this, because that function would assume that everything it doesn't clear
+ * explicitly is indeterminate and mark it as modified, but this marks null bindings as unmodified
+ * since it knows that the `CLEAR_STATE` emission has unbound them in the hardware.
+ */
+void terakan_hw_config_sqk_compute_state_cleared(struct terakan_hw_config_sqk * config);
+
 void
 terakan_hw_config_sqk_emit_modified_for_draw(struct terakan_gfx_command_writer * command_writer);
 

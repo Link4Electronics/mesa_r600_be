@@ -21,8 +21,6 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_hw_config_draw.h"
-
 #include "terakan_command_buffer.h"
 #include "terakan_device.h"
 #include "terakan_image.h"
@@ -1350,6 +1348,8 @@ terakan_hw_config_draw_emit_cb_target_mask(struct terakan_gfx_command_writer * c
 {
    terakan_hw_config_draw_emit_context_register(command_writer, R_028238_CB_TARGET_MASK,
                                                 command_writer->hw_config_draw.cb_target_mask_);
+   command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer =
+      !command_writer->hw_config_draw.cb_target_mask_;
 }
 
 static void
@@ -1516,7 +1516,9 @@ terakan_hw_config_draw_emit_cb_color(struct terakan_gfx_command_writer * const c
        */
       uint32_t const bo_reference = terakan_bo_reference_writer_add_reference(
          &command_writer->base.bo_reference_writer, config->cb_color_.bo[color_index], true, true,
-         G_028C70_RAT(color->info) ? TERAKAN_BO_PRIORITY_SHADER_RW_IMAGE
+         G_028C70_RAT(color->info) ? (G_028C70_RESOURCE_TYPE(color->info) == V_028C70_BUFFER
+                                         ? TERAKAN_BO_PRIORITY_SHADER_RW_BUFFER
+                                         : TERAKAN_BO_PRIORITY_SHADER_RW_IMAGE)
                                    : (is_multisampled ? TERAKAN_BO_PRIORITY_COLOR_BUFFER_MS
                                                       : TERAKAN_BO_PRIORITY_COLOR_BUFFER));
       terakan_gfx_command_writer_add_relocation(

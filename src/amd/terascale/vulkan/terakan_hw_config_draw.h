@@ -1112,6 +1112,15 @@ terakan_hw_config_draw_set_cb_target_mask(struct terakan_hw_config_draw * const 
 }
 
 static inline void
+terakan_hw_config_draw_set_cb_target_mask_modified_if_nonzero(
+   struct terakan_hw_config_draw * const config)
+{
+   if (config->cb_target_mask_) {
+      BITSET_SET(config->entries_modified_, TERAKAN_HW_CONFIG_DRAW_ENTRY_CB_TARGET_MASK);
+   }
+}
+
+static inline void
 terakan_hw_config_draw_set_cb_blend_constants_rgb(struct terakan_hw_config_draw * const config,
                                                   float const value[3])
 {

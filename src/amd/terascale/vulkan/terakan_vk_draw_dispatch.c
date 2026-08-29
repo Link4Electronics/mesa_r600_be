@@ -158,3 +158,27 @@ terakan_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const index
    *packet++ = S_0287F0_SOURCE_SELECT(V_0287F0_DI_SRC_SEL_DMA);
    terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const groupCountX,
+                    uint32_t const groupCountY, uint32_t const groupCountZ)
+{
+   struct terakan_gfx_command_writer * const command_writer =
+      terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
+
+   terakan_app_config_compute_set_vgt_compute_start(&command_writer->app_config_compute, 0, 0, 0);
+
+   terakan_gfx_command_writer_before_app_dispatch(command_writer);
+
+   uint32_t * packet = terakan_gfx_command_writer_emit(
+      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH, 5);
+   if (unlikely(packet == NULL)) {
+      return;
+   }
+   *packet++ = PKT3(PKT3_DISPATCH_DIRECT, 5 - 2, 0) | TERAKAN_PACKET3_COMPUTE;
+   *packet++ = groupCountX;
+   *packet++ = groupCountY;
+   *packet++ = groupCountZ;
+   *packet++ = 1; /* `VGT_DISPATCH_INITIATOR = COMPUTE_SHADER_EN(true)` */
+   terakan_gfx_command_writer_emit_done(command_writer, packet);
+}

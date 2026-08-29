@@ -334,6 +334,12 @@ struct terakan_resource_descriptor
 terakan_color_descriptor_info_to_uav_immediate_resource(struct terakan_device const * device,
                                                         uint32_t color_info);
 
+/* Commonly used for UAVs. */
+struct terakan_bo_and_color_descriptor {
+   struct terakan_bo const * bo;
+   struct terakan_color_descriptor color;
+};
+
 /* Additional hardware CB_COLOR[0-7] registers. */
 struct terakan_color_meta_descriptor {
    uint32_t cmask;

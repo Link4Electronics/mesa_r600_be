@@ -35,6 +35,7 @@
 struct terakan_meta_shader const * const terakan_meta_shaders[TERAKAN_META_SHADER_COUNT] = {
    [TERAKAN_META_SHADER_DUMMY_NAN_VS] = &terakan_meta_dummy_nan_vs,
    [TERAKAN_META_SHADER_DUMMY_OPAQUE_PS] = &terakan_meta_dummy_opaque_ps,
+   [TERAKAN_META_SHADER_DUMMY_EMPTY_CS] = &terakan_meta_dummy_empty_cs,
    [TERAKAN_META_SHADER_POSITION_FROM_INDEX_VS] = &terakan_meta_position_from_index_vs,
    [TERAKAN_META_SHADER_POSITION_AND_LAYER_FROM_INDEX_VS] =
       &terakan_meta_position_and_layer_from_index_vs,

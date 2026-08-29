@@ -51,9 +51,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* TODO(Triang3l): Remove the testing code. */
-#include <stdio.h>
-
 /* Note that when using pipeline objects, it's assumed that static state is the fastest path.
  * Therefore, for applying the pipeline state, to check if state is static, using conditionals
  * rather than a callback array, because the former are expected to be cheaper.
@@ -1069,7 +1066,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
       } else {
          VkShaderModuleCreateInfo const * const shader_module_create_info =
             vk_find_struct_const(create_info->pNext, SHADER_MODULE_CREATE_INFO);
-         if (shader_module_create_info != NULL) {
+         if (likely(shader_module_create_info != NULL)) {
             shader_data->spirv_size_bytes = shader_module_create_info->codeSize;
             shader_data->spirv = shader_module_create_info->pCode;
          } else {
@@ -1165,24 +1162,12 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
 
       struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
       union r600_shader_key shader_key = {};
-      /* TODO(Triang3l): Construct the shader key from the NIR and, when available, the pipeline
-       * state.
-       */
 
-      shader->sqk_usage = lower_and_optimize_post_link_result.sqk_usage;
+      terakan_shader_impl_apply_lower_and_optimize_post_link_result(
+         shader, &shader_key, &lower_and_optimize_post_link_result, shader_stage);
 
-      shader->push_constants_usage.driver_constants =
-         lower_and_optimize_post_link_result.driver_push_constants_used;
       shader->push_constants_usage.app_extent_bytes =
          pipeline_layout->shader_app_push_constants_extents_bytes[shader_stage];
-
-      shader->uav_usage = lower_and_optimize_post_link_result.uav_usage;
-
-      if (shader_stage == MESA_SHADER_FRAGMENT) {
-         shader->fs.rtv_mapping = lower_and_optimize_post_link_result.rtv_mapping;
-         shader_key.ps.nr_cbufs = util_bitcount(
-            terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(shader->fs.rtv_mapping));
-      }
 
       result = terakan_shader_impl_compile(shader, device, &shader_key, nir, allocator);
       ralloc_free(nir);
@@ -1210,6 +1195,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    /* TODO(Triang3l): Use a global allocator and GPU uploading instead of creating one host-visible
     * device-local BO per pipeline.
     */
+   /* TODO(Triang3l): Static constant buffers. */
 
    /* Place the fetch shader close to the vertex shader. */
    uint32_t shader_bo_bytes_shr8 = 0;
@@ -1233,6 +1219,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    /* 32 bits are enough for the BO size, as qword addresses in shader control flow instructions are
     * 24-bit.
     */
+   /* TODO(Triang3l): 32 bits may be not enough if static constant buffers are included. */
    result = device->platform_fn->bo->allocate_device_memory(
       device, shader_bo_bytes_shr8 << 8, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |

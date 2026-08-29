@@ -324,6 +324,10 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
                {
                   .relocation_type = TERAKAN_QUEUE_RELOCATION_TYPE_DRM_NOP,
                },
+            /* TODO(Triang3l): Don't enable `graphics_compute_context_tracking_shared` with virtual
+             * memory.
+             */
+            .graphics_compute_context_tracking_shared = true,
          },
 
       .supported_sync_types_static = device->sync_types,

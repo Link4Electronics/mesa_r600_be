@@ -297,6 +297,12 @@ struct terakan_shader_static {
           */
          uint32_t cb_shader_mask;
       } ps;
+
+      struct {
+         uint32_t spi_compute_num_thread[3];
+         /* In dwords. */
+         uint16_t sq_lds_alloc_size;
+      } cs;
    } stage;
 };
 
@@ -459,18 +465,9 @@ struct terakan_nir_lower_and_optimize_post_link_result {
 struct terakan_nir_lower_and_optimize_post_link_result terakan_nir_lower_and_optimize_post_link(
    nir_shader * nir, struct terakan_nir_lower_and_optimize_post_link_options const * options);
 
-/* Converts SPIR-V to NIR and performs pre-link lowerings. */
-nir_shader * terakan_shader_spirv_to_nir(struct terakan_device * device, size_t spirv_size_bytes,
-                                         uint32_t const * spirv, mesa_shader_stage stage,
-                                         char const * entrypoint,
-                                         VkSpecializationInfo const * specialization_info);
-
-struct terakan_pipeline_layout;
-
-void terakan_shader_lower_and_optimize_post_link(
-   nir_shader * nir, struct terakan_pipeline_layout const * pipeline_layout,
-   struct terakan_shader_sqk_usage * sqk_usage, BITSET_WORD * uavs_for_mutable_resources_needed,
-   uint32_t * driver_push_constants_used, uint8_t * rtv_dsb_uncompacted_exports_out);
+void terakan_shader_impl_apply_lower_and_optimize_post_link_result(
+   struct terakan_shader_impl * shader, union r600_shader_key * shader_key,
+   struct terakan_nir_lower_and_optimize_post_link_result const * result, mesa_shader_stage stage);
 
 void terakan_shader_impl_finish(struct terakan_shader_impl * shader);
 

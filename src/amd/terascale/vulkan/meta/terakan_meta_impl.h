@@ -81,6 +81,7 @@
 
 extern struct terakan_meta_shader const terakan_meta_dummy_nan_vs;
 extern struct terakan_meta_shader const terakan_meta_dummy_opaque_ps;
+extern struct terakan_meta_shader const terakan_meta_dummy_empty_cs;
 extern struct terakan_meta_shader const terakan_meta_position_from_index_vs;
 extern struct terakan_meta_shader const terakan_meta_position_and_layer_from_index_vs;
 extern struct terakan_meta_shader const terakan_meta_clear_depth_vs;
@@ -328,7 +329,7 @@ terakan_meta_config_draw_begin(struct terakan_gfx_command_writer * command_write
 static inline void
 terakan_meta_before_draw(struct terakan_gfx_command_writer * const command_writer)
 {
-   terakan_gfx_command_writer_before_hw_draw(command_writer);
+   terakan_gfx_command_writer_before_hw_draw_dispatch(command_writer);
 }
 
 static inline void

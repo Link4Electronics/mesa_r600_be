@@ -115,11 +115,6 @@ terakan_app_config_draw_cb_color_rtv_format_export_mask(
       [G_028C70_COMP_SWAP(rtv->color.info)];
 }
 
-struct terakan_app_config_draw_cb_color_uav {
-   struct terakan_bo const * bo;
-   struct terakan_color_descriptor color;
-};
-
 enum terakan_app_config_draw_entry {
    /* Entries that are needed with rasterizer discard. */
 
@@ -510,8 +505,7 @@ struct terakan_app_config_draw {
        * undefined.
        */
       BITSET_DECLARE(uav_bound, TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL);
-      struct terakan_app_config_draw_cb_color_uav
-         uav[TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL];
+      struct terakan_bo_and_color_descriptor uav[TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL];
 
       struct {
          uint8_t rtv_dsb_export_count;
