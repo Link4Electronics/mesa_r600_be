@@ -103,7 +103,7 @@ static struct terakan_physical_device_platform_fn const terakan_physical_device_
    .destroy = terakan_physical_device_wddm_destroy,
 };
 
-/* device_name must be provided if D3DKMTOpenAdapterFromLuid is not available. */
+/* `device_name` must be provided if `D3DKMTOpenAdapterFromLuid` is not available. */
 static VkResult
 terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const instance,
                                         IDXGIAdapter * const dxgi_adapter,
@@ -231,30 +231,7 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
 
    uint32_t const mc_arb_ramcfg = adapter_driver_private_data[0x558];
    uint32_t const gb_addr_config = adapter_driver_private_data[0x559];
-   /* Also GB_BACKEND_MAP = adapter_driver_private_data[0x55A]. */
-   struct terakan_physical_device_tiling_info const tiling_info = {
-      .pipes_log2 = G_0098F8_NUM_PIPES(gb_addr_config),
-      .banks_log2 = 2 + G_002760_NOOFBANK(mc_arb_ramcfg),
-      /* TODO(Triang3l): Handle MC_ARB_RAMCFG::NOOFRANK in image surface logic and pass it because
-       * it's not exposed by DRM Radeon 2.50.0, but is available on Windows.
-       */
-      .pipe_interleave_bytes_log2 = 8 + G_0098F8_PIPE_INTERLEAVE_SIZE(gb_addr_config),
-      .bank_interleave_log2 = G_0098F8_BANK_INTERLEAVE_SIZE(gb_addr_config),
-      .row_bytes_log2 = 10 + G_0098F8_ROW_SIZE(gb_addr_config),
-   };
-
-   struct terakan_physical_device_submission_info_gfx const submission_info_gfx = {
-      .base =
-         {
-            .relocation_type = TERAKAN_QUEUE_RELOCATION_TYPE_WDDM_PATCH,
-            .submission_outer_reserved_amount =
-               {
-                  .bo_references = TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_BO_REFERENCES,
-                  .relocations = TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_RELOCATIONS,
-               },
-         },
-      .need_sq_alu_const_mode_control = true,
-   };
+   /* Also `GB_BACKEND_MAP = adapter_driver_private_data[0x55A]`. */
 
    uint32_t const clock_crystal_frequency_hz = adapter_driver_private_data[0x4E1];
 
@@ -269,17 +246,61 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
 
    SYSTEM_INFO system_info;
    GetSystemInfo(&system_info);
-   result = terakan_physical_device_init(
-      &device->base, &instance->base, &terakan_physical_device_wddm_fn,
-      (struct terakan_physical_device_pci_device_id){
-         .device = (uint16_t)adapter_desc->DeviceId,
-         .subsystem_vendor = (uint16_t)adapter_desc->SubSysId,
-         .subsystem_device = (uint16_t)(adapter_desc->SubSysId >> 16),
-      },
-      system_info.dwAllocationGranularity, (VkDeviceSize)adapter_desc->SharedSystemMemory,
-      vram_bytes, vram_host_visible_bytes, UINT32_MAX & ~(system_info.dwAllocationGranularity - 1),
-      system_info.dwAllocationGranularity, &tiling_info, &submission_info_gfx,
-      clock_crystal_frequency_hz, device->sync_types);
+
+   struct terakan_physical_device_init_info const init_info = {
+      .instance = &instance->base,
+
+      .platform_fn_static = &terakan_physical_device_wddm_fn,
+
+      .pci_device_id =
+         {
+            .device = (uint16_t)adapter_desc->DeviceId,
+            .subsystem_vendor = (uint16_t)adapter_desc->SubSysId,
+            .subsystem_device = (uint16_t)(adapter_desc->SubSysId >> 16),
+         },
+
+      .gtt_allocation_granularity = system_info.dwAllocationGranularity,
+
+      .gtt_size = adapter_desc->SharedSystemMemory,
+      .vram_size = vram_bytes,
+      .vram_visible = vram_host_visible_bytes,
+
+      .max_memory_allocation_size = UINT32_MAX & ~(system_info.dwAllocationGranularity - 1u),
+
+      .min_memory_map_alignment = system_info.dwAllocationGranularity,
+
+      .tiling_info =
+         {
+            .pipes_log2 = G_0098F8_NUM_PIPES(gb_addr_config),
+            .banks_log2 = 2u + G_002760_NOOFBANK(mc_arb_ramcfg),
+            /* TODO(Triang3l): Handle `MC_ARB_RAMCFG::NOOFRANK` in image surface logic and pass it
+             * because it's not exposed by DRM Radeon 2.50.0, but is available on Windows.
+             */
+            .pipe_interleave_bytes_log2 = 8u + G_0098F8_PIPE_INTERLEAVE_SIZE(gb_addr_config),
+            .bank_interleave_log2 = G_0098F8_BANK_INTERLEAVE_SIZE(gb_addr_config),
+            .row_bytes_log2 = 10u + G_0098F8_ROW_SIZE(gb_addr_config),
+         },
+
+      .clock_crystal_frequency_hz = clock_crystal_frequency_hz,
+
+      .submission_info_gfx =
+         {
+            .base =
+               {
+                  .relocation_type = TERAKAN_QUEUE_RELOCATION_TYPE_WDDM_PATCH,
+                  .submission_outer_reserved_amount =
+                     {
+                        .bo_references = TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_BO_REFERENCES,
+                        .relocations = TERAKAN_QUEUE_WDDM_SUBMISSION_RESERVED_RELOCATIONS,
+                     },
+               },
+            .need_sq_alu_const_mode_control = true,
+         },
+
+      .supported_sync_types_static = device->sync_types,
+   };
+
+   result = terakan_physical_device_init(&device->base, &init_info);
    if (result != VK_SUCCESS) {
       goto fail_d3dkmt_adapter;
    }

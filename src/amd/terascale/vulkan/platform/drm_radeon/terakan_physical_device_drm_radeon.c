@@ -216,16 +216,6 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
          render_node_path, tiling_config_info_result);
       goto fail_render_node_fd;
    }
-   struct terakan_physical_device_tiling_info const tiling_info = {
-      .pipes_log2 = tiling_config & 0xF,
-      .banks_log2 = 2 + ((tiling_config >> 4) & 0xF),
-      .pipe_interleave_bytes_log2 = 8 + ((tiling_config >> 8) & 0xF),
-      /* As of 2.50.0, DRM Radeon doesn't expose the bank interleave, but has log2(1) for it in the
-       * "golden" GB_ADDR_CONFIG values for all R8xx/R9xx chips.
-       */
-      .bank_interleave_log2 = 0,
-      .row_bytes_log2 = 10 + ((tiling_config >> 12) & 0xF),
-   };
 
    __u32 clock_crystal_frequency_khz;
    struct drm_radeon_info clock_crystal_frequency_info_arguments = {
@@ -272,13 +262,6 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
 
    device->render_node_validation_fd = render_node_fd;
 
-   struct terakan_physical_device_submission_info_gfx const submission_info_gfx = {
-      .base =
-         {
-            .relocation_type = TERAKAN_QUEUE_RELOCATION_TYPE_DRM_NOP,
-         },
-   };
-
    size_t sync_type_count = 0;
    assert(sync_type_count < ARRAY_SIZE(device->sync_types));
    device->sync_types[sync_type_count++] = &terakan_sync_completion_type;
@@ -290,24 +273,63 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
 
    /* TTM aligns the BO size to the GPU page size, hence the GTT page size and the granularity of
     * the maximum BO size.
-    *
-    * BO size is limited by the fact that the command buffer parser in the Radeon kernel driver
-    * stores 32-bit offsets to bindings within buffer objects, and for the indirect arguments base
-    * (SET_BASE packet), it doesn't apply the offset during relocation, so DRAW_INDIRECT and
-    * DRAW_INDEX_INDIRECT need a 32-bit BO-relative offset rather than an offset within the Vulkan
-    * buffer.
     */
-   VkDeviceSize const page_size = (VkDeviceSize)sysconf(_SC_PAGESIZE);
-   result = terakan_physical_device_init(
-      &device->base, instance, &terakan_physical_device_drm_radeon_fn,
-      (struct terakan_physical_device_pci_device_id){
-         .device = drm_device->deviceinfo.pci->device_id,
-         .subsystem_vendor = drm_device->deviceinfo.pci->subvendor_id,
-         .subsystem_device = drm_device->deviceinfo.pci->subdevice_id,
-      },
-      page_size, (VkDeviceSize)gem_info.gart_size, (VkDeviceSize)gem_info.vram_size,
-      (VkDeviceSize)gem_info.vram_visible, UINT32_MAX & ~(page_size - 1), page_size, &tiling_info,
-      &submission_info_gfx, 1000 * clock_crystal_frequency_khz, device->sync_types);
+   uint32_t const page_size = (uint32_t)sysconf(_SC_PAGESIZE);
+
+   struct terakan_physical_device_init_info const init_info = {
+      .instance = instance,
+
+      .platform_fn_static = &terakan_physical_device_drm_radeon_fn,
+
+      .pci_device_id =
+         {
+            .device = drm_device->deviceinfo.pci->device_id,
+            .subsystem_vendor = drm_device->deviceinfo.pci->subvendor_id,
+            .subsystem_device = drm_device->deviceinfo.pci->subdevice_id,
+         },
+
+      .gtt_allocation_granularity = page_size,
+
+      .gtt_size = gem_info.gart_size,
+      .vram_size = gem_info.vram_size,
+      .vram_visible = gem_info.vram_visible,
+
+      /* BO size is limited by the fact that the command buffer parser in the Radeon kernel driver
+       * stores 32-bit offsets to bindings within buffer objects, and for the indirect arguments
+       * base (`SET_BASE` packet), it doesn't apply the offset during relocation, so `DRAW_INDIRECT`
+       * and `DRAW_INDEX_INDIRECT` need a 32-bit BO-relative offset rather than an offset within the
+       * Vulkan buffer.
+       */
+      .max_memory_allocation_size = UINT32_MAX & ~(page_size - 1u),
+
+      .min_memory_map_alignment = page_size,
+
+      .tiling_info =
+         {
+            .pipes_log2 = tiling_config & 0xFu,
+            .banks_log2 = 2u + ((tiling_config >> 4) & 0xFu),
+            .pipe_interleave_bytes_log2 = 8u + ((tiling_config >> 8) & 0xFu),
+            /* As of 2.50.0, DRM Radeon doesn't expose the bank interleave, but has log2(1) for it
+             * in the "golden" `GB_ADDR_CONFIG` values for all R8xx/R9xx chips.
+             */
+            .bank_interleave_log2 = 0u,
+            .row_bytes_log2 = 10u + ((tiling_config >> 12) & 0xFu),
+         },
+
+      .clock_crystal_frequency_hz = 1000u * clock_crystal_frequency_khz,
+
+      .submission_info_gfx =
+         {
+            .base =
+               {
+                  .relocation_type = TERAKAN_QUEUE_RELOCATION_TYPE_DRM_NOP,
+               },
+         },
+
+      .supported_sync_types_static = device->sync_types,
+   };
+
+   result = terakan_physical_device_init(&device->base, &init_info);
    if (result != VK_SUCCESS) {
       goto fail_render_node_path;
    }

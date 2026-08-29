@@ -1043,30 +1043,23 @@ terakan_physical_device_destroy(struct vk_physical_device * const device_base)
 }
 
 VkResult
-terakan_physical_device_init(
-   struct terakan_physical_device * const device, struct terakan_instance * const instance,
-   struct terakan_physical_device_platform_fn const * const platform_fn_static,
-   struct terakan_physical_device_pci_device_id const pci_device_id,
-   VkDeviceSize const gtt_allocation_granularity, VkDeviceSize const gtt_size,
-   VkDeviceSize const vram_size, VkDeviceSize const vram_visible,
-   VkDeviceSize const max_memory_allocation_size, VkDeviceSize const min_memory_map_alignment,
-   struct terakan_physical_device_tiling_info const * const tiling_info,
-   struct terakan_physical_device_submission_info_gfx const * const submission_info_gfx,
-   uint32_t const clock_crystal_frequency_hz,
-   struct vk_sync_type const * const * const supported_sync_types_static)
+terakan_physical_device_init(struct terakan_physical_device * const device,
+                             struct terakan_physical_device_init_info const * const init_info)
 {
    VkResult result;
 
    /* See NON-CONFORMANT: comments throughout the code for technical reasons. */
    vk_warn_non_conformant_implementation("terakan");
 
-   device->platform_fn = platform_fn_static;
+   struct terakan_instance * const instance = init_info->instance;
 
-   terakan_physical_device_chip_info_init(pci_device_id, &device->chip_info);
+   device->platform_fn = init_info->platform_fn_static;
 
-   device->max_memory_allocation_size = max_memory_allocation_size;
+   terakan_physical_device_chip_info_init(init_info->pci_device_id, &device->chip_info);
 
-   device->tiling_info = *tiling_info;
+   device->max_memory_allocation_size = init_info->max_memory_allocation_size;
+
+   device->tiling_info = init_info->tiling_info;
    /* HwlComputeMaxBaseAlignments from the R800 AddrLib for images.
     * Maximum 8x8 micro-tile size is 8-sample and 16 byte-per-pixel.
     * With the largest tile size, the bank width and height can be treated as 1.
@@ -1080,7 +1073,7 @@ terakan_physical_device_init(
       (VkDeviceSize)1 << (MIN2(device->tiling_info.row_bytes_log2, 3 + 3 + 3 + 4) +
                           device->tiling_info.banks_log2 + device->tiling_info.pipes_log2);
 
-   device->submission_info_gfx = *submission_info_gfx;
+   device->submission_info_gfx = init_info->submission_info_gfx;
 
    device->nir_options = (nir_shader_compiler_options){
       .lower_fdiv = true,
@@ -1224,8 +1217,8 @@ terakan_physical_device_init(
    struct vk_properties properties;
    terakan_physical_device_get_capabilities(
       instance, &device->chip_info, device->tiling_info.pipe_interleave_bytes_log2,
-      min_memory_map_alignment, clock_crystal_frequency_hz, max_memory_allocation_size, &extensions,
-      &features, &properties);
+      init_info->min_memory_map_alignment, init_info->clock_crystal_frequency_hz,
+      init_info->max_memory_allocation_size, &extensions, &features, &properties);
    device->platform_fn->get_platform_extensions(device, &extensions, &features, &properties);
 
    struct vk_physical_device_dispatch_table dispatch_table;
@@ -1240,11 +1233,12 @@ terakan_physical_device_init(
       goto fail_isa;
    }
 
-   device->vk.supported_sync_types = supported_sync_types_static;
+   device->vk.supported_sync_types = init_info->supported_sync_types_static;
 
-   terakan_physical_device_init_memory_properties(device->chip_info.has_dedicated_vram,
-                                                  gtt_allocation_granularity, gtt_size, vram_size,
-                                                  vram_visible, &device->memory_properties);
+   terakan_physical_device_init_memory_properties(
+      device->chip_info.has_dedicated_vram, init_info->gtt_allocation_granularity,
+      init_info->gtt_size, init_info->vram_size, init_info->vram_visible,
+      &device->memory_properties);
 
    /* Initialize WSI after everything else as it's a layer on top of the Vulkan physical device. */
    result = terakan_wsi_init(device);

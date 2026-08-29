@@ -194,21 +194,40 @@ void terakan_physical_device_finish(struct terakan_physical_device * device);
 
 void terakan_physical_device_destroy(struct vk_physical_device * device);
 
-/* vram_visible is included in vram_size.
- * clock_crystal_frequency_hz can be 0 if not available, in this case timestamp queries will be
- * disabled.
- */
-VkResult terakan_physical_device_init(
-   struct terakan_physical_device * device, struct terakan_instance * instance,
-   struct terakan_physical_device_platform_fn const * platform_fn_static,
-   struct terakan_physical_device_pci_device_id pci_device_id,
-   VkDeviceSize gtt_allocation_granularity, VkDeviceSize gtt_size, VkDeviceSize vram_size,
-   VkDeviceSize vram_visible, VkDeviceSize max_memory_allocation_size,
-   VkDeviceSize min_memory_map_alignment,
-   struct terakan_physical_device_tiling_info const * tiling_info,
-   struct terakan_physical_device_submission_info_gfx const * submission_info_gfx,
-   uint32_t clock_crystal_frequency_hz,
-   struct vk_sync_type const * const * supported_sync_types_static);
+struct terakan_physical_device_init_info {
+   /* `*_static` pointers must point to objects whose lifetime is not shorter than that of the
+    * physical device.
+    */
+
+   struct terakan_instance * instance;
+
+   struct terakan_physical_device_platform_fn const * platform_fn_static;
+
+   struct terakan_physical_device_pci_device_id pci_device_id;
+
+   uint32_t gtt_allocation_granularity;
+
+   uint64_t gtt_size;
+   uint64_t vram_size;
+   /* Included in `vram_size`. */
+   uint64_t vram_visible;
+
+   uint64_t max_memory_allocation_size;
+
+   uint32_t min_memory_map_alignment;
+
+   struct terakan_physical_device_tiling_info tiling_info;
+
+   /* Can be 0 if not available, in which case timestamp queries will be disabled. */
+   uint32_t clock_crystal_frequency_hz;
+
+   struct terakan_physical_device_submission_info_gfx submission_info_gfx;
+
+   struct vk_sync_type const * const * supported_sync_types_static;
+};
+
+VkResult terakan_physical_device_init(struct terakan_physical_device * device,
+                                      struct terakan_physical_device_init_info const * init_info);
 
 #ifdef __cplusplus
 }
