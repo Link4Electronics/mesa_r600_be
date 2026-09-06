@@ -25,8 +25,8 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
+#include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 
 #include "util/macros.h"
@@ -355,10 +355,10 @@ struct terakan_meta_shader const terakan_meta_clear_color_ps = {
 };
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const imageHandle,
-                           UNUSED VkImageLayout const imageLayout,
-                           VkClearColorValue const * const pColor, uint32_t const rangeCount,
-                           VkImageSubresourceRange const * const pRanges)
+terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const imageHandle,
+                              UNUSED VkImageLayout const imageLayout,
+                              VkClearColorValue const * const pColor, uint32_t const rangeCount,
+                              VkImageSubresourceRange const * const pRanges)
 {
    struct terakan_image const * const image = terakan_image_from_handle(imageHandle);
 
@@ -502,9 +502,9 @@ terakan_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const im
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t const attachmentCount,
-                            VkClearAttachment const * const pAttachments, uint32_t const rectCount,
-                            VkClearRect const * const pRects)
+terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t const attachmentCount,
+                               VkClearAttachment const * const pAttachments,
+                               uint32_t const rectCount, VkClearRect const * const pRects)
 {
    /* TODO(Triang3l): HTile, CMask. If falling back to a rectangle, maybe export to all render
     * targets at once instead of performing one draw per color attachment.

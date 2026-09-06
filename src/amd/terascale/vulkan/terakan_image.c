@@ -33,9 +33,9 @@
 
 #include "terakan_device.h"
 #include "terakan_device_memory.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "util/bitscan.h"
@@ -869,9 +869,9 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
-                                         VkDeviceImageMemoryRequirements const * const pInfo,
-                                         VkMemoryRequirements2 * const pMemoryRequirements)
+terakan_vk_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
+                                            VkDeviceImageMemoryRequirements const * const pInfo,
+                                            VkMemoryRequirements2 * const pMemoryRequirements)
 {
    struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
    struct terakan_physical_device const * const physical_device =
@@ -916,9 +916,9 @@ terakan_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
 
 /* Skipping the translation into the surface structure as it has already been done. */
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetImageMemoryRequirements2(VkDevice const deviceHandle,
-                                    VkImageMemoryRequirementsInfo2 const * const pInfo,
-                                    VkMemoryRequirements2 * const pMemoryRequirements)
+terakan_vk_GetImageMemoryRequirements2(VkDevice const deviceHandle,
+                                       VkImageMemoryRequirementsInfo2 const * const pInfo,
+                                       VkMemoryRequirements2 * const pMemoryRequirements)
 {
    struct terakan_image const * const image = terakan_image_from_handle(pInfo->image);
 
@@ -961,9 +961,9 @@ terakan_GetImageMemoryRequirements2(VkDevice const deviceHandle,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetImageSubresourceLayout(UNUSED VkDevice const device, VkImage const imageHandle,
-                                  VkImageSubresource const * pSubresource,
-                                  VkSubresourceLayout * const pLayout)
+terakan_vk_GetImageSubresourceLayout(UNUSED VkDevice const device, VkImage const imageHandle,
+                                     VkImageSubresource const * pSubresource,
+                                     VkSubresourceLayout * const pLayout)
 {
    struct terakan_image const * const image = terakan_image_from_handle(imageHandle);
 
@@ -993,8 +993,8 @@ terakan_GetImageSubresourceLayout(UNUSED VkDevice const device, VkImage const im
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_BindImageMemory2(UNUSED VkDevice const device, uint32_t const bindInfoCount,
-                         VkBindImageMemoryInfo const * const pBindInfos)
+terakan_vk_BindImageMemory2(UNUSED VkDevice const device, uint32_t const bindInfoCount,
+                            VkBindImageMemoryInfo const * const pBindInfos)
 {
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindImageMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
@@ -1716,8 +1716,8 @@ terakan_image_create_depth_stencil_descriptor(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyImage(VkDevice const deviceHandle, VkImage const imageHandle,
-                     VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyImage(VkDevice const deviceHandle, VkImage const imageHandle,
+                        VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_image * const image = terakan_image_from_handle(imageHandle);
 
@@ -1733,8 +1733,8 @@ terakan_DestroyImage(VkDevice const deviceHandle, VkImage const imageHandle,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * const pCreateInfo,
-                    VkAllocationCallbacks const * const pAllocator, VkImage * const pImage)
+terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * const pCreateInfo,
+                       VkAllocationCallbacks const * const pAllocator, VkImage * const pImage)
 {
    VkResult result;
 
@@ -1770,8 +1770,8 @@ fail_image:
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyImageView(VkDevice const deviceHandle, VkImageView const imageView,
-                         VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyImageView(VkDevice const deviceHandle, VkImageView const imageView,
+                            VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_image_view * const image_view = terakan_image_view_from_handle(imageView);
 
@@ -1787,9 +1787,10 @@ terakan_DestroyImageView(VkDevice const deviceHandle, VkImageView const imageVie
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateImageView(VkDevice const deviceHandle,
-                        VkImageViewCreateInfo const * const pCreateInfo,
-                        VkAllocationCallbacks const * const pAllocator, VkImageView * const pView)
+terakan_vk_CreateImageView(VkDevice const deviceHandle,
+                           VkImageViewCreateInfo const * const pCreateInfo,
+                           VkAllocationCallbacks const * const pAllocator,
+                           VkImageView * const pView)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 

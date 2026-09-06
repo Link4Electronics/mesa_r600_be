@@ -25,9 +25,9 @@
 
 #include "terakan_barrier.h"
 #include "terakan_buffer.h"
-#include "terakan_entrypoints.h"
 #include "terakan_physical_device.h"
 #include "terakan_query.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -1963,10 +1963,10 @@ terakan_meta_query_copy_init_offsets(VkQueryPipelineStatisticFlags const flags,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
-                                uint32_t firstQuery, uint32_t queryCount, VkBuffer const dstBuffer,
-                                VkDeviceSize const dstOffset, VkDeviceSize const stride,
-                                VkQueryResultFlags const flags)
+terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
+                                   uint32_t firstQuery, uint32_t queryCount,
+                                   VkBuffer const dstBuffer, VkDeviceSize const dstOffset,
+                                   VkDeviceSize const stride, VkQueryResultFlags const flags)
 {
    struct terakan_command_buffer * const command_buffer =
       terakan_command_buffer_from_handle(commandBuffer);

@@ -26,10 +26,10 @@
 #include "terakan_buffer.h"
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_image.h"
 #include "terakan_sampler.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "util/compiler.h"
@@ -44,10 +44,10 @@
 #include <string.h>
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const descriptorWriteCount,
-                             VkWriteDescriptorSet const * const pDescriptorWrites,
-                             uint32_t const descriptorCopyCount,
-                             VkCopyDescriptorSet const * const pDescriptorCopies)
+terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const descriptorWriteCount,
+                                VkWriteDescriptorSet const * const pDescriptorWrites,
+                                uint32_t const descriptorCopyCount,
+                                VkCopyDescriptorSet const * const pDescriptorCopies)
 {
    for (uint32_t descriptor_write_index = 0; descriptor_write_index < descriptorWriteCount;
         ++descriptor_write_index) {
@@ -297,9 +297,9 @@ terakan_descriptor_set_free_descriptors_and_finish(struct terakan_descriptor_poo
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_FreeDescriptorSets(UNUSED VkDevice const device, VkDescriptorPool const descriptorPool,
-                           uint32_t const descriptorSetCount,
-                           VkDescriptorSet const * const pDescriptorSets)
+terakan_vk_FreeDescriptorSets(UNUSED VkDevice const device, VkDescriptorPool const descriptorPool,
+                              uint32_t const descriptorSetCount,
+                              VkDescriptorSet const * const pDescriptorSets)
 {
    struct terakan_descriptor_pool * const pool =
       terakan_descriptor_pool_from_handle(descriptorPool);
@@ -340,9 +340,9 @@ terakan_FreeDescriptorSets(UNUSED VkDevice const device, VkDescriptorPool const 
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_AllocateDescriptorSets(VkDevice const deviceHandle,
-                               VkDescriptorSetAllocateInfo const * const pAllocateInfo,
-                               VkDescriptorSet * const pDescriptorSets)
+terakan_vk_AllocateDescriptorSets(VkDevice const deviceHandle,
+                                  VkDescriptorSetAllocateInfo const * const pAllocateInfo,
+                                  VkDescriptorSet * const pDescriptorSets)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
    struct terakan_descriptor_pool * const pool =
@@ -372,8 +372,8 @@ terakan_AllocateDescriptorSets(VkDevice const deviceHandle,
                                            TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT);
          }
          if (set_descriptors == NULL) {
-            terakan_FreeDescriptorSets(deviceHandle, pAllocateInfo->descriptorPool, array_set_index,
-                                       pDescriptorSets);
+            terakan_vk_FreeDescriptorSets(deviceHandle, pAllocateInfo->descriptorPool,
+                                          array_set_index, pDescriptorSets);
             for (uint32_t null_set_index = 0; null_set_index < set_count; ++null_set_index) {
                pDescriptorSets[null_set_index] = VK_NULL_HANDLE;
             }
@@ -444,9 +444,9 @@ terakan_AllocateDescriptorSets(VkDevice const deviceHandle,
    return VK_SUCCESS;
 }
 
-VKAPI_ATTR VkResult VKAPI_ATTR
-terakan_ResetDescriptorPool(UNUSED VkDevice const device, VkDescriptorPool const descriptorPool,
-                            UNUSED VkDescriptorPoolResetFlags const flags)
+VKAPI_ATTR VkResult VKAPI_CALL
+terakan_vk_ResetDescriptorPool(UNUSED VkDevice const device, VkDescriptorPool const descriptorPool,
+                               UNUSED VkDescriptorPoolResetFlags const flags)
 {
    struct terakan_descriptor_pool * const pool =
       terakan_descriptor_pool_from_handle(descriptorPool);
@@ -466,8 +466,8 @@ terakan_ResetDescriptorPool(UNUSED VkDevice const device, VkDescriptorPool const
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyDescriptorPool(VkDevice const deviceHandle, VkDescriptorPool const descriptorPool,
-                              VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyDescriptorPool(VkDevice const deviceHandle, VkDescriptorPool const descriptorPool,
+                                 VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_descriptor_pool * const pool =
       terakan_descriptor_pool_from_handle(descriptorPool);
@@ -493,10 +493,10 @@ terakan_DestroyDescriptorPool(VkDevice const deviceHandle, VkDescriptorPool cons
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateDescriptorPool(VkDevice const deviceHandle,
-                             VkDescriptorPoolCreateInfo const * const pCreateInfo,
-                             VkAllocationCallbacks const * const pAllocator,
-                             VkDescriptorPool * const pDescriptorPool)
+terakan_vk_CreateDescriptorPool(VkDevice const deviceHandle,
+                                VkDescriptorPoolCreateInfo const * const pCreateInfo,
+                                VkAllocationCallbacks const * const pAllocator,
+                                VkDescriptorPool * const pDescriptorPool)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 

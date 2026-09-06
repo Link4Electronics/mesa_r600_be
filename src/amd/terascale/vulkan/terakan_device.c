@@ -26,10 +26,10 @@
 #include "terakan_command_buffer.h"
 #include "terakan_cp_dma.h"
 #include "terakan_descriptor.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_physical_device.h"
 #include "terakan_queue.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/eg_sq.h"
 #include "gallium/drivers/r600/r600_opcodes.h"
@@ -79,7 +79,8 @@ terakan_device_finish(struct terakan_device * const device)
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyDevice(VkDevice const deviceHandle, VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyDevice(VkDevice const deviceHandle,
+                         VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
@@ -113,7 +114,8 @@ terakan_device_init(struct terakan_device * const device,
     */
    vk_device_dispatch_table_from_entrypoints(
       &dispatch_table, &vk_cmd_enqueue_unless_primary_device_entrypoints, true);
-   vk_device_dispatch_table_from_entrypoints(&dispatch_table, &terakan_device_entrypoints, false);
+   vk_device_dispatch_table_from_entrypoints(&dispatch_table, &terakan_vk_device_entrypoints,
+                                             false);
    vk_device_dispatch_table_from_entrypoints(&dispatch_table, &wsi_device_entrypoints, false);
 
    result =
@@ -124,7 +126,7 @@ terakan_device_init(struct terakan_device * const device,
 
    /* Populate the command dispatch table for secondary command buffer emulation. */
    vk_device_dispatch_table_from_entrypoints(&device->command_dispatch_table,
-                                             &terakan_device_entrypoints, true);
+                                             &terakan_vk_device_entrypoints, true);
    vk_device_dispatch_table_from_entrypoints(&device->command_dispatch_table,
                                              &vk_common_device_entrypoints, false);
    device->vk.command_dispatch_table = &device->command_dispatch_table;
@@ -358,9 +360,9 @@ fail_reference_placeholder_bos:
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateDevice(VkPhysicalDevice const physicalDevice,
-                     VkDeviceCreateInfo const * const pCreateInfo,
-                     VkAllocationCallbacks const * const pAllocator, VkDevice * const pDevice)
+terakan_vk_CreateDevice(VkPhysicalDevice const physicalDevice,
+                        VkDeviceCreateInfo const * const pCreateInfo,
+                        VkAllocationCallbacks const * const pAllocator, VkDevice * const pDevice)
 {
    struct terakan_physical_device * const physical_device =
       terakan_physical_device_from_handle(physicalDevice);

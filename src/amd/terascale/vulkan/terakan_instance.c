@@ -24,8 +24,8 @@
 #include "terakan_instance.h"
 
 #include "terakan_descriptor.h"
-#include "terakan_entrypoints.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/log.h"
 #include "util/macros.h"
@@ -89,9 +89,9 @@ static struct vk_instance_extension_table const terakan_instance_extensions_supp
 };
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_EnumerateInstanceExtensionProperties(char const * const pLayerName,
-                                             uint32_t * const pPropertyCount,
-                                             VkExtensionProperties * const pProperties)
+terakan_vk_EnumerateInstanceExtensionProperties(char const * const pLayerName,
+                                                uint32_t * const pPropertyCount,
+                                                VkExtensionProperties * const pProperties)
 {
    if (pLayerName != NULL) {
       return vk_error(NULL, VK_ERROR_LAYER_NOT_PRESENT);
@@ -102,8 +102,8 @@ terakan_EnumerateInstanceExtensionProperties(char const * const pLayerName,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_EnumerateInstanceLayerProperties(uint32_t * const pPropertyCount,
-                                         VkLayerProperties * const pProperties)
+terakan_vk_EnumerateInstanceLayerProperties(uint32_t * const pPropertyCount,
+                                            VkLayerProperties * const pProperties)
 {
    if (pProperties == NULL) {
       *pPropertyCount = 0;
@@ -115,17 +115,17 @@ terakan_EnumerateInstanceLayerProperties(uint32_t * const pPropertyCount,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_EnumerateInstanceVersion(uint32_t * const pApiVersion)
+terakan_vk_EnumerateInstanceVersion(uint32_t * const pApiVersion)
 {
    *pApiVersion = TERAKAN_API_VERSION;
    return VK_SUCCESS;
 }
 
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-terakan_GetInstanceProcAddr(VkInstance const instanceHandle, char const * const pName)
+terakan_vk_GetInstanceProcAddr(VkInstance const instanceHandle, char const * const pName)
 {
    struct vk_instance const * const instance = vk_instance_from_handle(instanceHandle);
-   return vk_instance_get_proc_addr(instance, &terakan_instance_entrypoints, pName);
+   return vk_instance_get_proc_addr(instance, &terakan_vk_instance_entrypoints, pName);
 }
 
 void
@@ -135,8 +135,8 @@ terakan_instance_finish(struct terakan_instance * const instance)
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyInstance(VkInstance const instanceHandle,
-                        UNUSED VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyInstance(VkInstance const instanceHandle,
+                           UNUSED VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_instance * const instance = terakan_instance_from_handle(instanceHandle);
 
@@ -156,7 +156,7 @@ terakan_instance_init(struct terakan_instance * instance,
    VkResult result;
 
    struct vk_instance_dispatch_table dispatch_table;
-   vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &terakan_instance_entrypoints,
+   vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &terakan_vk_instance_entrypoints,
                                                true);
    vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &wsi_instance_entrypoints, false);
 
@@ -233,8 +233,8 @@ terakan_instance_init(struct terakan_instance * instance,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateInstance(VkInstanceCreateInfo const * const pCreateInfo,
-                       VkAllocationCallbacks const * pAllocator, VkInstance * const pInstance)
+terakan_vk_CreateInstance(VkInstanceCreateInfo const * const pCreateInfo,
+                          VkAllocationCallbacks const * pAllocator, VkInstance * const pInstance)
 {
    VkResult result;
 
@@ -271,5 +271,5 @@ PUBLIC
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
 vk_icdGetInstanceProcAddr(VkInstance const instanceHandle, char const * const pName)
 {
-   return terakan_GetInstanceProcAddr(instanceHandle, pName);
+   return terakan_vk_GetInstanceProcAddr(instanceHandle, pName);
 }

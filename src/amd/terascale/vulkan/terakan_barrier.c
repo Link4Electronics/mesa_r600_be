@@ -25,8 +25,8 @@
 #include "terakan_command_buffer.h"
 #include "terakan_cp_dma.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "gallium/drivers/r600/r600d_common.h"
@@ -434,8 +434,8 @@ terakan_barrier_emit_actions_unconditionally(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdPipelineBarrier2(VkCommandBuffer const commandBuffer,
-                            VkDependencyInfo const * const pDependencyInfo)
+terakan_vk_CmdPipelineBarrier2(VkCommandBuffer const commandBuffer,
+                               VkDependencyInfo const * const pDependencyInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;

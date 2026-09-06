@@ -23,8 +23,8 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
+#include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 
 #include "util/bitscan.h"
@@ -36,8 +36,8 @@
 #include <stdint.h>
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdBeginRendering(VkCommandBuffer const commandBuffer,
-                          VkRenderingInfo const * const pRenderingInfo)
+terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
+                             VkRenderingInfo const * const pRenderingInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
@@ -214,13 +214,13 @@ terakan_CmdBeginRendering(VkCommandBuffer const commandBuffer,
          .baseArrayLayer = 0,
          .layerCount = layer_count_minus_1 + 1,
       };
-      terakan_CmdClearAttachments(commandBuffer, clear_attachment_count, clear_attachments, 1,
-                                  &clear_rect);
+      terakan_vk_CmdClearAttachments(commandBuffer, clear_attachment_count, clear_attachments, 1,
+                                     &clear_rect);
    }
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdEndRendering(UNUSED VkCommandBuffer const commandBuffer)
+terakan_vk_CmdEndRendering(UNUSED VkCommandBuffer const commandBuffer)
 {
    /* TODO(Triang3l): Resolve the attachments. */
 

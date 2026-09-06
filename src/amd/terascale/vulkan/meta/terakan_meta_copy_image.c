@@ -23,8 +23,8 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -194,8 +194,8 @@ struct terakan_meta_shader const terakan_meta_copy_image_ps = {
 };
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdCopyImage2(VkCommandBuffer const commandBuffer,
-                      VkCopyImageInfo2 const * const pCopyImageInfo)
+terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
+                         VkCopyImageInfo2 const * const pCopyImageInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;

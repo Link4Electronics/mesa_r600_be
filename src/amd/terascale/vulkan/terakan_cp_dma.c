@@ -26,7 +26,7 @@
 #include "terakan_barrier.h"
 #include "terakan_buffer.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_wddm.h"
 #include "gallium/drivers/r600/evergreend.h"
@@ -186,8 +186,8 @@ terakan_cp_dma_copy(struct terakan_gfx_command_writer * const command_writer,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdCopyBuffer2(VkCommandBuffer const commandBuffer,
-                       VkCopyBufferInfo2 const * const pCopyBufferInfo)
+terakan_vk_CmdCopyBuffer2(VkCommandBuffer const commandBuffer,
+                          VkCopyBufferInfo2 const * const pCopyBufferInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
@@ -210,9 +210,9 @@ terakan_CmdCopyBuffer2(VkCommandBuffer const commandBuffer,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdUpdateBuffer(VkCommandBuffer const commandBuffer, VkBuffer const dstBuffer,
-                        VkDeviceSize const dstOffset, VkDeviceSize const dataSize,
-                        void const * const pData)
+terakan_vk_CmdUpdateBuffer(VkCommandBuffer const commandBuffer, VkBuffer const dstBuffer,
+                           VkDeviceSize const dstOffset, VkDeviceSize const dataSize,
+                           void const * const pData)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
@@ -275,8 +275,8 @@ terakan_cp_dma_fill(struct terakan_gfx_command_writer * const command_writer,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdFillBuffer(VkCommandBuffer const commandBuffer, VkBuffer const dstBuffer,
-                      VkDeviceSize const dstOffset, VkDeviceSize const size, uint32_t const data)
+terakan_vk_CmdFillBuffer(VkCommandBuffer const commandBuffer, VkBuffer const dstBuffer,
+                         VkDeviceSize const dstOffset, VkDeviceSize const size, uint32_t const data)
 {
    struct terakan_buffer const * const dst_buffer = terakan_buffer_from_handle(dstBuffer);
    VkDeviceSize const dst_offset_aligned = dstOffset & ~(VkDeviceSize)(sizeof(uint32_t) - 1);

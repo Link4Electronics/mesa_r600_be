@@ -25,10 +25,10 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
 #include "terakan_pipeline_layout.h"
 #include "terakan_shader.h"
+#include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 
 #include "amd/terascale/common/terascale_format.h"
@@ -1277,11 +1277,11 @@ fail_pipeline:
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateGraphicsPipelines(VkDevice const deviceHandle, VkPipelineCache const pipelineCache,
-                                uint32_t const createInfoCount,
-                                VkGraphicsPipelineCreateInfo const * const pCreateInfos,
-                                VkAllocationCallbacks const * const pAllocator,
-                                VkPipeline * const pPipelines)
+terakan_vk_CreateGraphicsPipelines(VkDevice const deviceHandle, VkPipelineCache const pipelineCache,
+                                   uint32_t const createInfoCount,
+                                   VkGraphicsPipelineCreateInfo const * const pCreateInfos,
+                                   VkAllocationCallbacks const * const pAllocator,
+                                   VkPipeline * const pPipelines)
 {
    VkResult result = VK_SUCCESS;
 

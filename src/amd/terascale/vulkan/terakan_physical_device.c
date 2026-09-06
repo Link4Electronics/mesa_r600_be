@@ -28,13 +28,13 @@
 #include "terakan_physical_device.h"
 
 #include "terakan_descriptor.h"
-#include "terakan_entrypoints.h"
 #include "terakan_hw_config_draw.h"
 #include "terakan_image.h"
 #include "terakan_instance.h"
 #include "terakan_limits.h"
 #include "terakan_push_constants.h"
 #include "terakan_vertex_input.h"
+#include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 #include "terakan_wsi.h"
 
@@ -948,7 +948,7 @@ terakan_physical_device_init_memory_properties(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetPhysicalDeviceMemoryProperties2(
+terakan_vk_GetPhysicalDeviceMemoryProperties2(
    VkPhysicalDevice const physicalDevice,
    VkPhysicalDeviceMemoryProperties2 * const pMemoryProperties)
 {
@@ -994,7 +994,7 @@ terakan_physical_device_get_queue_family_properties(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetPhysicalDeviceQueueFamilyProperties2(
+terakan_vk_GetPhysicalDeviceQueueFamilyProperties2(
    VkPhysicalDevice const physicalDevice, uint32_t * const pQueueFamilyPropertyCount,
    VkQueueFamilyProperties2 * const pQueueFamilyProperties)
 {
@@ -1015,7 +1015,7 @@ terakan_GetPhysicalDeviceQueueFamilyProperties2(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetPhysicalDeviceMultisamplePropertiesEXT(
+terakan_vk_GetPhysicalDeviceMultisamplePropertiesEXT(
    VkPhysicalDevice const physicalDevice, VkSampleCountFlagBits const samples,
    VkMultisamplePropertiesEXT * const pMultisampleProperties)
 {
@@ -1227,8 +1227,8 @@ terakan_physical_device_init(struct terakan_physical_device * const device,
    device->platform_fn->get_platform_extensions(device, &extensions, &features, &properties);
 
    struct vk_physical_device_dispatch_table dispatch_table;
-   vk_physical_device_dispatch_table_from_entrypoints(&dispatch_table,
-                                                      &terakan_physical_device_entrypoints, true);
+   vk_physical_device_dispatch_table_from_entrypoints(
+      &dispatch_table, &terakan_vk_physical_device_entrypoints, true);
    vk_physical_device_dispatch_table_from_entrypoints(&dispatch_table,
                                                       &wsi_physical_device_entrypoints, false);
 

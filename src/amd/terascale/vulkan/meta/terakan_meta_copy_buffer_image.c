@@ -24,9 +24,9 @@
 #include "terakan_meta_impl.h"
 
 #include "terakan_buffer.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/macros.h"
 #include "vk_format.h"
@@ -593,8 +593,8 @@ terakan_meta_copy_buffer_image_translate_region_image(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
-                              VkCopyBufferToImageInfo2 const * const pCopyBufferToImageInfo)
+terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
+                                 VkCopyBufferToImageInfo2 const * const pCopyBufferToImageInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
@@ -733,8 +733,8 @@ terakan_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
-                              VkCopyImageToBufferInfo2 const * const pCopyImageToBufferInfo)
+terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
+                                 VkCopyImageToBufferInfo2 const * const pCopyImageToBufferInfo)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;

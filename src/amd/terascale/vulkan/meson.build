@@ -18,10 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-terakan_entrypoints = custom_target(
-  'terakan_entrypoints',
+terakan_vk_entrypoints = custom_target(
+  'terakan_vk_entrypoints',
   input : [vk_entrypoints_gen, vk_api_xml],
-  output : ['terakan_entrypoints.h', 'terakan_entrypoints.c'],
+  output : ['terakan_vk_entrypoints.h', 'terakan_vk_entrypoints.c'],
   command : [
     prog_python, '@INPUT0@',
     '--xml', '@INPUT1@',
@@ -29,7 +29,7 @@ terakan_entrypoints = custom_target(
     '--weak',
     '--out-h', '@OUTPUT0@',
     '--out-c', '@OUTPUT1@',
-    '--prefix', 'terakan',
+    '--prefix', 'terakan_vk',
     '--beta', with_vulkan_beta.to_string(),
   ],
   depend_files : vk_entrypoints_gen_depend_files,
@@ -173,7 +173,7 @@ libvulkan_terascale = shared_library(
   'vulkan_terascale',
   [
     libterakan_files,
-    terakan_entrypoints,
+    terakan_vk_entrypoints,
     sha1_h,
   ],
   vs_module_defs : vulkan_api_def,

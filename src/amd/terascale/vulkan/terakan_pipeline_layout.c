@@ -28,7 +28,7 @@
 #include "terakan_descriptor_set.h"
 #include "terakan_descriptor_set_layout.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_format.h"
 #include "compiler/shader_enums.h"
@@ -53,13 +53,13 @@
  */
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
-                              VkPipelineBindPoint const pipelineBindPoint,
-                              VkPipelineLayout const layoutHandle, uint32_t const firstSet,
-                              uint32_t const descriptorSetCount,
-                              VkDescriptorSet const * const pDescriptorSets,
-                              UNUSED uint32_t const dynamicOffsetCount,
-                              uint32_t const * const pDynamicOffsets)
+terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
+                                 VkPipelineBindPoint const pipelineBindPoint,
+                                 VkPipelineLayout const layoutHandle, uint32_t const firstSet,
+                                 uint32_t const descriptorSetCount,
+                                 VkDescriptorSet const * const pDescriptorSets,
+                                 UNUSED uint32_t const dynamicOffsetCount,
+                                 uint32_t const * const pDynamicOffsets)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
@@ -526,10 +526,10 @@ too_many_descriptors:
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreatePipelineLayout(VkDevice const deviceHandle,
-                             VkPipelineLayoutCreateInfo const * const pCreateInfo,
-                             UNUSED VkAllocationCallbacks const * const pAllocator,
-                             VkPipelineLayout * const pPipelineLayout)
+terakan_vk_CreatePipelineLayout(VkDevice const deviceHandle,
+                                VkPipelineLayoutCreateInfo const * const pCreateInfo,
+                                UNUSED VkAllocationCallbacks const * const pAllocator,
+                                VkPipelineLayout * const pPipelineLayout)
 {
    struct terakan_pipeline_layout * layout;
    VkResult const result = terakan_pipeline_layout_create(

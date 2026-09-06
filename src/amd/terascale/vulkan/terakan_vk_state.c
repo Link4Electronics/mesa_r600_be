@@ -26,9 +26,9 @@
 #include "terakan_app_config_draw.h"
 #include "terakan_buffer.h"
 #include "terakan_command_buffer.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
 #include "terakan_vertex_input.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_format.h"
 #include "gallium/drivers/r600/evergreend.h"
@@ -993,11 +993,11 @@ terakan_vk_state_dynamic_apply(struct terakan_gfx_command_writer * const command
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdBindVertexBuffers2(VkCommandBuffer const commandBuffer, uint32_t const firstBinding,
-                              uint32_t const bindingCount, VkBuffer const * const pBuffers,
-                              VkDeviceSize const * const pOffsets,
-                              VkDeviceSize const * const pSizes,
-                              VkDeviceSize const * const pStrides)
+terakan_vk_CmdBindVertexBuffers2(VkCommandBuffer const commandBuffer, uint32_t const firstBinding,
+                                 uint32_t const bindingCount, VkBuffer const * const pBuffers,
+                                 VkDeviceSize const * const pOffsets,
+                                 VkDeviceSize const * const pSizes,
+                                 VkDeviceSize const * const pStrides)
 {
    assert(firstBinding <= TERAKAN_VK_STATE_MAX_VERTEX_BINDINGS);
    assert(bindingCount <= TERAKAN_VK_STATE_MAX_VERTEX_BINDINGS - firstBinding);

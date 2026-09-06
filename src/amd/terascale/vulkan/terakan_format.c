@@ -23,9 +23,9 @@
 
 #include "terakan_format.h"
 
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -109,9 +109,9 @@ terakan_format_info_get(VkFormat const format, struct terakan_format_info * cons
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const physicalDevice,
-                                           VkFormat const format,
-                                           VkFormatProperties2 * const pFormatProperties)
+terakan_vk_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const physicalDevice,
+                                              VkFormat const format,
+                                              VkFormatProperties2 * const pFormatProperties)
 {
    VkFormatFeatureFlags2 image_linear_tiling_features = 0;
    VkFormatFeatureFlags2 image_optimal_tiling_features = 0;
@@ -321,7 +321,7 @@ terakan_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const physica
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_GetPhysicalDeviceImageFormatProperties2(
+terakan_vk_GetPhysicalDeviceImageFormatProperties2(
    VkPhysicalDevice const physicalDevice,
    VkPhysicalDeviceImageFormatInfo2 const * const pImageFormatInfo,
    VkImageFormatProperties2 * const pImageFormatProperties)
@@ -341,8 +341,8 @@ terakan_GetPhysicalDeviceImageFormatProperties2(
    VkFormatProperties2 format_properties_2;
    format_properties_2.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2;
    format_properties_2.pNext = &format_properties_3;
-   terakan_GetPhysicalDeviceFormatProperties2(physicalDevice, pImageFormatInfo->format,
-                                              &format_properties_2);
+   terakan_vk_GetPhysicalDeviceFormatProperties2(physicalDevice, pImageFormatInfo->format,
+                                                 &format_properties_2);
 
    VkFormatFeatureFlags2 features;
    switch (pImageFormatInfo->tiling) {

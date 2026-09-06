@@ -30,10 +30,10 @@
 #include "terakan_cp_dma.h"
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_instance.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_wddm.h"
 #include "c11/threads.h"
@@ -140,8 +140,8 @@ terakan_query_pool_vk_result_size_counters(struct terakan_query_pool const * con
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdResetQueryPool(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
-                          uint32_t firstQuery, uint32_t queryCount)
+terakan_vk_CmdResetQueryPool(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
+                             uint32_t firstQuery, uint32_t queryCount)
 {
    struct terakan_query_pool const * const query_pool = terakan_query_pool_from_handle(queryPool);
    terakan_query_pool_clamp_range(query_pool, &firstQuery, &queryCount);
@@ -177,16 +177,16 @@ terakan_query_pool_reset(struct terakan_query_pool const * const query_pool, uin
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_ResetQueryPool(UNUSED VkDevice const device, VkQueryPool const queryPool,
-                       uint32_t const firstQuery, uint32_t const queryCount)
+terakan_vk_ResetQueryPool(UNUSED VkDevice const device, VkQueryPool const queryPool,
+                          uint32_t const firstQuery, uint32_t const queryCount)
 {
    terakan_query_pool_reset(terakan_query_pool_from_handle(queryPool), firstQuery, queryCount);
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdBeginQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
-                                uint32_t const query, VkQueryControlFlags const flags,
-                                uint32_t const index)
+terakan_vk_CmdBeginQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
+                                   uint32_t const query, VkQueryControlFlags const flags,
+                                   uint32_t const index)
 {
    struct terakan_query_pool const * const query_pool = terakan_query_pool_from_handle(queryPool);
 
@@ -338,8 +338,8 @@ terakan_CmdBeginQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdEndQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
-                              uint32_t const query, uint32_t const index)
+terakan_vk_CmdEndQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool const queryPool,
+                                 uint32_t const query, uint32_t const index)
 {
    struct terakan_query_pool const * const query_pool = terakan_query_pool_from_handle(queryPool);
 
@@ -612,9 +612,9 @@ terakan_CmdEndQueryIndexedEXT(VkCommandBuffer const commandBuffer, VkQueryPool c
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdWriteTimestamp2(VkCommandBuffer const commandBuffer,
-                           UNUSED VkPipelineStageFlags2 const stage, VkQueryPool const queryPool,
-                           uint32_t const query)
+terakan_vk_CmdWriteTimestamp2(VkCommandBuffer const commandBuffer,
+                              UNUSED VkPipelineStageFlags2 const stage, VkQueryPool const queryPool,
+                              uint32_t const query)
 {
    struct terakan_query_pool const * const query_pool = terakan_query_pool_from_handle(queryPool);
 
@@ -684,10 +684,10 @@ terakan_query_swap_counter(uint64_t const counter)
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_GetQueryPoolResults(VkDevice const deviceHandle, VkQueryPool const queryPool,
-                            uint32_t firstQuery, uint32_t queryCount, UNUSED size_t const dataSize,
-                            void * const pData, VkDeviceSize const stride,
-                            VkQueryResultFlags const flags)
+terakan_vk_GetQueryPoolResults(VkDevice const deviceHandle, VkQueryPool const queryPool,
+                               uint32_t firstQuery, uint32_t queryCount,
+                               UNUSED size_t const dataSize, void * const pData,
+                               VkDeviceSize const stride, VkQueryResultFlags const flags)
 {
    VkResult result = VK_SUCCESS;
 
@@ -821,8 +821,8 @@ terakan_GetQueryPoolResults(VkDevice const deviceHandle, VkQueryPool const query
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyQueryPool(VkDevice const deviceHandle, VkQueryPool const queryPool,
-                         VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyQueryPool(VkDevice const deviceHandle, VkQueryPool const queryPool,
+                            VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_query_pool * const query_pool = terakan_query_pool_from_handle(queryPool);
 
@@ -836,10 +836,10 @@ terakan_DestroyQueryPool(VkDevice const deviceHandle, VkQueryPool const queryPoo
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateQueryPool(VkDevice const deviceHandle,
-                        VkQueryPoolCreateInfo const * const pCreateInfo,
-                        VkAllocationCallbacks const * const pAllocator,
-                        VkQueryPool * const pQueryPool)
+terakan_vk_CreateQueryPool(VkDevice const deviceHandle,
+                           VkQueryPoolCreateInfo const * const pCreateInfo,
+                           VkAllocationCallbacks const * const pAllocator,
+                           VkQueryPool * const pQueryPool)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
    struct terakan_physical_device const * const physical_device =

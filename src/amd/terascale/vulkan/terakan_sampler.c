@@ -24,8 +24,8 @@
 #include "terakan_sampler.h"
 
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "vk_log.h"
@@ -35,8 +35,8 @@
 #include <stdint.h>
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroySampler(VkDevice const deviceHandle, VkSampler const samplerHandle,
-                       VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroySampler(VkDevice const deviceHandle, VkSampler const samplerHandle,
+                          VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_sampler * const sampler = terakan_sampler_from_handle(samplerHandle);
 
@@ -50,8 +50,8 @@ terakan_DestroySampler(VkDevice const deviceHandle, VkSampler const samplerHandl
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateSampler(VkDevice const deviceHandle, VkSamplerCreateInfo const * const pCreateInfo,
-                      VkAllocationCallbacks const * const pAllocator, VkSampler * const pSampler)
+terakan_vk_CreateSampler(VkDevice const deviceHandle, VkSamplerCreateInfo const * const pCreateInfo,
+                         VkAllocationCallbacks const * const pAllocator, VkSampler * const pSampler)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 

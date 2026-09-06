@@ -23,9 +23,9 @@
 
 #include "terakan_bo.h"
 #include "terakan_command_buffer.h"
-#include "terakan_entrypoints.h"
 #include "terakan_pipeline_layout.h"
 #include "terakan_shader.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -219,11 +219,11 @@ fail_pipeline:
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateComputePipelines(VkDevice const deviceHandle, VkPipelineCache const pipelineCache,
-                               uint32_t const createInfoCount,
-                               VkComputePipelineCreateInfo const * const pCreateInfos,
-                               VkAllocationCallbacks const * const pAllocator,
-                               VkPipeline * const pPipelines)
+terakan_vk_CreateComputePipelines(VkDevice const deviceHandle, VkPipelineCache const pipelineCache,
+                                  uint32_t const createInfoCount,
+                                  VkComputePipelineCreateInfo const * const pCreateInfos,
+                                  VkAllocationCallbacks const * const pAllocator,
+                                  VkPipeline * const pPipelines)
 {
    VkResult result = VK_SUCCESS;
 

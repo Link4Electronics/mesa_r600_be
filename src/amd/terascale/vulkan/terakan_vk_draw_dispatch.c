@@ -23,7 +23,7 @@
 
 #include "terakan_buffer.h"
 #include "terakan_command_buffer.h"
-#include "terakan_entrypoints.h"
+#include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 
 #include "gallium/drivers/r600/evergreend.h"
@@ -38,9 +38,9 @@
 #include <stdint.h>
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdBindIndexBuffer2(VkCommandBuffer const commandBuffer, VkBuffer const bufferHandle,
-                            VkDeviceSize const offset, VkDeviceSize const size,
-                            VkIndexType const indexType)
+terakan_vk_CmdBindIndexBuffer2(VkCommandBuffer const commandBuffer, VkBuffer const bufferHandle,
+                               VkDeviceSize const offset, VkDeviceSize const size,
+                               VkIndexType const indexType)
 {
    bool const index_type_32_bit = indexType == VK_INDEX_TYPE_UINT32;
    uint32_t const index_type = index_type_32_bit
@@ -94,9 +94,9 @@ terakan_vk_before_draw(struct terakan_gfx_command_writer * const command_writer)
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdDraw(VkCommandBuffer const commandBuffer, uint32_t const vertexCount,
-                uint32_t const instanceCount, uint32_t const firstVertex,
-                uint32_t const firstInstance)
+terakan_vk_CmdDraw(VkCommandBuffer const commandBuffer, uint32_t const vertexCount,
+                   uint32_t const instanceCount, uint32_t const firstVertex,
+                   uint32_t const firstInstance)
 {
    if (unlikely(instanceCount == 0)) {
       /* `VGT_NUM_INSTANCES` 0 is interpreted as 1. */
@@ -126,9 +126,9 @@ terakan_CmdDraw(VkCommandBuffer const commandBuffer, uint32_t const vertexCount,
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const indexCount,
-                       uint32_t const instanceCount, uint32_t const firstIndex,
-                       int32_t const vertexOffset, uint32_t const firstInstance)
+terakan_vk_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const indexCount,
+                          uint32_t const instanceCount, uint32_t const firstIndex,
+                          int32_t const vertexOffset, uint32_t const firstInstance)
 {
    if (unlikely(instanceCount == 0)) {
       /* `VGT_NUM_INSTANCES` 0 is interpreted as 1. */
@@ -160,8 +160,8 @@ terakan_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const index
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const groupCountX,
-                    uint32_t const groupCountY, uint32_t const groupCountZ)
+terakan_vk_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const groupCountX,
+                       uint32_t const groupCountY, uint32_t const groupCountZ)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;

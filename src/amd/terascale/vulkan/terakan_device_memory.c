@@ -25,10 +25,10 @@
 
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_image.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -43,9 +43,10 @@
 #include <stdint.h>
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_GetMemoryFdPropertiesKHR(VkDevice const deviceHandle,
-                                 VkExternalMemoryHandleTypeFlagBits const handleType, int const fd,
-                                 VkMemoryFdPropertiesKHR * const pMemoryFdProperties)
+terakan_vk_GetMemoryFdPropertiesKHR(VkDevice const deviceHandle,
+                                    VkExternalMemoryHandleTypeFlagBits const handleType,
+                                    int const fd,
+                                    VkMemoryFdPropertiesKHR * const pMemoryFdProperties)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
    struct terakan_physical_device const * const physical_device =
@@ -86,8 +87,8 @@ terakan_GetMemoryFdPropertiesKHR(VkDevice const deviceHandle,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_GetMemoryFdKHR(VkDevice const deviceHandle, VkMemoryGetFdInfoKHR const * const pGetFdInfo,
-                       int * const pFd)
+terakan_vk_GetMemoryFdKHR(VkDevice const deviceHandle,
+                          VkMemoryGetFdInfoKHR const * const pGetFdInfo, int * const pFd)
 {
    struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
 
@@ -104,26 +105,26 @@ terakan_GetMemoryFdKHR(VkDevice const deviceHandle, VkMemoryGetFdInfoKHR const *
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_FlushMappedMemoryRanges(UNUSED VkDevice const device,
-                                UNUSED uint32_t const memoryRangeCount,
-                                UNUSED VkMappedMemoryRange const * const pMemoryRanges)
+terakan_vk_FlushMappedMemoryRanges(UNUSED VkDevice const device,
+                                   UNUSED uint32_t const memoryRangeCount,
+                                   UNUSED VkMappedMemoryRange const * const pMemoryRanges)
 {
    /* All host-visible memory types are host-coherent currently. */
    return VK_SUCCESS;
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_InvalidateMappedMemoryRanges(UNUSED VkDevice const device,
-                                     UNUSED uint32_t const memoryRangeCount,
-                                     UNUSED VkMappedMemoryRange const * const pMemoryRanges)
+terakan_vk_InvalidateMappedMemoryRanges(UNUSED VkDevice const device,
+                                        UNUSED uint32_t const memoryRangeCount,
+                                        UNUSED VkMappedMemoryRange const * const pMemoryRanges)
 {
    /* All host-visible memory types are host-coherent currently. */
    return VK_SUCCESS;
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_UnmapMemory2KHR(UNUSED VkDevice const device,
-                        VkMemoryUnmapInfoKHR const * const pMemoryUnmapInfo)
+terakan_vk_UnmapMemory2KHR(UNUSED VkDevice const device,
+                           VkMemoryUnmapInfoKHR const * const pMemoryUnmapInfo)
 {
    struct terakan_device_memory * const device_memory =
       terakan_device_memory_from_handle(pMemoryUnmapInfo->memory);
@@ -134,8 +135,8 @@ terakan_UnmapMemory2KHR(UNUSED VkDevice const device,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_MapMemory2KHR(VkDevice const deviceHandle, VkMemoryMapInfoKHR const * const pMemoryMapInfo,
-                      void ** const ppData)
+terakan_vk_MapMemory2KHR(VkDevice const deviceHandle,
+                         VkMemoryMapInfoKHR const * const pMemoryMapInfo, void ** const ppData)
 {
    struct terakan_device_memory * const device_memory =
       terakan_device_memory_from_handle(pMemoryMapInfo->memory);
@@ -150,8 +151,8 @@ terakan_MapMemory2KHR(VkDevice const deviceHandle, VkMemoryMapInfoKHR const * co
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_FreeMemory(VkDevice const deviceHandle, VkDeviceMemory const deviceMemory,
-                   VkAllocationCallbacks const * const pAllocator)
+terakan_vk_FreeMemory(VkDevice const deviceHandle, VkDeviceMemory const deviceMemory,
+                      VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_device_memory * const device_memory =
       terakan_device_memory_from_handle(deviceMemory);
@@ -166,9 +167,9 @@ terakan_FreeMemory(VkDevice const deviceHandle, VkDeviceMemory const deviceMemor
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_AllocateMemory(VkDevice const deviceHandle,
-                       VkMemoryAllocateInfo const * const pAllocateInfo,
-                       VkAllocationCallbacks const * pAllocator, VkDeviceMemory * const pMemory)
+terakan_vk_AllocateMemory(VkDevice const deviceHandle,
+                          VkMemoryAllocateInfo const * const pAllocateInfo,
+                          VkAllocationCallbacks const * pAllocator, VkDeviceMemory * const pMemory)
 {
    VkResult result;
 

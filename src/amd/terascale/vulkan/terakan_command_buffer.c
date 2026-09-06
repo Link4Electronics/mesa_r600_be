@@ -27,7 +27,6 @@
 #include "terakan_cp_dma.h"
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_image.h"
 #include "terakan_instance.h"
 #include "terakan_limits.h"
@@ -35,6 +34,7 @@
 #include "terakan_queue.h"
 #include "terakan_shader.h"
 #include "terakan_vertex_input.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_wddm.h"
 #include "gallium/drivers/r600/evergreend.h"
@@ -1057,7 +1057,7 @@ terakan_gfx_command_writer_emit_event_write_eop_discarding_data(
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_EndCommandBuffer(VkCommandBuffer const commandBuffer)
+terakan_vk_EndCommandBuffer(VkCommandBuffer const commandBuffer)
 {
    struct terakan_command_buffer * const command_buffer =
       terakan_command_buffer_from_handle(commandBuffer);
@@ -1086,8 +1086,8 @@ terakan_EndCommandBuffer(VkCommandBuffer const commandBuffer)
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
-                           VkCommandBufferBeginInfo const * const pBeginInfo)
+terakan_vk_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
+                              VkCommandBufferBeginInfo const * const pBeginInfo)
 {
    struct terakan_command_buffer * const command_buffer =
       terakan_command_buffer_from_handle(commandBuffer);
@@ -1285,8 +1285,8 @@ terakan_command_pool_trim_resources(struct terakan_command_pool * const command_
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_TrimCommandPool(VkDevice const deviceHandle, VkCommandPool const commandPool,
-                        UNUSED VkCommandPoolTrimFlags const flags)
+terakan_vk_TrimCommandPool(VkDevice const deviceHandle, VkCommandPool const commandPool,
+                           UNUSED VkCommandPoolTrimFlags const flags)
 {
    struct terakan_command_pool * const command_pool = terakan_command_pool_from_handle(commandPool);
 
@@ -1296,8 +1296,8 @@ terakan_TrimCommandPool(VkDevice const deviceHandle, VkCommandPool const command
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyCommandPool(VkDevice const deviceHandle, VkCommandPool const commandPool,
-                           VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyCommandPool(VkDevice const deviceHandle, VkCommandPool const commandPool,
+                              VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_command_pool * const command_pool = terakan_command_pool_from_handle(commandPool);
 
@@ -1319,10 +1319,10 @@ terakan_DestroyCommandPool(VkDevice const deviceHandle, VkCommandPool const comm
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateCommandPool(VkDevice const deviceHandle,
-                          VkCommandPoolCreateInfo const * const pCreateInfo,
-                          VkAllocationCallbacks const * const pAllocator,
-                          VkCommandPool * const pCommandPool)
+terakan_vk_CreateCommandPool(VkDevice const deviceHandle,
+                             VkCommandPoolCreateInfo const * const pCreateInfo,
+                             VkAllocationCallbacks const * const pAllocator,
+                             VkCommandPool * const pCommandPool)
 {
    VkResult result;
 

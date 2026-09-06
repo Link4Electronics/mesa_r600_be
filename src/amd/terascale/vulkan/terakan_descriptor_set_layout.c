@@ -26,8 +26,8 @@
 #include "terakan_descriptor.h"
 #include "terakan_descriptor_set.h"
 #include "terakan_device.h"
-#include "terakan_entrypoints.h"
 #include "terakan_sampler.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -84,10 +84,10 @@ terakan_descriptor_set_layout_shader_range_try_extend(
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateDescriptorSetLayout(VkDevice const deviceHandle,
-                                  VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
-                                  UNUSED VkAllocationCallbacks const * const pAllocator,
-                                  VkDescriptorSetLayout * const pSetLayout)
+terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
+                                     VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
+                                     UNUSED VkAllocationCallbacks const * const pAllocator,
+                                     VkDescriptorSetLayout * const pSetLayout)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 

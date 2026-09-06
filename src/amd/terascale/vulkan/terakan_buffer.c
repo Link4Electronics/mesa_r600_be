@@ -26,9 +26,9 @@
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
 #include "terakan_device_memory.h"
-#include "terakan_entrypoints.h"
 #include "terakan_format.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_entrypoints.h"
 
 #include "util/macros.h"
 #include "util/u_endian.h"
@@ -80,7 +80,7 @@ terakan_buffer_create_storage_buffer_descriptor(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetPhysicalDeviceExternalBufferProperties(
+terakan_vk_GetPhysicalDeviceExternalBufferProperties(
    UNUSED VkPhysicalDevice const physicalDevice,
    VkPhysicalDeviceExternalBufferInfo const * const pExternalBufferInfo,
    VkExternalBufferProperties * const pExternalBufferProperties)
@@ -124,9 +124,9 @@ terakan_GetPhysicalDeviceExternalBufferProperties(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_GetDeviceBufferMemoryRequirements(VkDevice const deviceHandle,
-                                          VkDeviceBufferMemoryRequirements const * const pInfo,
-                                          VkMemoryRequirements2 * const pMemoryRequirements)
+terakan_vk_GetDeviceBufferMemoryRequirements(VkDevice const deviceHandle,
+                                             VkDeviceBufferMemoryRequirements const * const pInfo,
+                                             VkMemoryRequirements2 * const pMemoryRequirements)
 {
    pMemoryRequirements->memoryRequirements.size = pInfo->pCreateInfo->size;
 
@@ -175,8 +175,8 @@ terakan_GetDeviceBufferMemoryRequirements(VkDevice const deviceHandle,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_BindBufferMemory2(UNUSED VkDevice const device, uint32_t const bindInfoCount,
-                          VkBindBufferMemoryInfo const * const pBindInfos)
+terakan_vk_BindBufferMemory2(UNUSED VkDevice const device, uint32_t const bindInfoCount,
+                             VkBindBufferMemoryInfo const * const pBindInfos)
 {
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindBufferMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
@@ -189,8 +189,8 @@ terakan_BindBufferMemory2(UNUSED VkDevice const device, uint32_t const bindInfoC
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyBuffer(VkDevice const deviceHandle, VkBuffer const bufferHandle,
-                      VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyBuffer(VkDevice const deviceHandle, VkBuffer const bufferHandle,
+                         VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_buffer * const buffer = terakan_buffer_from_handle(bufferHandle);
 
@@ -206,8 +206,8 @@ terakan_DestroyBuffer(VkDevice const deviceHandle, VkBuffer const bufferHandle,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateBuffer(VkDevice const deviceHandle, VkBufferCreateInfo const * const pCreateInfo,
-                     VkAllocationCallbacks const * const pAllocator, VkBuffer * const pBuffer)
+terakan_vk_CreateBuffer(VkDevice const deviceHandle, VkBufferCreateInfo const * const pCreateInfo,
+                        VkAllocationCallbacks const * const pAllocator, VkBuffer * const pBuffer)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
@@ -228,8 +228,8 @@ terakan_CreateBuffer(VkDevice const deviceHandle, VkBufferCreateInfo const * con
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_DestroyBufferView(VkDevice const deviceHandle, VkBufferView const bufferView,
-                          VkAllocationCallbacks const * const pAllocator)
+terakan_vk_DestroyBufferView(VkDevice const deviceHandle, VkBufferView const bufferView,
+                             VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_buffer_view * const buffer_view = terakan_buffer_view_from_handle(bufferView);
 
@@ -245,9 +245,10 @@ terakan_DestroyBufferView(VkDevice const deviceHandle, VkBufferView const buffer
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_CreateBufferView(VkDevice const deviceHandle,
-                         VkBufferViewCreateInfo const * const pCreateInfo,
-                         VkAllocationCallbacks const * const pAllocator, VkBufferView * const pView)
+terakan_vk_CreateBufferView(VkDevice const deviceHandle,
+                            VkBufferViewCreateInfo const * const pCreateInfo,
+                            VkAllocationCallbacks const * const pAllocator,
+                            VkBufferView * const pView)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
