@@ -498,6 +498,21 @@ terakan_nir_lower_and_optimize_post_link(
    while (r600_optimize_nir_once(nir)) {
    }
 
+   /* Perform late algebraic optimizations and lowerings, including some of the lowerings of ALU
+    * instructions not supported by SFN directly, such as `ineg`.
+    */
+   {
+      bool late_algebraic_progress;
+      do {
+         late_algebraic_progress = false;
+         NIR_PASS(late_algebraic_progress, nir, nir_opt_algebraic_late);
+         NIR_PASS(_, nir, nir_opt_copy_prop);
+         NIR_PASS(_, nir, nir_opt_constant_folding);
+         NIR_PASS(_, nir, nir_opt_dce);
+         NIR_PASS(_, nir, nir_opt_cse);
+      } while (late_algebraic_progress);
+   }
+
    /* Convert booleans to integers when nothing may insert comparisons or selections anymore. */
    NIR_PASS(_, nir, nir_lower_bool_to_int32);
 
