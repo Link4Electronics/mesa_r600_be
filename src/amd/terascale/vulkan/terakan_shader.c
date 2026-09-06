@@ -278,8 +278,8 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
       do {
          progress = false;
          NIR_PASS(progress, nir, nir_opt_copy_prop);
-         NIR_PASS(progress, nir, nir_opt_dce);
          NIR_PASS(progress, nir, nir_opt_constant_folding);
+         NIR_PASS(progress, nir, nir_opt_dce);
       } while (progress);
    };
    NIR_PASS(_, nir, nir_opt_cse);
@@ -426,8 +426,8 @@ terakan_nir_lower_and_optimize_post_link(
       do {
          progress = false;
          NIR_PASS(progress, nir, nir_opt_copy_prop);
-         NIR_PASS(progress, nir, nir_opt_dce);
          NIR_PASS(progress, nir, nir_opt_constant_folding);
+         NIR_PASS(progress, nir, nir_opt_dce);
       } while (progress);
    };
 
