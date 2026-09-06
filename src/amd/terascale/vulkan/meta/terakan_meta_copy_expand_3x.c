@@ -139,7 +139,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r8xx[] = {
 
    /* 16-17: Vertex-fetch from the source to R0.XYZ. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 3 - 1),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -275,7 +275,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
 
    /* 22-23: Vertex-fetch from the source to R0.XYZ. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -359,7 +359,7 @@ struct terakan_meta_shader const terakan_meta_copy_expand_3x_ps = {
             },
       },
    .kcache_used = BITFIELD_BIT(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS),
-   .primary_meta_resource_used = true,
+   .primary_meta_srv_used = true,
 };
 
 static void
@@ -397,8 +397,8 @@ terakan_meta_copy_expand_3x_buffer_to_image(
    struct terakan_color_descriptor image_descriptor =
       terakan_meta_transfer_expand_3x_uav(bytes_per_surfel);
    /* The buffer descriptor base is the rectangle origin. */
-   struct terakan_resource_descriptor buffer_descriptor =
-      terakan_meta_transfer_expand_3x_resource(bytes_per_surfel);
+   struct terakan_srv_descriptor buffer_descriptor =
+      terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
    bool constants_set = false;
@@ -431,7 +431,7 @@ terakan_meta_copy_expand_3x_buffer_to_image(
          bytes_per_block *
             terakan_meta_copy_buffer_image_region_image_buffer_slice_extent_blocks(&region_image) -
          1u;
-      buffer_descriptor.resource[1] = (uint32_t)MIN2(buffer_slice_extent_bytes_minus_1, UINT32_MAX);
+      buffer_descriptor.srv[1] = (uint32_t)MIN2(buffer_slice_extent_bytes_minus_1, UINT32_MAX);
       uint64_t const buffer_y_pitch_surfels = (uint64_t)3u * region_image.buffer_y_pitch_blocks;
       uint64_t const buffer_z_pitch_bytes = bytes_per_block * region_image.buffer_z_pitch_blocks;
       uint64_t buffer_offset = region->bufferOffset;
@@ -470,15 +470,14 @@ terakan_meta_copy_expand_3x_buffer_to_image(
          terakan_meta_config_draw_set_cb_uav(command_writer, 0, image->bo, &image_descriptor);
 
          uint64_t const buffer_descriptor_base = buffer->va + buffer_offset;
-         buffer_descriptor.resource[0] = (uint32_t)buffer_descriptor_base;
-         buffer_descriptor.resource[2] =
-            (buffer_descriptor.resource[2] & C_030008_BASE_ADDRESS_HI) |
-            S_030008_BASE_ADDRESS_HI(buffer_descriptor_base >> 32);
-         buffer_descriptor.resource[1] =
-            (uint32_t)MIN2(buffer_descriptor.resource[1], buffer->vk.size - buffer->va - 1u);
-         terakan_hw_config_sqk_set_resource_fs(
-            &command_writer->hw_config_sqk, TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-            buffer->bo, &buffer_descriptor);
+         buffer_descriptor.srv[0] = (uint32_t)buffer_descriptor_base;
+         buffer_descriptor.srv[2] = (buffer_descriptor.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                    S_030008_BASE_ADDRESS_HI(buffer_descriptor_base >> 32);
+         buffer_descriptor.srv[1] =
+            (uint32_t)MIN2(buffer_descriptor.srv[1], buffer->vk.size - buffer->va - 1u);
+         terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          buffer->bo, &buffer_descriptor);
 
          terakan_meta_draw_rect(command_writer, region_extent_rect, 1);
 
@@ -510,8 +509,8 @@ terakan_meta_copy_expand_3x_image_to_buffer(
    struct terakan_color_descriptor buffer_descriptor =
       terakan_meta_transfer_expand_3x_uav(bytes_per_surfel);
    /* The image descriptor base is the rectangle origin. */
-   struct terakan_resource_descriptor image_descriptor =
-      terakan_meta_transfer_expand_3x_resource(bytes_per_surfel);
+   struct terakan_srv_descriptor image_descriptor =
+      terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
    bool constants_set = false;
@@ -554,9 +553,8 @@ terakan_meta_copy_expand_3x_image_to_buffer(
           << 8) +
          (image_y_pitch_bytes * region_image.rect_blocks.bounds[0][1] +
           bytes_per_block * (uint32_t)region_image.rect_blocks.bounds[0][0]);
-      image_descriptor.resource[1] = bytes_per_block * (uint32_t)region_extent_rect.bounds[1][0] -
-                                     1u +
-                                     image_y_pitch_bytes * (region_extent_rect.bounds[1][1] - 1u);
+      image_descriptor.srv[1] = bytes_per_block * (uint32_t)region_extent_rect.bounds[1][0] - 1u +
+                                image_y_pitch_bytes * (region_extent_rect.bounds[1][1] - 1u);
 
       if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] !=
              surface_level->aligned_extent_surfels[0] ||
@@ -601,12 +599,12 @@ terakan_meta_copy_expand_3x_image_to_buffer(
             buffer_max_surfels_minus_1);
          terakan_meta_config_draw_set_cb_uav(command_writer, 0, buffer->bo, &buffer_descriptor);
 
-         image_descriptor.resource[0] = (uint32_t)image_descriptor_base;
-         image_descriptor.resource[2] = (image_descriptor.resource[2] & C_030008_BASE_ADDRESS_HI) |
-                                        S_030008_BASE_ADDRESS_HI(image_descriptor_base >> 32);
-         terakan_hw_config_sqk_set_resource_fs(
-            &command_writer->hw_config_sqk, TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-            image->bo, &image_descriptor);
+         image_descriptor.srv[0] = (uint32_t)image_descriptor_base;
+         image_descriptor.srv[2] = (image_descriptor.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                   S_030008_BASE_ADDRESS_HI(image_descriptor_base >> 32);
+         terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          image->bo, &image_descriptor);
 
          if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] !=
              buffer_uav_alignment_offset_surfels) {
@@ -654,8 +652,8 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
    struct terakan_image_descriptor_subresource_range dst_subresource_range = {.max_level_count = 1};
 
    /* The source descriptor base is the rectangle origin. */
-   struct terakan_resource_descriptor src_descriptor =
-      terakan_meta_transfer_expand_3x_resource(src_bytes_per_surfel);
+   struct terakan_srv_descriptor src_descriptor =
+      terakan_meta_transfer_expand_3x_srv(src_bytes_per_surfel);
    /* The destination descriptor base is the slice origin. */
    struct terakan_color_descriptor dst_descriptor =
       terakan_meta_transfer_expand_3x_uav(dst_surface_aspect->bytes_per_block / 3u);
@@ -747,7 +745,7 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
           << 8) +
          (src_y_pitch_bytes * (uint32_t)region->srcOffset.y +
           src_surface_aspect->bytes_per_block * (uint32_t)region->srcOffset.x);
-      src_descriptor.resource[1] =
+      src_descriptor.srv[1] =
          src_surface_aspect->bytes_per_block * (uint32_t)region_extent_rect.bounds[1][0] - 1u +
          src_y_pitch_bytes * (region_extent_rect.bounds[1][1] - 1u);
 
@@ -782,12 +780,12 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
       uint32_t const region_slice_count = MIN2(src_subresource_range.max_depth_or_layer_count,
                                                dst_subresource_range.max_depth_or_layer_count);
       for (uint32_t region_slice = 0; region_slice < region_slice_count; ++region_slice) {
-         src_descriptor.resource[0] = (uint32_t)src_descriptor_base;
-         src_descriptor.resource[2] = (src_descriptor.resource[2] & C_030008_BASE_ADDRESS_HI) |
-                                      S_030008_BASE_ADDRESS_HI(src_descriptor_base >> 32);
-         terakan_hw_config_sqk_set_resource_fs(
-            &command_writer->hw_config_sqk, TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-            src_image->bo, &src_descriptor);
+         src_descriptor.srv[0] = (uint32_t)src_descriptor_base;
+         src_descriptor.srv[2] = (src_descriptor.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                 S_030008_BASE_ADDRESS_HI(src_descriptor_base >> 32);
+         terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          src_image->bo, &src_descriptor);
 
          terakan_meta_config_draw_set_cb_uav(command_writer, 0, dst_image->bo, &dst_descriptor);
 

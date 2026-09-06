@@ -142,7 +142,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    size_t binding_count = 0;
    uint8_t immutable_sampler_count = 0;
    uint16_t shader_range_count = 0;
-   VkShaderStageFlags stages_with_resources = 0, stages_with_samplers = 0, stages_with_uavs = 0;
+   VkShaderStageFlags stages_with_srvs = 0, stages_with_samplers = 0, stages_with_uavs = 0;
    for (uint32_t create_info_binding_index = 0;
         create_info_binding_index < non_empty_create_info_binding_count;
         ++create_info_binding_index) {
@@ -157,17 +157,17 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       }
       binding_count = (size_t)binding->binding + 1;
       /* Coarsely validate the binding count against the numeric limit. */
-      if (binding->descriptorCount >= MAX3(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL,
-                                           TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL,
+      if (binding->descriptorCount >= MAX3(TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL,
+                                           TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL,
                                            TERAKAN_SAMPLER_HW_COUNT_PER_STAGE)) {
          goto too_many_descriptors;
       }
       uint8_t binding_shader_range_count = 0;
       VkDescriptorType const binding_type = binding->descriptorType;
       VkShaderStageFlagBits const binding_stages = binding->stageFlags & stage_mask;
-      if (terakan_descriptor_type_has_resource(binding_type)) {
+      if (terakan_descriptor_type_has_srv(binding_type)) {
          ++binding_shader_range_count;
-         stages_with_resources |= binding_stages;
+         stages_with_srvs |= binding_stages;
          VkShaderStageFlags const binding_uav_stages = binding_stages & uav_supported_stage_mask;
          if (binding_uav_stages && terakan_descriptor_type_has_uav(binding_type)) {
             ++binding_shader_range_count;
@@ -222,7 +222,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
     */
    uint8_t next_immutable_sampler_index = 0;
    uint16_t dynamic_offset_count = 0;
-   uint16_t set_resource_count = 0;
+   uint16_t set_srv_count = 0;
    uint16_t set_uav_count = 0;
    uint8_t set_sampler_count = 0;
    for (uint32_t create_info_binding_index = 0;
@@ -246,19 +246,19 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
        * This isn't necessary due to the requirements for consecutive bindings in
        * vkUpdateDescriptorSets, but trivially allows for more graceful handling of invalid usage.
        */
-      layout_binding->first_set_resource = set_resource_count;
+      layout_binding->first_set_srv = set_srv_count;
       layout_binding->first_set_uav = set_uav_count;
       layout_binding->first_set_sampler = set_sampler_count;
 
       /* Add to the counts, validating against the numeric limits. */
-      if (terakan_descriptor_type_has_resource(binding_type)) {
-         if (TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_resource_count <
+      if (terakan_descriptor_type_has_srv(binding_type)) {
+         if (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_srv_count <
              binding_descriptor_count) {
             goto too_many_descriptors_destroy;
          }
-         set_resource_count += binding_descriptor_count;
+         set_srv_count += binding_descriptor_count;
          if (terakan_descriptor_type_has_uav(binding_type)) {
-            if (TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_uav_count <
+            if (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_uav_count <
                 binding_descriptor_count) {
                goto too_many_descriptors_destroy;
             }
@@ -311,7 +311,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    assert(next_immutable_sampler_index == immutable_sampler_count);
 
    layout->pool_first_sampler_offset_bytes =
-      sizeof(struct terakan_descriptor_set_resource) * set_resource_count;
+      sizeof(struct terakan_descriptor_set_srv) * set_srv_count;
    layout->pool_first_uav_offset_bytes =
       layout->pool_first_sampler_offset_bytes +
       sizeof(struct terakan_descriptor_set_sampler) * set_sampler_count;
@@ -325,17 +325,17 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
 
    uint16_t next_shader_range_index = 0;
 
-   /* Resource ranges. */
+   /* SRV ranges. */
    /* TODO(Triang3l): Cleanup `mesa_shader_stage` and `VkShaderStageFlags` usage. */
-   unsigned remaining_stages = (unsigned)stages_with_resources;
+   unsigned remaining_stages = (unsigned)stages_with_srvs;
    while (remaining_stages) {
       int const stage_index = u_bit_scan(&remaining_stages);
 
       struct terakan_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
-      layout_shader->first_resource_range = next_shader_range_index;
+      layout_shader->first_srv_range = next_shader_range_index;
 
-      uint8_t stage_resource_count = 0;
+      uint8_t stage_srv_count = 0;
       uint8_t stage_uniform_buffer_count = 0;
 
       uint8_t const stage_flag = (uint8_t)1 << stage_index;
@@ -347,36 +347,35 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
-             !terakan_descriptor_type_has_resource(binding->descriptor_type)) {
+             !terakan_descriptor_type_has_srv(binding->descriptor_type)) {
             continue;
          }
 
-         if (terakan_resource_range_mutable_max_count((mesa_shader_stage)stage_index) -
-                stage_resource_count <
+         if (terakan_srv_range_mutable_max_count((mesa_shader_stage)stage_index) - stage_srv_count <
              binding->descriptor_count) {
             goto too_many_descriptors_destroy;
          }
 
-         binding->first_shader_resources[stage_index] = stage_resource_count;
+         binding->first_shader_srvs[stage_index] = stage_srv_count;
 
          assert(next_shader_range_index < shader_range_count);
          struct terakan_descriptor_set_layout_shader_range * const shader_range =
             &layout->shader_ranges[next_shader_range_index];
-         shader_range->first_set_descriptor = binding->first_set_resource;
+         shader_range->first_set_descriptor = binding->first_set_srv;
          shader_range->first_dynamic_offset =
             binding->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
                   binding->descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
                ? binding->first_immutable_sampler_or_dynamic_offset
                : UINT16_MAX;
-         shader_range->first_shader_descriptor = stage_resource_count;
+         shader_range->first_shader_descriptor = stage_srv_count;
          shader_range->descriptor_count = binding->descriptor_count;
-         if (next_shader_range_index == layout_shader->first_resource_range ||
+         if (next_shader_range_index == layout_shader->first_srv_range ||
              !terakan_descriptor_set_layout_shader_range_try_extend(
                 &layout->shader_ranges[next_shader_range_index - 1], shader_range)) {
             ++next_shader_range_index;
          }
 
-         stage_resource_count += binding->descriptor_count;
+         stage_srv_count += binding->descriptor_count;
 
          if (binding->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
              binding->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
@@ -385,10 +384,9 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          }
       }
 
-      layout_shader->resource_range_count =
-         next_shader_range_index - layout_shader->first_resource_range;
+      layout_shader->srv_range_count = next_shader_range_index - layout_shader->first_srv_range;
 
-      layout_shader->resource_count = stage_resource_count;
+      layout_shader->srv_count = stage_srv_count;
       layout_shader->uniform_buffer_count = stage_uniform_buffer_count;
    }
 
@@ -452,8 +450,8 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       layout_shader->sampler_count = stage_sampler_count;
    }
 
-   /* UAV ranges, after setting up resource ranges because they take shader indices from the
-    * resources corresponding to them.
+   /* UAV ranges, after setting up SRV ranges because they take shader indices from the SRVs
+    * corresponding to them.
     */
    remaining_stages = (unsigned)stages_with_uavs;
    while (remaining_stages) {
@@ -475,7 +473,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
              !terakan_descriptor_type_has_uav(binding->descriptor_type)) {
             continue;
          }
-         assert(terakan_descriptor_type_has_resource(binding->descriptor_type));
+         assert(terakan_descriptor_type_has_srv(binding->descriptor_type));
 
          assert(next_shader_range_index < shader_range_count);
          struct terakan_descriptor_set_layout_shader_range * const shader_range =
@@ -485,7 +483,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             binding->descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
                ? binding->first_immutable_sampler_or_dynamic_offset
                : UINT16_MAX;
-         shader_range->first_shader_descriptor = binding->first_shader_resources[stage_index];
+         shader_range->first_shader_descriptor = binding->first_shader_srvs[stage_index];
          shader_range->descriptor_count = binding->descriptor_count;
          if (next_shader_range_index == layout_shader->first_uav_range ||
              !terakan_descriptor_set_layout_shader_range_try_extend(

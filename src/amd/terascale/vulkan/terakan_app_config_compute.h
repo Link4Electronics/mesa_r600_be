@@ -53,15 +53,15 @@ struct terakan_app_config_compute {
 
    struct {
       /* For descriptor set binding simplicity, storing UAV descriptors in the configuration at the
-       * same indices as the read-only resources corresponding to them, but to calculate UAV
-       * indices, compacting the indices of the resources that have corresponding UAVs.
+       * same indices as the SRVs corresponding to them, but to calculate UAV indices, compacting
+       * the indices of the SRVs that have corresponding UAVs.
        *
        * The UAV array is large, so it's not initialized. Rather, if `uav_bound` doesn't have the
        * corresponding bit set for a UAV, the BO pointer and the color target descriptor are
        * undefined.
        */
-      BITSET_DECLARE(uav_bound, TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
-      struct terakan_bo_and_color_descriptor uav[TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL];
+      BITSET_DECLARE(uav_bound, TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
+      struct terakan_bo_and_color_descriptor uav[TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL];
    } cb_color_;
 };
 
@@ -86,7 +86,7 @@ terakan_app_config_compute_set_sq_pgm_ls(struct terakan_app_config_compute * con
  * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_app_config_compute_set_cb_color(struct terakan_app_config_compute * config,
-                                             unsigned mutable_resource_index,
+                                             unsigned mutable_srv_index,
                                              struct terakan_bo const * bo,
                                              struct terakan_color_descriptor const * color);
 

@@ -301,8 +301,8 @@ extern uint8_t const terascale_format_cb_color_export_component_masks[4 + 1][4];
  * Export components not mapped to a channel are replaced with (0, 0, 0, 1), with the exception of
  * zero channel count (for invalid formats), for which the swizzle is (0, 0, 0, 0) like for null
  * descriptors in Vulkan - there are no masked-out channels, so this swizzle can be used for
- * fetching in the SQ directly (hence "read" in the name), like for constructing the SQ resource
- * descriptor for a UAV IMMED buffer.
+ * fetching in the SQ directly (hence "read" in the name), like for constructing the SRV descriptor
+ * for a UAV IMMED buffer.
  */
 extern uint8_t const terascale_format_cb_color_read_swizzle[4 + 1][4][4];
 

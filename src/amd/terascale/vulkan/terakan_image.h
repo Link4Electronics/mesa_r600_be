@@ -232,8 +232,8 @@ struct terakan_image_descriptor_create_info {
  *
  * Dimensionality reinterpretation for single-sample images is allowed in many cases, see the
  * implementation for more details. Specifically for transfer implementation purposes, a
- * single-level `2D_ARRAY` resource descriptor can be created for any single-sample image (for 3D,
- * this is similar to what `VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT` allows for color attachments).
+ * single-level `2D_ARRAY` SRV descriptor can be created for any single-sample image (for 3D, this
+ * is similar to what `VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT` allows for color attachments).
  * Also, for transfers, cross-aspect reinterpretation is allowed.
  *
  * If `component_mapping_opt` is NULL, an identity component mapping will be used.
@@ -245,15 +245,14 @@ struct terakan_image_descriptor_create_info {
  * vertex stages) storage image reads into account, as well as size queries, and if mutable
  * descriptor type makes supporting it more complicated.
  */
-bool terakan_image_create_resource_descriptor(
+bool terakan_image_create_srv_descriptor(
    struct terakan_image_descriptor_create_info const * descriptor_create_info,
    uint32_t desired_dimensionality, VkComponentMapping const * component_mapping_opt,
-   struct terakan_resource_descriptor * descriptor_out);
+   struct terakan_srv_descriptor * descriptor_out);
 
 /* Returns the number of Z slices or array layers accessible through the descriptor as color
- * descriptors support fewer layers than texture resource descriptors, or 0 if a valid color
- * descriptor can't be created given the provided info (the destination structures are not filled in
- * this case).
+ * descriptors support fewer layers than SRV descriptors, or 0 if a valid color descriptor can't be
+ * created given the provided info (the destination structures are not filled in this case).
  *
  * Size-compatible uncompressed views of compressed images, and 2D and 2D array views of 3D images,
  * are allowed regardless of whether that was requested in the client API. 1D images also can be
@@ -295,7 +294,7 @@ struct terakan_image_view {
 
    struct terakan_bo const * bo;
 
-   struct terakan_resource_descriptor resource;
+   struct terakan_srv_descriptor srv;
 
    /* Used for both RTVs and UAVs, so `INFO.RAT` is not specifically defined. */
    struct terakan_color_descriptor color;

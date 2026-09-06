@@ -563,30 +563,30 @@ terakan_vertex_input_try_emit_unbound_attribute_mov(
 }
 
 void
-terakan_vertex_input_create_fs_code(
-   struct terakan_vertex_input_fs_layout const * const layout, bool const is_r9xx,
-   struct terakan_vertex_input_fs_resource_usage * const resource_usage_out,
-   struct terakan_vertex_input_fs_code * const code_out)
+terakan_vertex_input_create_fs_code(struct terakan_vertex_input_fs_layout const * const layout,
+                                    bool const is_r9xx,
+                                    struct terakan_vertex_input_fs_srv_usage * const srv_usage_out,
+                                    struct terakan_vertex_input_fs_code * const code_out)
 {
    /* Check which attributes are bound and unbound, and for the bound ones, gather the counts of
-    * bytes per element, resource usage, and reorder attributes for more optimal memory access
-    * patterns and for mega fetches.
+    * bytes per element, SRV usage, and reorder attributes for more optimal memory access patterns
+    * and for mega fetches.
     *
     * As a result of the sorting, in particular, within one step rate and binding, fetches will be
     * consecutive and ordered by the offset, making mega fetch construction only need to look at the
     * neighborhood of an attribute in one direction, not to iterate all attributes.
     */
 
-   uint8_t attributes_bytes_per_element[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint8_t attributes_bytes_per_element[TERAKAN_SRV_HW_COUNT_FETCH];
 
    uint8_t bound_used_attribute_count = 0;
    /* `sorted_attribute_indices` includes only bound used attributes. */
-   uint8_t sorted_attribute_indices[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint8_t sorted_attribute_indices[TERAKAN_SRV_HW_COUNT_FETCH];
 
    /* Constructed only from bound used attributes. */
-   uint8_t attribute_truncations[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint8_t attribute_truncations[TERAKAN_SRV_HW_COUNT_FETCH];
    uint32_t bindings_used = 0b0;
-   uint8_t bindings_truncations_used[TERAKAN_RESOURCE_HW_COUNT_FETCH] = {};
+   uint8_t bindings_truncations_used[TERAKAN_SRV_HW_COUNT_FETCH] = {};
 
    /* Which unbound used attributes require an instruction for setting them to 0 or 1 (depending on
     * `DST_SEL`) to be emitted.
@@ -632,45 +632,44 @@ terakan_vertex_input_create_fs_code(
                 sizeof(*sorted_attribute_indices), terakan_vertex_input_compare_attribute_indices,
                 (void *)layout);
 
-   /* For each binding, place the resource for the attributes with the largest number of bytes per
-    * element at the same index as the binding, since it's likely to be the least changing resource
-    * for the binding (positions are usually the largest, and they may be shared between depth-only
-    * and color render passes). Then place other truncations for each binding starting from the
-    * upper resource indices, where they're less likely to collide with bindings in other vertex
-    * input layouts.
+   /* For each binding, place the SRV for the attributes with the largest number of bytes per
+    * element at the same index as the binding, since it's likely to be the least changing SRV for
+    * the binding (positions are usually the largest, and they may be shared between depth-only and
+    * color render passes). Then place other truncations for each binding starting from the upper
+    * SRV indices, where they're less likely to collide with bindings in other vertex input layouts.
     */
-   resource_usage_out->resources_used = bindings_used;
+   srv_usage_out->srvs_used = bindings_used;
    /* [Binding index][buffer size truncation amount in dwords]. */
-   uint8_t bindings_resource_indices[TERAKAN_RESOURCE_HW_COUNT_FETCH][(12 / 4) + 1] = {};
+   uint8_t bindings_srv_indices[TERAKAN_SRV_HW_COUNT_FETCH][(12 / 4) + 1] = {};
    u_foreach_bit (binding_index, bindings_used) {
-      uint8_t * const binding_resource_indices = bindings_resource_indices[binding_index];
+      uint8_t * const binding_srv_indices = bindings_srv_indices[binding_index];
 
       unsigned binding_truncations_remaining = bindings_truncations_used[binding_index];
 
       assert(binding_truncations_remaining);
       uint8_t const binding_truncation_largest = util_last_bit(binding_truncations_remaining) - 1;
       binding_truncations_remaining &= ~(1u << binding_truncation_largest);
-      resource_usage_out->resource_bindings_and_truncation[binding_index] =
+      srv_usage_out->srv_bindings_and_truncation[binding_index] =
          binding_index | (binding_truncation_largest << 5);
-      binding_resource_indices[binding_truncation_largest] = binding_index;
+      binding_srv_indices[binding_truncation_largest] = binding_index;
 
       while (binding_truncations_remaining) {
          unsigned const binding_truncation = u_bit_scan(&binding_truncations_remaining);
-         uint32_t const resources_unallocated = ~resource_usage_out->resources_used;
-         assert(resources_unallocated);
-         unsigned const resource_index = util_last_bit(resources_unallocated) - 1;
-         resource_usage_out->resources_used |= BITFIELD_BIT(resource_index);
-         resource_usage_out->resource_bindings_and_truncation[resource_index] =
+         uint32_t const srvs_unallocated = ~srv_usage_out->srvs_used;
+         assert(srvs_unallocated);
+         unsigned const srv_index = util_last_bit(srvs_unallocated) - 1;
+         srv_usage_out->srvs_used |= BITFIELD_BIT(srv_index);
+         srv_usage_out->srv_bindings_and_truncation[srv_index] =
             binding_index | (binding_truncation << 5);
-         binding_resource_indices[binding_truncation] = resource_index;
+         binding_srv_indices[binding_truncation] = srv_index;
       }
    }
 
    /* Gather all unique indexing functions for all attributes. */
 
    uint8_t indexing_count = 0;
-   struct terakan_vertex_input_indexing indexings[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-   uint8_t attribute_indexings[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   struct terakan_vertex_input_indexing indexings[TERAKAN_SRV_HW_COUNT_FETCH];
+   uint8_t attribute_indexings[TERAKAN_SRV_HW_COUNT_FETCH];
    /* Iterating in the fetch instruction order, so the last destination GPR set in this loop for an
     * indexing function is the last that won't be overwritten by fetches until all fetches reading
     * the index from it are done.
@@ -846,7 +845,7 @@ terakan_vertex_input_create_fs_code(
 
       /* Update the scheduling priority according to the current situation. */
       uint8_t sorted_indexing_count = 0;
-      uint8_t sorted_indexings[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+      uint8_t sorted_indexings[TERAKAN_SRV_HW_COUNT_FETCH];
       u_foreach_bit (indexing_index, remaining_indexings) {
          sorted_indexings[sorted_indexing_count++] = indexing_index;
       }
@@ -1359,7 +1358,7 @@ terakan_vertex_input_create_fs_code(
     * The hardware can convert mini-fetches into mega-fetches, so the mega-fetch count needs to be
     * specified for mini-fetches too.
     */
-   uint8_t are_mega_fetch_and_mega_fetch_counts[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint8_t are_mega_fetch_and_mega_fetch_counts[TERAKAN_SRV_HW_COUNT_FETCH];
    if (!is_r9xx) {
       for (uint8_t sorted_attribute_index = 0;
            sorted_attribute_index < bound_used_attribute_count;) {
@@ -1463,7 +1462,7 @@ terakan_vertex_input_create_fs_code(
                                       ? SQ_VTX_FETCH_INSTANCE_DATA
                                       : SQ_VTX_FETCH_NO_INDEX_OFFSET) |
          S_SQ_VTX_WORD0_BUFFER_ID(
-            bindings_resource_indices[attribute_binding][attribute_truncations[attribute_index]]) |
+            bindings_srv_indices[attribute_binding][attribute_truncations[attribute_index]]) |
          S_SQ_VTX_WORD0_SRC_GPR(fetch_src_gpr_and_component >> 2) |
          S_SQ_VTX_WORD0_SRC_SEL_X(fetch_src_gpr_and_component & 3);
       fetch[1] = S_SQ_VTX_WORD1_GPR_DST_GPR(1 + attribute_index) | format_fetch_word1;

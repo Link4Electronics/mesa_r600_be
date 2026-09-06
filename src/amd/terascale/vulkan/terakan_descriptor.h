@@ -54,208 +54,15 @@ enum terakan_descriptor_hw_stage {
    TERAKAN_DESCRIPTOR_HW_STAGE_CS = 5,
 };
 
-/* MRTs [0, TERAKAN_COLOR_HW_RTV_COUNT) support both color attachments and storage buffers/images.
- * MRTs [TERAKAN_COLOR_HW_RTV_COUNT, TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT) support only storage
- * buffers/images.
- *
- * RTV - Render Target View in Direct3D terms.
- * UAV - Unordered Access View in Direct3D, also known as Random Access Target (RAT) on TeraScale.
+/*
+ * CB color target (MRT - Multiple Render Target) descriptors for:
+ * - Render Target Views (RTV) in Direct3D terms;
+ * - Unordered Access Views (UAV) in Direct3D, also known as Random Access Target (RAT) on
+ *   TeraScale.
  */
-#define TERAKAN_COLOR_HW_RTV_COUNT         8
-#define TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT 12
-
-/* Limit the UAV count in pixel shaders by maxFragmentCombinedOutputResources, which includes
- * "output Location decorated color attachments", and with dual-source blending, both sources
- * correspond to the same color attachment in Vulkan, but in the hardware, dual-source blending uses
- * two separate MRT indices and CB_COLOR1_INFO's SOURCE_FORMAT, so with dual-source blending, two
- * rather than one RTV/UAV bindings are occupied by the first attachment.
- */
-#define TERAKAN_COLOR_UAV_COUNT_PIXEL (TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT - 1)
-
-/* Constant cache (kcache) hardware properties. */
-#define TERAKAN_KCACHE_HW_LINE_BYTES_LOG2          8
-#define TERAKAN_KCACHE_HW_LINE_BYTES               (1 << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)
-#define TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2 8
-#define TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER      (1 << TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2)
-#define TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES_LOG2                                               \
-   (TERAKAN_KCACHE_HW_LINE_BYTES_LOG2 + TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2)
-#define TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES (1 << TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES_LOG2)
-#define TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE     16
-/* "Indexed locks of banks 14 and 15 are ignored" according to the KCACHE_BANK_INDEX_MODE#
- * documentation.
- */
-#define TERAKAN_KCACHE_HW_RELATIVE_INDEXABLE_BUFFERS 14
-
-/* Kcache allocation. */
-/* The buffer with driver and application and push constants is never accessed with a relative
- * index, place it near the end.
- */
-#define TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS (TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE - 1)
-/* Number of kcache buffers starting from 0 allocated for uniform buffers from application pipeline
- * layouts.
- */
-#define TERAKAN_KCACHE_MAX_UNIFORM_BUFFERS TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS
-
-/* For easier writing of meta shaders.
- * offsetof doesn't produce a constant on MSVC 2022, so using dword offsets instead.
- */
-#define TERAKAN_KCACHE_BANK_SOURCE_BASE(bank) ((0x80 << ((bank) >> 1)) + (((bank) & 0b1) << 5))
-#define TERAKAN_KCACHE_DWORD_LINE(offset_dwords)                                                   \
-   ((offset_dwords) / (TERAKAN_KCACHE_HW_LINE_BYTES / sizeof(uint32_t)))
-#define TERAKAN_KCACHE_DWORD_VECTOR(offset_dwords)                                                 \
-   (((offset_dwords) & (TERAKAN_KCACHE_HW_LINE_BYTES / sizeof(uint32_t) - 1)) / 4)
-#define TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)                                           \
-   (TERAKAN_KCACHE_BANK_SOURCE_BASE(bank) + TERAKAN_KCACHE_DWORD_VECTOR(offset_dwords))
-#define TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords) ((offset_dwords) & 3)
-#define TERAKAN_KCACHE_DWORD_WORD0_SRC0(bank, offset_dwords)                                       \
-   (S_SQ_ALU_WORD0_SRC0_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                    \
-    S_SQ_ALU_WORD0_SRC0_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
-#define TERAKAN_KCACHE_DWORD_WORD0_SRC1(bank, offset_dwords)                                       \
-   (S_SQ_ALU_WORD0_SRC1_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                    \
-    S_SQ_ALU_WORD0_SRC1_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
-/* With a filler for the second OP2 operand for single-operand instructions. */
-#define TERAKAN_KCACHE_DWORD_WORD0_SRC01(bank, offset_dwords)                                      \
-   (TERAKAN_KCACHE_DWORD_WORD0_SRC0(bank, offset_dwords) |                                         \
-    TERAKAN_KCACHE_DWORD_WORD0_SRC1(bank, offset_dwords))
-#define TERAKAN_KCACHE_DWORD_WORD1_SRC2(bank, offset_dwords)                                       \
-   (S_SQ_ALU_WORD1_OP3_SRC2_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                \
-    S_SQ_ALU_WORD1_OP3_SRC2_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
-
-#define TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE 176
-#define TERAKAN_RESOURCE_HW_COUNT_VERTEX        160
-#define TERAKAN_RESOURCE_HW_COUNT_FETCH         32
-
-#define TERAKAN_RESOURCE_HW_OFFSET_PS 0
-#define TERAKAN_RESOURCE_HW_OFFSET_VSES                                                            \
-   (TERAKAN_RESOURCE_HW_OFFSET_PS + TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE)
-#define TERAKAN_RESOURCE_HW_OFFSET_GS                                                              \
-   (TERAKAN_RESOURCE_HW_OFFSET_VSES + TERAKAN_RESOURCE_HW_COUNT_VERTEX)
-#define TERAKAN_RESOURCE_HW_OFFSET_HS                                                              \
-   (TERAKAN_RESOURCE_HW_OFFSET_GS + TERAKAN_RESOURCE_HW_COUNT_VERTEX)
-#define TERAKAN_RESOURCE_HW_OFFSET_LS                                                              \
-   (TERAKAN_RESOURCE_HW_OFFSET_HS + TERAKAN_RESOURCE_HW_COUNT_VERTEX)
-#define TERAKAN_RESOURCE_HW_OFFSET_CS                                                              \
-   (TERAKAN_RESOURCE_HW_OFFSET_LS + TERAKAN_RESOURCE_HW_COUNT_VERTEX)
-#define TERAKAN_RESOURCE_HW_OFFSET_FS                                                              \
-   (TERAKAN_RESOURCE_HW_OFFSET_CS + TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE)
-#define TERAKAN_RESOURCE_HW_COUNT (TERAKAN_RESOURCE_HW_OFFSET_FS + TERAKAN_RESOURCE_HW_COUNT_FETCH)
-
-struct terakan_resource_descriptor {
-   uint32_t resource[8];
-};
-
-/* Dynamically indexable immediate constant arrays in application shader code.
- * Also used for a single resource binding for meta draws or dispatches as it can be quickly
- * invalidated alongside the shader itself.
- */
-#define TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META 0
-/* Dynamically indexable driver and application push constants. */
-#define TERAKAN_RESOURCE_RANGE_PUSH_CONSTANTS                                                      \
-   (TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META + 1)
-/* VS: Base vertex and instance.
- * GS and VS/TES ALT_CONST: Ring buffer.
- * CS: Number of workgroups.
- * Not needed in FS, so can be used for an additional input attachment.
- * Can be used in meta non-pixel shaders for an additional resource.
- */
-#define TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC (TERAKAN_RESOURCE_HW_COUNT_VERTEX - 1)
-/* Pixel and compute shaders provide additional 16 resource bindings beyond the 160 available in
- * vertex stages. Use them for resources specific to those stages. In fragment shaders, place IMMED
- * buffers of UAVs (11 with the limitations of maxFragmentCombinedOutputResources's interaction with
- * dual-source blending) there, and give the rest of that range to an extension of the mutable
- * resource type descriptor space for use as input attachments (at least 4 are mandatory in Vulkan).
- * To reduce hardware binding changes when switching between fragment shaders that have the same UAV
- * bindings, but different color output counts, not offsetting immediate buffer resource indices by
- * the color output count unlike UAV indices themselves.
- */
-/* TODO(Triang3l): Place advanced blending equation feedback loop resources downward at the end of
- * this range, describe that in the comment, and change the name to include that.
- */
-#define TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_PIXEL                                            \
-   (TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE - TERAKAN_COLOR_UAV_COUNT_PIXEL)
-#define TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_COMPUTE                                          \
-   (TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE - TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT)
-/* Resources from the application's pipeline layout:
- * - Sampled images, uniform texel buffers.
- * - Storage images, storage texel buffers, storage buffers - read-only when coherence with writable
- *   ones is not needed (vertex stages, or `restrict readonly` without `coherent`), as well as for
- *   UAV info queries.
- * - Uniform buffers - for dynamic indexing.
- * - Input attachments.
- */
-#define TERAKAN_RESOURCE_RANGE_MUTABLE_BASE (TERAKAN_RESOURCE_RANGE_PUSH_CONSTANTS + 1)
-#define TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL                                         \
-   (TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC - TERAKAN_RESOURCE_RANGE_MUTABLE_BASE)
-#define TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL                                             \
-   (TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_PIXEL - TERAKAN_RESOURCE_RANGE_MUTABLE_BASE)
-static_assert(
-   TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL >=
-      TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL,
-   "The maximum number of mutable resource bindings per stage is expected to be bound by vertex "
-   "stages, which have fewer hardware resource bindings.");
-static_assert(
-   TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL >= 15 + 4 + 128 + 8,
-   "There should be enough non-pixel shader mutable resource bindings for the minimum Direct3D 11 "
-   "binding counts plus Vulkan storage buffers.");
-static_assert(
-   TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL >= 15 + 4 + 128 + 8 + 4,
-   "There should be enough pixel shader mutable resource bindings for the minimum Direct3D 11 "
-   "binding counts plus Vulkan storage buffers and input attachments.");
-#define TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE                                       \
-   (TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL * 5 +                                       \
-    TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL)
-
-static inline uint8_t
-terakan_resource_range_mutable_max_count(mesa_shader_stage const stage)
-{
-   return stage == MESA_SHADER_FRAGMENT ? TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL
-                                        : TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL;
-}
-
-/* SQ_VTX_CONSTANT doesn't have words 5 and 6, so using word 5 for the BO priority. */
-#define TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD 5
-
-#define TERAKAN_SAMPLER_HW_COUNT_PER_STAGE 18
-
-struct terakan_sampler_descriptor {
-   uint32_t sampler[3];
-   /* May be uninitialized if not used by the sampler. */
-   uint32_t register_border_color[4];
-};
-
-static inline int32_t
-terakan_sampler_lod_bias_from_float(float const lod_bias)
-{
-   if (unlikely(isnan(lod_bias))) {
-      return 0;
-   }
-   return (int32_t)(CLAMP(lod_bias, -0x1.0p5f, 0x1.0p5f - 0x1.0p-8f) * 0x1.0p8f);
-}
-
-static inline uint32_t
-terakan_sampler_min_max_lod_from_float(float lod)
-{
-   lod = fmaxf(lod, 0.0f);
-   lod = MIN2(lod, 0x1.0p4f - 0x1.0p-8f);
-   /* Convert to fixed-point rounding down.
-    * This is particularly important for image view minimum LOD clamping, as
-    * `minLodInteger_imageView` is defined as `floor(minLodFloat_imageView)` in the
-    * `VkImageViewMinLodCreateInfoEXT` specification, and section 5.8.4 "Fractional Clamping" of the
-    * Direct3D 11.3 Functional Specification also defines the most detailed mip that needs to be
-    * resident as `floor(MinLOD)`.
-    */
-   return (uint32_t)(lod * 0x1.0p8f);
-}
-
-static inline uint32_t
-terakan_sampler_max_aniso_ratio_from_float(float max_aniso_ratio)
-{
-   max_aniso_ratio = fmaxf(max_aniso_ratio, 1.0f);
-   max_aniso_ratio = MIN2(max_aniso_ratio, 0x1.0p4f);
-   return util_logbase2((unsigned)max_aniso_ratio);
-}
 
 /* `CB_COLOR[0-11]` register intermediate representation used for both RTVs and UAVs.
+ *
  * Throughout the driver, descriptors containing as detailed information as possible are passed, and
  * only in `terakan_hw_config`, the descriptors are normalized specifically for RTV or UAV usage.
  * Specifically, in the intermediate representation:
@@ -364,11 +171,6 @@ terakan_color_descriptor_to_hw_uav(struct terakan_color_descriptor * const descr
 
 struct terakan_device;
 
-/* The BO is `device->uav_immediate_bo`. */
-struct terakan_resource_descriptor
-terakan_color_descriptor_info_to_uav_immediate_resource(struct terakan_device const * device,
-                                                        uint32_t color_info);
-
 /* Commonly used for UAVs. */
 struct terakan_bo_and_color_descriptor {
    struct terakan_bo const * bo;
@@ -394,6 +196,25 @@ terakan_color_meta_descriptor_create_disabled(struct terakan_color_descriptor co
       .fmask_slice = S_028C88_TILE_MAX(G_028C68_SLICE_TILE_MAX(color->slice)),
    };
 }
+
+/* MRTs [0, TERAKAN_COLOR_HW_RTV_COUNT) support both color attachments and storage buffers/images.
+ * MRTs [TERAKAN_COLOR_HW_RTV_COUNT, TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT) support only storage
+ * buffers/images.
+ */
+#define TERAKAN_COLOR_HW_RTV_COUNT         8
+#define TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT 12
+
+/* Limit the UAV count in pixel shaders by `maxFragmentCombinedOutputResources`, which includes
+ * "output Location decorated color attachments", and with dual-source blending, both sources
+ * correspond to the same color attachment in Vulkan, but in the hardware, dual-source blending uses
+ * two separate MRT indices and `CB_COLOR1_INFO`'s `SOURCE_FORMAT`, so with dual-source blending,
+ * two rather than one RTV/UAV bindings are occupied by the first attachment.
+ */
+#define TERAKAN_COLOR_UAV_COUNT_PIXEL (TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT - 1)
+
+/*
+ * DB depth / stencil view descriptors.
+ */
 
 struct terakan_depth_stencil_descriptor {
    uint32_t view;
@@ -441,8 +262,207 @@ terakan_depth_stencil_descriptor_is_bound(
    }
 }
 
+/*
+ * Constant cache (kcache).
+ */
+
+/* Hardware properties. */
+#define TERAKAN_KCACHE_HW_LINE_BYTES_LOG2          8
+#define TERAKAN_KCACHE_HW_LINE_BYTES               (1 << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)
+#define TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2 8
+#define TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER      (1 << TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2)
+#define TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES_LOG2                                               \
+   (TERAKAN_KCACHE_HW_LINE_BYTES_LOG2 + TERAKAN_KCACHE_HW_MAX_LINES_IN_BUFFER_LOG2)
+#define TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES (1 << TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES_LOG2)
+#define TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE     16
+/* "Indexed locks of banks 14 and 15 are ignored" according to the KCACHE_BANK_INDEX_MODE#
+ * documentation.
+ */
+#define TERAKAN_KCACHE_HW_RELATIVE_INDEXABLE_BUFFERS 14
+
+/* Kcache allocation. */
+/* The buffer with driver and application and push constants is never accessed with a relative
+ * index, place it near the end.
+ */
+#define TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS (TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE - 1)
+/* Number of kcache buffers starting from 0 allocated for uniform buffers from application pipeline
+ * layouts.
+ */
+#define TERAKAN_KCACHE_MAX_UNIFORM_BUFFERS TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS
+
+/* For easier writing of meta shaders.
+ * offsetof doesn't produce a constant on MSVC 2022, so using dword offsets instead.
+ */
+#define TERAKAN_KCACHE_BANK_SOURCE_BASE(bank) ((0x80 << ((bank) >> 1)) + (((bank) & 0b1) << 5))
+#define TERAKAN_KCACHE_DWORD_LINE(offset_dwords)                                                   \
+   ((offset_dwords) / (TERAKAN_KCACHE_HW_LINE_BYTES / sizeof(uint32_t)))
+#define TERAKAN_KCACHE_DWORD_VECTOR(offset_dwords)                                                 \
+   (((offset_dwords) & (TERAKAN_KCACHE_HW_LINE_BYTES / sizeof(uint32_t) - 1)) / 4)
+#define TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)                                           \
+   (TERAKAN_KCACHE_BANK_SOURCE_BASE(bank) + TERAKAN_KCACHE_DWORD_VECTOR(offset_dwords))
+#define TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords) ((offset_dwords) & 3)
+#define TERAKAN_KCACHE_DWORD_WORD0_SRC0(bank, offset_dwords)                                       \
+   (S_SQ_ALU_WORD0_SRC0_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                    \
+    S_SQ_ALU_WORD0_SRC0_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
+#define TERAKAN_KCACHE_DWORD_WORD0_SRC1(bank, offset_dwords)                                       \
+   (S_SQ_ALU_WORD0_SRC1_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                    \
+    S_SQ_ALU_WORD0_SRC1_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
+/* With a filler for the second OP2 operand for single-operand instructions. */
+#define TERAKAN_KCACHE_DWORD_WORD0_SRC01(bank, offset_dwords)                                      \
+   (TERAKAN_KCACHE_DWORD_WORD0_SRC0(bank, offset_dwords) |                                         \
+    TERAKAN_KCACHE_DWORD_WORD0_SRC1(bank, offset_dwords))
+#define TERAKAN_KCACHE_DWORD_WORD1_SRC2(bank, offset_dwords)                                       \
+   (S_SQ_ALU_WORD1_OP3_SRC2_SEL(TERAKAN_KCACHE_DWORD_SOURCE(bank, offset_dwords)) |                \
+    S_SQ_ALU_WORD1_OP3_SRC2_CHAN(TERAKAN_KCACHE_DWORD_COMPONENT(offset_dwords)))
+
+/*
+ * Shader Resource View (SRV, in Direct3D terms) descriptors.
+ */
+
+/* `SQ_VTX_CONSTANT` doesn't have words 5 and 6, so using word 5 for the BO priority. */
+#define TERAKAN_SRV_BUFFER_PRIORITY_WORD 5
+
+#define TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE 176
+#define TERAKAN_SRV_HW_COUNT_VERTEX        160
+#define TERAKAN_SRV_HW_COUNT_FETCH         32
+
+#define TERAKAN_SRV_HW_OFFSET_PS   0
+#define TERAKAN_SRV_HW_OFFSET_VSES (TERAKAN_SRV_HW_OFFSET_PS + TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE)
+#define TERAKAN_SRV_HW_OFFSET_GS   (TERAKAN_SRV_HW_OFFSET_VSES + TERAKAN_SRV_HW_COUNT_VERTEX)
+#define TERAKAN_SRV_HW_OFFSET_HS   (TERAKAN_SRV_HW_OFFSET_GS + TERAKAN_SRV_HW_COUNT_VERTEX)
+#define TERAKAN_SRV_HW_OFFSET_LS   (TERAKAN_SRV_HW_OFFSET_HS + TERAKAN_SRV_HW_COUNT_VERTEX)
+#define TERAKAN_SRV_HW_OFFSET_CS   (TERAKAN_SRV_HW_OFFSET_LS + TERAKAN_SRV_HW_COUNT_VERTEX)
+#define TERAKAN_SRV_HW_OFFSET_FS   (TERAKAN_SRV_HW_OFFSET_CS + TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE)
+#define TERAKAN_SRV_HW_COUNT       (TERAKAN_SRV_HW_OFFSET_FS + TERAKAN_SRV_HW_COUNT_FETCH)
+
+struct terakan_srv_descriptor {
+   uint32_t srv[8];
+};
+
+/* Dynamically indexable immediate constant arrays in application shader code.
+ * Also used for a single SRV binding for meta draws or dispatches as it can be quickly invalidated
+ * alongside the shader itself.
+ */
+#define TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META 0
+/* Dynamically indexable driver and application push constants. */
+#define TERAKAN_SRV_RANGE_PUSH_CONSTANTS (TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META + 1)
+/* VS: Base vertex and instance.
+ * GS and VS/TES `ALT_CONST`: Ring buffer.
+ * CS: Number of workgroups.
+ * Not needed in FS, so can be used for an additional input attachment.
+ * Can be used in meta non-pixel shaders for an additional SRV.
+ */
+#define TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC (TERAKAN_SRV_HW_COUNT_VERTEX - 1)
+/* Pixel and compute shaders provide additional 16 SRV bindings beyond the 160 available in vertex
+ * stages. Use them for SRVs specific to those stages. In fragment shaders, place IMMED buffers of
+ * UAVs (11 with the limitations of `maxFragmentCombinedOutputResources`'s interaction with
+ * dual-source blending) there, and give the rest of that range to an extension of the mutable SRV
+ * type descriptor space for use as input attachments (at least 4 are mandatory in Vulkan). To
+ * reduce hardware binding changes when switching between fragment shaders that have the same UAV
+ * bindings, but different color output counts, not offsetting immediate buffer SRV indices by the
+ * color output count unlike UAV indices themselves.
+ */
+/* TODO(Triang3l): Place advanced blending equation feedback loop SRVs downward at the end of this
+ * range, describe that in the comment, and change the name to include that.
+ */
+#define TERAKAN_SRV_RANGE_UAV_IMMEDIATE_BASE_PIXEL                                                 \
+   (TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE - TERAKAN_COLOR_UAV_COUNT_PIXEL)
+#define TERAKAN_SRV_RANGE_UAV_IMMEDIATE_BASE_COMPUTE                                               \
+   (TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE - TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT)
+/* SRVs from the application's pipeline layout:
+ * - Sampled images, uniform texel buffers.
+ * - Storage images, storage texel buffers, storage buffers - read-only when coherence with writable
+ *   ones is not needed (vertex stages, or `restrict readonly` without `coherent`), as well as for
+ *   UAV info queries.
+ * - Uniform buffers - for dynamic indexing.
+ * - Input attachments.
+ */
+#define TERAKAN_SRV_RANGE_MUTABLE_BASE (TERAKAN_SRV_RANGE_PUSH_CONSTANTS + 1)
+#define TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL                                              \
+   (TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC - TERAKAN_SRV_RANGE_MUTABLE_BASE)
+#define TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL                                                  \
+   (TERAKAN_SRV_RANGE_UAV_IMMEDIATE_BASE_PIXEL - TERAKAN_SRV_RANGE_MUTABLE_BASE)
+static_assert(
+   TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL >= TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL,
+   "The maximum number of mutable SRV bindings per stage is expected to be bound by vertex stages, "
+   "which have fewer hardware SRV bindings.");
+static_assert(
+   TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL >= 15 + 4 + 128 + 8,
+   "There should be enough non-pixel shader mutable SRV bindings for the minimum Direct3D 11 "
+   "binding counts plus Vulkan storage buffers.");
+static_assert(
+   TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL >= 15 + 4 + 128 + 8 + 4,
+   "There should be enough pixel shader mutable SRV bindings for the minimum Direct3D 11 binding "
+   "counts plus Vulkan storage buffers and input attachments.");
+#define TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE                                            \
+   (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL * 5 + TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL)
+
+static inline uint8_t
+terakan_srv_range_mutable_max_count(mesa_shader_stage const stage)
+{
+   return stage == MESA_SHADER_FRAGMENT ? TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL
+                                        : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL;
+}
+
+/*
+ * Sampler descriptors.
+ */
+
+struct terakan_sampler_descriptor {
+   uint32_t sampler[3];
+   /* May be uninitialized if not used by the sampler. */
+   uint32_t register_border_color[4];
+};
+
+static inline int32_t
+terakan_sampler_lod_bias_from_float(float const lod_bias)
+{
+   if (unlikely(isnan(lod_bias))) {
+      return 0;
+   }
+   return (int32_t)(CLAMP(lod_bias, -0x1.0p5f, 0x1.0p5f - 0x1.0p-8f) * 0x1.0p8f);
+}
+
+static inline uint32_t
+terakan_sampler_min_max_lod_from_float(float lod)
+{
+   lod = fmaxf(lod, 0.0f);
+   lod = MIN2(lod, 0x1.0p4f - 0x1.0p-8f);
+   /* Convert to fixed-point rounding down.
+    * This is particularly important for image view minimum LOD clamping, as
+    * `minLodInteger_imageView` is defined as `floor(minLodFloat_imageView)` in the
+    * `VkImageViewMinLodCreateInfoEXT` specification, and section 5.8.4 "Fractional Clamping" of the
+    * Direct3D 11.3 Functional Specification also defines the most detailed mip that needs to be
+    * resident as `floor(MinLOD)`.
+    */
+   return (uint32_t)(lod * 0x1.0p8f);
+}
+
+static inline uint32_t
+terakan_sampler_max_aniso_ratio_from_float(float max_aniso_ratio)
+{
+   max_aniso_ratio = fmaxf(max_aniso_ratio, 1.0f);
+   max_aniso_ratio = MIN2(max_aniso_ratio, 0x1.0p4f);
+   return util_logbase2((unsigned)max_aniso_ratio);
+}
+
+#define TERAKAN_SAMPLER_HW_COUNT_PER_STAGE 18
+
+/*
+ * Utility functionality for multiple descriptor types.
+ */
+
+/* The BO is `device->uav_immediate_bo`. */
+struct terakan_srv_descriptor
+terakan_color_descriptor_info_to_uav_immediate_srv(struct terakan_device const * device,
+                                                   uint32_t color_info);
+
+/* TODO(Triang3l): Move all of this to `descriptor_type_has_*` to Vulkan-specific code, and rework
+ * `terakan_descriptor_create_for_*_buffer`.
+ */
+
 static inline bool
-terakan_descriptor_type_has_resource(VkDescriptorType const descriptor_type)
+terakan_descriptor_type_has_srv(VkDescriptorType const descriptor_type)
 {
    return descriptor_type != VK_DESCRIPTOR_TYPE_SAMPLER;
 }
@@ -464,21 +484,20 @@ terakan_descriptor_type_has_uav(VkDescriptorType const descriptor_type)
       return false;
    }
    /* For read-only bindings of the given types, and for size queries, UAVs always have a
-    * corresponding resource.
+    * corresponding SRV.
     */
-   assert(terakan_descriptor_type_has_resource(descriptor_type));
+   assert(terakan_descriptor_type_has_srv(descriptor_type));
    return true;
 }
 
-bool
-terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * bo, uint64_t va,
-                                             VkDeviceSize range,
-                                             struct terakan_resource_descriptor * resource_out);
+bool terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * bo, uint64_t va,
+                                                  VkDeviceSize range,
+                                                  struct terakan_srv_descriptor * srv_out);
 
 bool terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * bo, uint64_t va,
                                                   VkDeviceSize range,
                                                   unsigned pipe_interleave_bytes_log2,
-                                                  struct terakan_resource_descriptor * resource_out,
+                                                  struct terakan_srv_descriptor * srv_out,
                                                   struct terakan_color_descriptor * color_out);
 
 #ifdef __cplusplus

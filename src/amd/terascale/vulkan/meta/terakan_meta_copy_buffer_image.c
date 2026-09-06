@@ -129,7 +129,7 @@ static uint32_t const terakan_meta_copy_buffer_to_image_ps_r8xx[] = {
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(16 - 1),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -178,7 +178,7 @@ static uint32_t const terakan_meta_copy_image_to_buffer_ps_r8xx[] = {
 
    /* 6-7: Fetch from the source texture to R1. */
    S_SQ_TEX_WORD0_TEX_INST(3) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(1) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -286,7 +286,7 @@ static uint32_t const terakan_meta_copy_buffer_to_image_ps_r9xx[] = {
 
    /* 4-5: Vertex-fetch from the source buffer to R0. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -339,7 +339,7 @@ static uint32_t const terakan_meta_copy_image_to_buffer_ps_r9xx[] = {
    0,
    0,
    S_SQ_TEX_WORD0_TEX_INST(3) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(1) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -410,7 +410,7 @@ struct terakan_meta_shader const terakan_meta_copy_buffer_to_image_ps = {
             },
       },
    .kcache_used = BITFIELD_BIT(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS),
-   .primary_meta_resource_used = true,
+   .primary_meta_srv_used = true,
 };
 
 struct terakan_meta_shader const terakan_meta_copy_image_to_buffer_ps = {
@@ -479,7 +479,7 @@ struct terakan_meta_shader const terakan_meta_copy_image_to_buffer_ps = {
             },
       },
    .kcache_used = BITFIELD_BIT(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS),
-   .primary_meta_resource_used = true,
+   .primary_meta_srv_used = true,
 };
 
 bool
@@ -609,10 +609,10 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
 
    struct terakan_buffer const * const buffer =
       terakan_buffer_from_handle(pCopyBufferToImageInfo->srcBuffer);
-   struct terakan_resource_descriptor buffer_descriptor = {
-      .resource = {
+   struct terakan_srv_descriptor buffer_descriptor = {
+      .srv = {
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_VERTEX_BUFFER,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_VERTEX_BUFFER,
       }};
 
    command_writer->post_color_image_copy_write_barrier_actions |=
@@ -644,7 +644,7 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
          continue;
       }
 
-      buffer_descriptor.resource[3] =
+      buffer_descriptor.srv[3] =
          S_03000C_DST_SEL_X(region_image.image_descriptor_create_info.view_format.swizzle_r) |
          S_03000C_DST_SEL_Y(region_image.image_descriptor_create_info.view_format.swizzle_g) |
          S_03000C_DST_SEL_Z(region_image.image_descriptor_create_info.view_format.swizzle_b) |
@@ -703,12 +703,12 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
             TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY);
 
          uint64_t const buffer_descriptor_base = buffer->va + buffer_offset;
-         buffer_descriptor.resource[0] = (uint32_t)buffer_descriptor_base;
-         buffer_descriptor.resource[1] = (uint32_t)MIN3(
+         buffer_descriptor.srv[0] = (uint32_t)buffer_descriptor_base;
+         buffer_descriptor.srv[1] = (uint32_t)MIN3(
             buffer_z_pitch_bytes * (image_descriptor_slices - 1u) +
                buffer_slice_extent_bytes_minus_1,
             buffer->vk.size - buffer_offset - 1u, UINT32_MAX);
-         buffer_descriptor.resource[2] =
+         buffer_descriptor.srv[2] =
             S_030008_BASE_ADDRESS_HI(buffer_descriptor_base >> 32) |
             S_030008_STRIDE(region_bytes_per_block) |
             S_030008_DATA_FORMAT(region_image.image_descriptor_create_info.view_format.format) |
@@ -716,9 +716,9 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
                (enum terascale_format_number_type)
                   region_image.image_descriptor_create_info.view_format.number_type)) |
             S_030008_ENDIAN_SWAP(G_028C70_ENDIAN(image_descriptor.info));
-         terakan_hw_config_sqk_set_resource_fs(
-            &command_writer->hw_config_sqk, TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-            buffer->bo, &buffer_descriptor);
+         terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          buffer->bo, &buffer_descriptor);
 
          terakan_meta_draw_rect(command_writer, region_image.rect_blocks, image_descriptor_slices);
 
@@ -784,8 +784,8 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
          continue;
       }
 
-      struct terakan_resource_descriptor image_descriptor;
-      if (unlikely(!terakan_image_create_resource_descriptor(
+      struct terakan_srv_descriptor image_descriptor;
+      if (unlikely(!terakan_image_create_srv_descriptor(
                        &region_image.image_descriptor_create_info, V_030000_SQ_TEX_DIM_2D_ARRAY,
                        NULL, &image_descriptor))) {
          continue;
@@ -825,7 +825,7 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
              1u);
       buffer_descriptor.base = (uint32_t)(buffer_va_aligned >> 8);
       buffer_descriptor.info =
-         S_028C70_ENDIAN(G_030008_ENDIAN_SWAP(image_descriptor.resource[2])) |
+         S_028C70_ENDIAN(G_030008_ENDIAN_SWAP(image_descriptor.srv[2])) |
          S_028C70_FORMAT(region_image.image_descriptor_create_info.view_format.format) |
          S_028C70_NUMBER_TYPE(region_image.image_descriptor_create_info.view_format.number_type) |
          S_028C70_COMP_SWAP(region_image.image_descriptor_create_info.view_format.cb_color_swap) |
@@ -835,9 +835,9 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
       terakan_meta_config_draw_set_cb_uav(command_writer, 0, buffer->bo, &buffer_descriptor);
 
       /* Set the image if the region wasn't rejected due to being invalid. */
-      terakan_hw_config_sqk_set_resource_fs(
-         &command_writer->hw_config_sqk, TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-         image->bo, &image_descriptor);
+      terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                       TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META, image->bo,
+                                       &image_descriptor);
 
       int32_t const image_offset_x_minus_buffer_offset =
          (int32_t)region_image.rect_blocks.bounds[0][0] -

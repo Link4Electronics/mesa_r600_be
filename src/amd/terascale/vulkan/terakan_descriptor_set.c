@@ -67,9 +67,9 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
 
       uint32_t const descriptor_count = descriptor_write->descriptorCount;
 
-      struct terakan_descriptor_set_resource * const dst_resources =
-         (struct terakan_descriptor_set_resource *)dst_set->descriptors +
-         dst_binding->first_set_resource + descriptor_write->dstArrayElement;
+      struct terakan_descriptor_set_srv * const dst_srvs =
+         (struct terakan_descriptor_set_srv *)dst_set->descriptors + dst_binding->first_set_srv +
+         descriptor_write->dstArrayElement;
       struct terakan_descriptor_set_sampler * const dst_samplers =
          (struct terakan_descriptor_set_sampler *)(dst_set->descriptors +
                                                    dst_set->layout->pool_first_sampler_offset_bytes) +
@@ -115,16 +115,15 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          if (descriptor_write->descriptorType != VK_DESCRIPTOR_TYPE_SAMPLER) {
             for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
                  ++descriptor_index) {
-               struct terakan_descriptor_set_resource * const dst_resource =
-                  &dst_resources[descriptor_index];
+               struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
                struct terakan_image_view const * const image_view = terakan_image_view_from_handle(
                   descriptor_write->pImageInfo[descriptor_index].imageView);
-               if (image_view != NULL && G_03001C_TYPE(image_view->resource.resource[7]) ==
-                                            V_03001C_SQ_TEX_VTX_VALID_TEXTURE) {
-                  dst_resource->bo = image_view->bo;
-                  dst_resource->resource = image_view->resource;
+               if (image_view != NULL &&
+                   G_03001C_TYPE(image_view->srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_TEXTURE) {
+                  dst_srv->bo = image_view->bo;
+                  dst_srv->srv = image_view->srv;
                } else {
-                  dst_resource->bo = NULL;
+                  dst_srv->bo = NULL;
                }
             }
          }
@@ -150,16 +149,15 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
       case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER: {
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
-            struct terakan_descriptor_set_resource * const dst_resource =
-               &dst_resources[descriptor_index];
+            struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
             struct terakan_buffer_view const * const buffer_view = terakan_buffer_view_from_handle(
                descriptor_write->pTexelBufferView[descriptor_index]);
-            if (buffer_view != NULL && G_03001C_TYPE(buffer_view->resource.resource[7]) ==
-                                          V_03001C_SQ_TEX_VTX_VALID_BUFFER) {
-               dst_resource->bo = buffer_view->bo;
-               dst_resource->resource = buffer_view->resource;
+            if (buffer_view != NULL &&
+                G_03001C_TYPE(buffer_view->srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER) {
+               dst_srv->bo = buffer_view->bo;
+               dst_srv->srv = buffer_view->srv;
             } else {
-               dst_resource->bo = NULL;
+               dst_srv->bo = NULL;
             }
          }
       } break;
@@ -168,10 +166,9 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
       case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC: {
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
-            struct terakan_descriptor_set_resource * const dst_resource =
-               &dst_resources[descriptor_index];
-            dst_resource->bo = terakan_buffer_create_uniform_buffer_descriptor(
-               &descriptor_write->pBufferInfo[descriptor_index], &dst_resource->resource);
+            struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
+            dst_srv->bo = terakan_buffer_create_uniform_buffer_descriptor(
+               &descriptor_write->pBufferInfo[descriptor_index], &dst_srv->srv);
          }
       } break;
 
@@ -179,13 +176,11 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
       case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: {
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
-            struct terakan_descriptor_set_resource * const dst_resource =
-               &dst_resources[descriptor_index];
+            struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
             struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
             struct terakan_bo const * const bo = terakan_buffer_create_storage_buffer_descriptor(
-               &descriptor_write->pBufferInfo[descriptor_index], &dst_resource->resource,
-               &dst_uav->color);
-            dst_resource->bo = bo;
+               &descriptor_write->pBufferInfo[descriptor_index], &dst_srv->srv, &dst_uav->color);
+            dst_srv->bo = bo;
             dst_uav->bo = bo;
          }
       } break;
@@ -241,15 +236,15 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
       struct terakan_descriptor_set_layout_binding const * const dst_binding =
          &dst_set->layout->bindings[dst_binding_index];
 
-      if (terakan_descriptor_type_has_resource(descriptor_type)) {
-         assert(terakan_descriptor_type_has_resource(dst_binding->descriptor_type));
+      if (terakan_descriptor_type_has_srv(descriptor_type)) {
+         assert(terakan_descriptor_type_has_srv(dst_binding->descriptor_type));
          memcpy(dst_set->descriptors +
-                   sizeof(struct terakan_descriptor_set_resource) *
-                      (dst_binding->first_set_resource + descriptor_copy->dstArrayElement),
+                   sizeof(struct terakan_descriptor_set_srv) *
+                      (dst_binding->first_set_srv + descriptor_copy->dstArrayElement),
                 src_set->descriptors +
-                   sizeof(struct terakan_descriptor_set_resource) *
-                      (src_binding->first_set_resource + descriptor_copy->srcArrayElement),
-                sizeof(struct terakan_descriptor_set_resource) * descriptor_copy->descriptorCount);
+                   sizeof(struct terakan_descriptor_set_srv) *
+                      (src_binding->first_set_srv + descriptor_copy->srcArrayElement),
+                sizeof(struct terakan_descriptor_set_srv) * descriptor_copy->descriptorCount);
 
          if (terakan_descriptor_type_has_uav(descriptor_type)) {
             assert(terakan_descriptor_type_has_uav(dst_binding->descriptor_type));
@@ -500,12 +495,12 @@ terakan_vk_CreateDescriptorPool(VkDevice const deviceHandle,
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
-   size_t resource_count = 0, sampler_count = 0, uav_count = 0;
+   size_t srv_count = 0, sampler_count = 0, uav_count = 0;
    for (uint32_t pool_size_index = 0; pool_size_index < pCreateInfo->poolSizeCount;
         ++pool_size_index) {
       VkDescriptorPoolSize const pool_size = pCreateInfo->pPoolSizes[pool_size_index];
-      if (terakan_descriptor_type_has_resource(pool_size.type)) {
-         resource_count += pool_size.descriptorCount;
+      if (terakan_descriptor_type_has_srv(pool_size.type)) {
+         srv_count += pool_size.descriptorCount;
          if (terakan_descriptor_type_has_uav(pool_size.type)) {
             uav_count += pool_size.descriptorCount;
          }
@@ -515,7 +510,7 @@ terakan_vk_CreateDescriptorPool(VkDevice const deviceHandle,
       }
    }
    size_t const descriptor_memory_size =
-      sizeof(struct terakan_descriptor_set_resource) * resource_count +
+      sizeof(struct terakan_descriptor_set_srv) * srv_count +
       sizeof(struct terakan_descriptor_set_sampler) * sampler_count +
       sizeof(struct terakan_descriptor_set_uav) * uav_count;
 

@@ -103,12 +103,12 @@ terakan_device_init(struct terakan_device * const device,
 
    struct vk_device_dispatch_table dispatch_table;
    /* For secondary command buffer support, overwrite any command entrypoints in the main
-    * device-level dispatch table with vk_cmd_enqueue_unless_primary_Cmd*.
+    * device-level dispatch table with `vk_cmd_enqueue_unless_primary_Cmd*`.
     *
     * With no kernel support for chained indirect buffers (and thus having to re-emit all state
-    * including up to 1024 resource bindings one by one), and with the need to merge address
-    * relocations if inserting one indirect buffer into another, encoding secondary command buffers
-    * into hardware packets wouldn't be a viable approach. Also, serializing vkCmdBindDescriptorSets
+    * including up to 1024 SRV bindings one by one), and with the need to merge address relocations
+    * if inserting one indirect buffer into another, encoding secondary command buffers into
+    * hardware packets wouldn't be a viable approach. Also, serializing `vkCmdBindDescriptorSets`
     * calls themselves may be a more compact way of representing them compared to expanding them
     * into updates of each individual binding register.
     */
@@ -273,13 +273,12 @@ terakan_device_init(struct terakan_device * const device,
          struct terakan_shader_sqk_usage * const meta_shader_sqk_usage =
             &device->meta_shader_sqk_usage[meta_shader_index];
          meta_shader_sqk_usage->kcache = meta_shader->kcache_used;
-         if (meta_shader->primary_meta_resource_used) {
-            BITSET_SET(meta_shader_sqk_usage->resources,
-                       TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META);
+         if (meta_shader->primary_meta_srv_used) {
+            BITSET_SET(meta_shader_sqk_usage->srvs,
+                       TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META);
          }
-         if (meta_shader->non_pixel_stage_specific_resource_used) {
-            BITSET_SET(meta_shader_sqk_usage->resources,
-                       TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC);
+         if (meta_shader->non_pixel_stage_specific_srv_used) {
+            BITSET_SET(meta_shader_sqk_usage->srvs, TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC);
          }
       }
       terakan_bo_unmap(device->meta_shaders_bo);

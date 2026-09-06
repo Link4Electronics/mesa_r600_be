@@ -58,7 +58,7 @@ uint32_t terakan_vertex_input_format_fetch_word1(struct terascale_format_info co
  * the OpenGL implementation may align the attributes by itself instead.
  *
  * Using the same limit for the number of attributes as for bindings in the hardware, because
- * different attributes may need multiple hardware resource bindings even if they use the same
+ * different attributes may need multiple hardware SRV bindings even if they use the same
  * application-side binding.
  */
 
@@ -69,7 +69,7 @@ struct terakan_vertex_input_fs_layout {
    /* If an attribute is used, but its `DATA_FORMAT` is `INVALID`, the actual buffer fetch is
     * explicitly not generated, but the destination GPR is still filled, excluding components where
     * `DSL_SEL` is `MASK`, with 1 for the specified `NUM_FORMAT_ALL` if `DST_SEL` is a constant 1,
-    * or with 0 (similarly to XYZW data channels for a fetch from a null resource) otherwise. Other
+    * or with 0 (similarly to XYZW data channels for a fetch from a null SRV) otherwise. Other
     * parameters of the attribute specified in this structure not mentioned earlier in this comment
     * are ignored by fetch shader generation.
     *
@@ -81,15 +81,15 @@ struct terakan_vertex_input_fs_layout {
     * `INVALID` explicitly, the destination GPR value, and whether a fetch instruction is actually
     * emitted, is undefined.
     */
-   uint32_t attribute_format_fetch_word1[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-   uint8_t attribute_bindings[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-   uint16_t attribute_offsets[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint32_t attribute_format_fetch_word1[TERAKAN_SRV_HW_COUNT_FETCH];
+   uint8_t attribute_bindings[TERAKAN_SRV_HW_COUNT_FETCH];
+   uint16_t attribute_offsets[TERAKAN_SRV_HW_COUNT_FETCH];
 
    uint32_t instance_rate_attributes;
    /* Ignored if the attribute is per-vertex. For per-instance attributes, a divisor of 0 means that
     * the value is the same for all instances (like in `VK_EXT_vertex_attribute_divisor`).
     */
-   uint32_t attribute_instance_divisors[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint32_t attribute_instance_divisors[TERAKAN_SRV_HW_COUNT_FETCH];
 
    /* #2048StrideAs1024 #hashtag: Which bindings (see `attribute_bindings`) need the index to be
     * adjusted in the fetch shader so they can be fetched with a stride of 2048, which is the
@@ -116,14 +116,14 @@ struct terakan_vertex_input_fs_layout {
 };
 
 /* Whether the layouts will surely have identically behaving fetch shaders built for them, and with
- * the same resource descriptor usage.
+ * the same SRV descriptor usage.
  */
 bool terakan_vertex_input_fs_layout_identical(struct terakan_vertex_input_fs_layout const * a,
                                               struct terakan_vertex_input_fs_layout const * b);
 
-struct terakan_vertex_input_fs_resource_usage {
-   /* Mask of which resource registers are used. */
-   uint32_t resources_used;
+struct terakan_vertex_input_fs_srv_usage {
+   /* Mask of which SRV registers are used. */
+   uint32_t srvs_used;
 
    /* Pre-R9xx hardware performs bounds checking only for up to the first 32 bits of an element, so
     * the buffer size in the fetch constant needs to be shrunk depending on the attribute format for
@@ -132,26 +132,25 @@ struct terakan_vertex_input_fs_resource_usage {
     * Bits [4:0] - application binding index.
     * Bits [:5] - number of dwords to subtract from the buffer size in the fetch constant.
     *
-    * Only resources included in `resources_used` have their values in this array initialized.
+    * Only SRVs included in `srvs_used` have their values in this array initialized.
     */
-   uint8_t resource_bindings_and_truncation[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint8_t srv_bindings_and_truncation[TERAKAN_SRV_HW_COUNT_FETCH];
 };
 
 static inline bool
-terakan_vertex_input_fs_resource_usage_equal(
-   struct terakan_vertex_input_fs_resource_usage const * const a,
-   struct terakan_vertex_input_fs_resource_usage const * const b)
+terakan_vertex_input_fs_srv_usage_equal(struct terakan_vertex_input_fs_srv_usage const * const a,
+                                        struct terakan_vertex_input_fs_srv_usage const * const b)
 {
-   if (a->resources_used != b->resources_used) {
+   if (a->srvs_used != b->srvs_used) {
       return false;
    }
-   unsigned resources_remaining = a->resources_used;
-   while (resources_remaining) {
+   unsigned srvs_remaining = a->srvs_used;
+   while (srvs_remaining) {
       int range_start, range_length;
-      u_bit_scan_consecutive_range(&resources_remaining, &range_start, &range_length);
-      if (memcmp(&a->resource_bindings_and_truncation[range_start],
-                 &b->resource_bindings_and_truncation[range_start],
-                 sizeof(a->resource_bindings_and_truncation[0]) * range_length) != 0) {
+      u_bit_scan_consecutive_range(&srvs_remaining, &range_start, &range_length);
+      if (memcmp(&a->srv_bindings_and_truncation[range_start],
+                 &b->srv_bindings_and_truncation[range_start],
+                 sizeof(a->srv_bindings_and_truncation[0]) * range_length) != 0) {
          return false;
       }
    }
@@ -175,8 +174,7 @@ terakan_vertex_input_fs_resource_usage_equal(
  */
 #define TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS_PER_ATTRIBUTE 12
 #define TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS                                           \
-   (TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS_PER_ATTRIBUTE *                               \
-    TERAKAN_RESOURCE_HW_COUNT_FETCH)
+   (TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS_PER_ATTRIBUTE * TERAKAN_SRV_HW_COUNT_FETCH)
 /* An ALU clause can contain up to 0x80 qwords, but the last instruction group may overflow to the
  * next clause if there's less space available than needed for it (up to 5 instruction qwords and 2
  * literal constant qwords).
@@ -195,7 +193,7 @@ terakan_vertex_input_fs_resource_usage_equal(
    (DIV_ROUND_UP(TERAKAN_VERTEX_INPUT_FS_MAX_CONTROL_FLOW_QWORDS +                                 \
                     TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS,                              \
                  2) +                                                                              \
-    2 * TERAKAN_RESOURCE_HW_COUNT_FETCH)
+    2 * TERAKAN_SRV_HW_COUNT_FETCH)
 
 struct terakan_vertex_input_fs_code {
    uint32_t control_flow_qwords;
@@ -207,13 +205,13 @@ struct terakan_vertex_input_fs_code {
     */
    uint32_t control_flow[2 * TERAKAN_VERTEX_INPUT_FS_MAX_CONTROL_FLOW_QWORDS];
    uint32_t pre_fetch_alu[2 * TERAKAN_VERTEX_INPUT_FS_MAX_PRE_FETCH_ALU_QWORDS];
-   uint32_t fetch[4 * TERAKAN_RESOURCE_HW_COUNT_FETCH];
+   uint32_t fetch[4 * TERAKAN_SRV_HW_COUNT_FETCH];
 };
 
-void terakan_vertex_input_create_fs_code(
-   struct terakan_vertex_input_fs_layout const * layout, bool is_r9xx,
-   struct terakan_vertex_input_fs_resource_usage * resource_usage_out,
-   struct terakan_vertex_input_fs_code * code_out);
+void terakan_vertex_input_create_fs_code(struct terakan_vertex_input_fs_layout const * layout,
+                                         bool is_r9xx,
+                                         struct terakan_vertex_input_fs_srv_usage * srv_usage_out,
+                                         struct terakan_vertex_input_fs_code * code_out);
 
 static inline uint32_t
 terakan_vertex_input_fs_code_qwords(struct terakan_vertex_input_fs_code const * const code)
@@ -241,7 +239,7 @@ struct terakan_vertex_input_fs {
    struct terakan_bo const * bo;
    uint32_t va_shr8;
 
-   struct terakan_vertex_input_fs_resource_usage resource_usage;
+   struct terakan_vertex_input_fs_srv_usage srv_usage;
 
    struct terakan_vertex_input_fs_layout layout;
 };

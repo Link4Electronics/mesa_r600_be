@@ -280,8 +280,8 @@ terascale_wddm_create_context_private_data_clear(
 
 #define TERASCALE_WDDM_PATCH_IDS_DB_Z_STENCIL_BASE TERASCALE_WDDM_PATCH_IDS(0x3, 0)
 
-/* The exact meaning of the lower bits is unknown, possibly an abstract resource index within the
- * stage (like the UAV index for resources corresponding to UAVs).
+/* The exact meaning of the lower bits is unknown, possibly an abstract SRV index within the stage
+ * (like the UAV index for SRVs corresponding to UAVs).
  */
 #define TERASCALE_WDDM_PATCH_IDS_SQ_TEX_RESOURCE_BASE TERASCALE_WDDM_PATCH_IDS(0x5, 0)
 /* Same for texture resource mips and FMask. */
@@ -324,7 +324,7 @@ terascale_wddm_create_context_private_data_clear(
 #define TERASCALE_WDDM_PATCH_IDS_SQ_GSVS_RING_BASE TERASCALE_WDDM_PATCH_IDS(0x2E, 0)
 
 /* The exact meaning of the lower bits is unknown, possibly an abstract resource index within the
- * stage (such as the vertex buffer index in Direct3D 11 fetch shaders, the UAV index for resources
+ * stage (such as the vertex buffer index in Direct3D 11 fetch shaders, the UAV index for SRVs
  * corresponding to UAVs).
  */
 #define TERASCALE_WDDM_PATCH_IDS_SQ_VTX_CONSTANT_BASE_LO TERASCALE_WDDM_PATCH_IDS_40_BIT_LO(0x30)

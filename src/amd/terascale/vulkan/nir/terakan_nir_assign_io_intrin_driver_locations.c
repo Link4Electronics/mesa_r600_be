@@ -57,7 +57,7 @@ terakan_nir_assign_vs_input_load_driver_location(UNUSED nir_builder * const buil
       unsigned const attribute_index = location - VERT_ATTRIB_GENERIC0;
       /* TODO(Triang3l): Remove any limiting to `VERT_ATTRIB_GENERIC15` in the compilation process.
        */
-      if (unlikely(attribute_index >= TERAKAN_RESOURCE_HW_COUNT_FETCH)) {
+      if (unlikely(attribute_index >= TERAKAN_SRV_HW_COUNT_FETCH)) {
          *sanitize = true;
       } else {
          nir_intrinsic_set_base(intrinsic, attribute_index);
@@ -78,7 +78,7 @@ terakan_nir_sanitize_vs_input_load_location(nir_builder * const builder,
    unsigned const location = nir_intrinsic_io_semantics(intrinsic).location;
    if (location >= VERT_ATTRIB_GENERIC0) {
       unsigned const attribute_index = location - VERT_ATTRIB_GENERIC0;
-      if (attribute_index >= TERAKAN_RESOURCE_HW_COUNT_FETCH) {
+      if (attribute_index >= TERAKAN_SRV_HW_COUNT_FETCH) {
          builder->cursor = nir_instr_remove(&intrinsic->instr);
          /* Replace an out-of-bounds attribute with zero, similarly to an unbound attribute. */
          nir_def_replace(&intrinsic->def, nir_imm_zero(builder, intrinsic->def.num_components,

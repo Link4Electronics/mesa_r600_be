@@ -1186,7 +1186,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
          pipeline->shaders[MESA_SHADER_VERTEX].vs.vertex_attributes_needed;
       terakan_vertex_input_create_fs_code(
          &pipeline->vertex_input.sq_pgm_fetch.layout, physical_device->chip_info.is_r9xx,
-         &pipeline->vertex_input.sq_pgm_fetch.resource_usage, &fetch_shader_code);
+         &pipeline->vertex_input.sq_pgm_fetch.srv_usage, &fetch_shader_code);
       fetch_shader_is_no_operation =
          terakan_vertex_input_fs_code_is_no_operation(&fetch_shader_code);
    }

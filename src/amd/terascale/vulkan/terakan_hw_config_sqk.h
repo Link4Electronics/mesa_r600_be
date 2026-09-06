@@ -93,7 +93,7 @@ struct terakan_hw_config_sqk_stage_emission_flags {
 
    uint32_t samplers;
 
-   BITSET_DECLARE(resources, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
 };
 
 /* Assuming that both samplers are bound (all `SQ_TEX_SAMPLER` fields are relevant regardless of the
@@ -139,9 +139,9 @@ terakan_hw_config_sqk_kcache_buffer_equal(
    return a->bo == b->bo && a->va_lines == b->va_lines && a->size_lines == b->size_lines;
 }
 
-struct terakan_hw_config_sqk_resource {
+struct terakan_hw_config_sqk_srv {
    struct terakan_bo const * bo;
-   struct terakan_resource_descriptor descriptor;
+   struct terakan_srv_descriptor descriptor;
 };
 
 struct terakan_hw_config_sqk_stage {
@@ -180,7 +180,7 @@ struct terakan_hw_config_sqk_stage {
 
    struct terakan_sampler_descriptor samplers[TERAKAN_SAMPLER_HW_COUNT_PER_STAGE];
 
-   BITSET_DECLARE(resources_bound, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_bound, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
 };
 
 struct terakan_hw_config_sqk {
@@ -203,9 +203,9 @@ struct terakan_hw_config_sqk {
 
    /* Vertex input (fetch shader) stage. */
    struct {
-      uint32_t resources_used;
-      uint32_t resources_modified;
-      uint32_t resources_bound;
+      uint32_t srvs_used;
+      uint32_t srvs_modified;
+      uint32_t srvs_bound;
    } vi_;
 
    struct terakan_hw_config_sqk_stage stages_[MESA_SHADER_COMPUTE + 1];
@@ -221,23 +221,23 @@ struct terakan_hw_config_sqk {
     */
    struct terakan_hw_config_sqk_stage_emission_flags vses_last_used_by_tes_;
 
-   /* Whether each resource register, for its current (or if currently unused, its last) usage,
-    * needs to have the `UNCACHED` flag force-enabled during emission if a buffer is bound to it.
+   /* Whether each SRV register, for its current (or if currently unused, its last) usage, needs to
+    * have the `UNCACHED` flag force-enabled during emission if a buffer is bound to it.
     */
-   BITSET_DECLARE(resources_last_used_as_uncached_fs_, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
-   BITSET_DECLARE(resources_last_used_as_uncached_cs_, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_last_used_as_uncached_fs_, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_last_used_as_uncached_cs_, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
 
-   /* Resource arrays are large, so they're not initialized. Rather, if `resources_bound` for the
-    * given stage doesn't have the corresponding bit set for a resource, the BO pointer and the
-    * resource descriptor are undefined.
+   /* SRV arrays are large, so they're not initialized. Rather, if `srvs_bound` for the given stage
+    * doesn't have the corresponding bit set for an SRV, the BO pointer and the SRV descriptor are
+    * undefined.
     */
-   struct terakan_hw_config_sqk_resource resources_vi_[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-   struct terakan_hw_config_sqk_resource resources_vs_[TERAKAN_RESOURCE_HW_COUNT_VERTEX];
-   struct terakan_hw_config_sqk_resource resources_tcs_[TERAKAN_RESOURCE_HW_COUNT_VERTEX];
-   struct terakan_hw_config_sqk_resource resources_tes_[TERAKAN_RESOURCE_HW_COUNT_VERTEX];
-   struct terakan_hw_config_sqk_resource resources_gs_[TERAKAN_RESOURCE_HW_COUNT_VERTEX];
-   struct terakan_hw_config_sqk_resource resources_fs_[TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE];
-   struct terakan_hw_config_sqk_resource resources_cs_[TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE];
+   struct terakan_hw_config_sqk_srv srvs_vi_[TERAKAN_SRV_HW_COUNT_FETCH];
+   struct terakan_hw_config_sqk_srv srvs_vs_[TERAKAN_SRV_HW_COUNT_VERTEX];
+   struct terakan_hw_config_sqk_srv srvs_tcs_[TERAKAN_SRV_HW_COUNT_VERTEX];
+   struct terakan_hw_config_sqk_srv srvs_tes_[TERAKAN_SRV_HW_COUNT_VERTEX];
+   struct terakan_hw_config_sqk_srv srvs_gs_[TERAKAN_SRV_HW_COUNT_VERTEX];
+   struct terakan_hw_config_sqk_srv srvs_fs_[TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE];
+   struct terakan_hw_config_sqk_srv srvs_cs_[TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE];
 };
 
 /* #MemoryIntegrity is expected to be handled for the contents of the bound constants before the
@@ -295,38 +295,38 @@ void terakan_hw_config_sqk_set_sampler_fs(struct terakan_hw_config_sqk * config,
 void terakan_hw_config_sqk_set_sampler_cs(struct terakan_hw_config_sqk * config, unsigned index,
                                           struct terakan_sampler_descriptor const * descriptor);
 
-/* Pass NULL BO or descriptor pointer to the resource setter to unbind the resource.
+/* Pass NULL BO or descriptor pointer to the SRV setter to unbind the SRV.
  * Both the BO and the descriptor pointers are ignored if any of them is NULL.
  */
-typedef void (*terakan_hw_config_sqk_set_resource_function)(
+typedef void (*terakan_hw_config_sqk_set_srv_function)(
    struct terakan_hw_config_sqk * config, unsigned index, struct terakan_bo const * bo,
-   struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_vi(struct terakan_hw_config_sqk * config, unsigned index,
-                                           struct terakan_bo const * bo,
-                                           struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_vs(struct terakan_hw_config_sqk * config, unsigned index,
-                                           struct terakan_bo const * bo,
-                                           struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_tcs(struct terakan_hw_config_sqk * config, unsigned index,
-                                            struct terakan_bo const * bo,
-                                            struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_tes(struct terakan_hw_config_sqk * config, unsigned index,
-                                            struct terakan_bo const * bo,
-                                            struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_gs(struct terakan_hw_config_sqk * config, unsigned index,
-                                           struct terakan_bo const * bo,
-                                           struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_fs(struct terakan_hw_config_sqk * config, unsigned index,
-                                           struct terakan_bo const * bo,
-                                           struct terakan_resource_descriptor const * descriptor);
-void terakan_hw_config_sqk_set_resource_cs(struct terakan_hw_config_sqk * config, unsigned index,
-                                           struct terakan_bo const * bo,
-                                           struct terakan_resource_descriptor const * descriptor);
+   struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_vi(struct terakan_hw_config_sqk * config, unsigned index,
+                                      struct terakan_bo const * bo,
+                                      struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_vs(struct terakan_hw_config_sqk * config, unsigned index,
+                                      struct terakan_bo const * bo,
+                                      struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_tcs(struct terakan_hw_config_sqk * config, unsigned index,
+                                       struct terakan_bo const * bo,
+                                       struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_tes(struct terakan_hw_config_sqk * config, unsigned index,
+                                       struct terakan_bo const * bo,
+                                       struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_gs(struct terakan_hw_config_sqk * config, unsigned index,
+                                      struct terakan_bo const * bo,
+                                      struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_fs(struct terakan_hw_config_sqk * config, unsigned index,
+                                      struct terakan_bo const * bo,
+                                      struct terakan_srv_descriptor const * descriptor);
+void terakan_hw_config_sqk_set_srv_cs(struct terakan_hw_config_sqk * config, unsigned index,
+                                      struct terakan_bo const * bo,
+                                      struct terakan_srv_descriptor const * descriptor);
 
 struct terakan_hw_config_sqk_set_functions {
    terakan_hw_config_sqk_set_kcache_function kcache;
    terakan_hw_config_sqk_set_sampler_function sampler;
-   terakan_hw_config_sqk_set_resource_function resource;
+   terakan_hw_config_sqk_set_srv_function srv;
 };
 
 extern struct terakan_hw_config_sqk_set_functions const
@@ -358,17 +358,17 @@ terakan_hw_config_sqk_set_draw_usage_(struct terakan_hw_config_sqk * const confi
 
 static inline void
 terakan_hw_config_sqk_set_usage_vi(struct terakan_hw_config_sqk * const config,
-                                   uint32_t const resources_used)
+                                   uint32_t const srvs_used)
 {
-   config->vi_.resources_used = resources_used;
+   config->vi_.srvs_used = srvs_used;
 }
 
-/* Note that this doesn't mark the stage resources as pending, as it's expected that it's done
- * anyway when changing the shader resource usage.
+/* Note that this doesn't mark the stage SRVs as pending, as it's expected that it's done anyway
+ * when changing the shader SRV usage.
  */
-void terakan_hw_config_sqk_update_uncached_resources_(
-   struct terakan_hw_config_sqk_stage * stage, BITSET_WORD * resources_last_used_as_uncached,
-   struct terakan_hw_config_sqk_resource const * resources);
+void terakan_hw_config_sqk_update_uncached_srvs_(struct terakan_hw_config_sqk_stage * stage,
+                                                 BITSET_WORD * srvs_last_used_as_uncached,
+                                                 struct terakan_hw_config_sqk_srv const * srvs);
 
 /* Pass NULL usage to specify that the shader is unbound.
  * This is especially important for the TES stage, because without `USE_LS_CONSTS`, its usage not
@@ -405,9 +405,9 @@ terakan_hw_config_sqk_set_usage_fs(struct terakan_hw_config_sqk * const config,
    if (!terakan_hw_config_sqk_set_draw_usage_(config, MESA_SHADER_FRAGMENT, usage)) {
       return;
    }
-   terakan_hw_config_sqk_update_uncached_resources_(&config->stages_[MESA_SHADER_FRAGMENT],
-                                                    config->resources_last_used_as_uncached_fs_,
-                                                    config->resources_fs_);
+   terakan_hw_config_sqk_update_uncached_srvs_(&config->stages_[MESA_SHADER_FRAGMENT],
+                                               config->srvs_last_used_as_uncached_fs_,
+                                               config->srvs_fs_);
 }
 
 static inline void
@@ -419,8 +419,8 @@ terakan_hw_config_sqk_set_usage_cs(struct terakan_hw_config_sqk * const config,
       return;
    }
    stage->usage = usage;
-   terakan_hw_config_sqk_update_uncached_resources_(
-      stage, config->resources_last_used_as_uncached_cs_, config->resources_cs_);
+   terakan_hw_config_sqk_update_uncached_srvs_(stage, config->srvs_last_used_as_uncached_cs_,
+                                               config->srvs_cs_);
 }
 
 struct terakan_gfx_command_writer;

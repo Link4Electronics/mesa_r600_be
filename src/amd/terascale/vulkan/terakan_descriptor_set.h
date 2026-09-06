@@ -42,9 +42,9 @@
 extern "C" {
 #endif
 
-struct terakan_descriptor_set_resource {
+struct terakan_descriptor_set_srv {
    struct terakan_bo const * bo;
-   struct terakan_resource_descriptor resource;
+   struct terakan_srv_descriptor srv;
 };
 
 struct terakan_descriptor_set_sampler {
@@ -71,13 +71,12 @@ struct terakan_descriptor_set_uav {
 };
 
 #define TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT                                                \
-   MAX3(alignof(struct terakan_descriptor_set_resource),                                           \
+   MAX3(alignof(struct terakan_descriptor_set_srv),                                                \
         alignof(struct terakan_descriptor_set_sampler),                                            \
         alignof(struct terakan_descriptor_set_uav))
 
 static_assert(
-   (sizeof(struct terakan_descriptor_set_resource) % TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) ==
-         0 &&
+   (sizeof(struct terakan_descriptor_set_srv) % TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
       (sizeof(struct terakan_descriptor_set_sampler) %
        TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
       (sizeof(struct terakan_descriptor_set_uav) % TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) ==

@@ -218,8 +218,8 @@ terakan_meta_config_draw_begin(
 
    /* Use only the vertex pre-rasterization shader stage, and disable ring buffers in the
     * pre-rasterization shaders for them not to limit occupancy.
-    * Note that disabling fetch shader resource usage is not needed because fetch shader resources
-    * in `terakan_hw_config_sqk` are set by `terakan_app_config_draw`, which is not applied for meta
+    * Note that disabling fetch shader SRV usage is not needed because fetch shader SRVs in
+    * `terakan_hw_config_sqk` are set by `terakan_app_config_draw`, which is not applied for meta
     * draws.
     */
 

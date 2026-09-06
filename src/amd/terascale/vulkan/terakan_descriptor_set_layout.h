@@ -56,14 +56,14 @@ struct terakan_descriptor_set_layout_binding {
     * UAVs are allocated in the set's memory (but not in the shader ranges) regardless of the stage
     * flags for simplicity of writing and copying.
     */
-   uint16_t first_set_resource;
+   uint16_t first_set_srv;
    uint16_t first_set_uav;
    uint8_t first_set_sampler;
 
    uint8_t stage_flags;
 
    /* Primarily for shader compilation and pushing. */
-   uint8_t first_shader_resources[MESA_SHADER_STAGES];
+   uint8_t first_shader_srvs[MESA_SHADER_STAGES];
    uint8_t first_shader_uniform_buffers[MESA_SHADER_STAGES];
    uint8_t first_shader_samplers[MESA_SHADER_STAGES];
 };
@@ -73,7 +73,7 @@ struct terakan_descriptor_set_layout_shader_range {
    uint16_t first_set_descriptor;
    /* UINT16_MAX if not using a dynamic offset. */
    uint16_t first_dynamic_offset;
-   /* Of the range's type. UAVs share indices with resources corresponding to them. */
+   /* Of the range's type. UAVs share indices with SRVs corresponding to them. */
    uint8_t first_shader_descriptor;
    uint8_t descriptor_count;
 };
@@ -82,14 +82,14 @@ struct terakan_descriptor_set_layout_shader {
    uint32_t non_immutable_samplers;
    uint32_t immutable_samplers_unnormalized_coordinates;
 
-   uint16_t first_resource_range;
+   uint16_t first_srv_range;
    uint16_t first_sampler_range;
    uint16_t first_uav_range;
-   uint8_t resource_range_count;
+   uint8_t srv_range_count;
    uint8_t sampler_range_count;
    uint8_t uav_range_count;
 
-   uint8_t resource_count;
+   uint8_t srv_count;
    uint8_t uniform_buffer_count;
    uint8_t sampler_count;
 };
@@ -97,7 +97,7 @@ struct terakan_descriptor_set_layout_shader {
 struct terakan_descriptor_set_layout {
    struct vk_descriptor_set_layout vk;
 
-   /* Resources are the in the beginning of the set's descriptor memory. */
+   /* SRVs are the in the beginning of the set's descriptor memory. */
    uint32_t pool_first_sampler_offset_bytes;
    /* For simplicity of copying descriptors (the destination must not be immutable, but the source
     * may be - VUID-VkCopyDescriptorSet-dstBinding-02753), immutable samplers are stored in the set

@@ -90,8 +90,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
       }
       struct terakan_descriptor_set_layout const * const set_layout = set->layout;
 
-      struct terakan_descriptor_set_resource const * const set_resources =
-         (struct terakan_descriptor_set_resource const *)set->descriptors;
+      struct terakan_descriptor_set_srv const * const set_srvs =
+         (struct terakan_descriptor_set_srv const *)set->descriptors;
       struct terakan_descriptor_set_sampler const * const set_samplers =
          (struct terakan_descriptor_set_sampler const *)(set->descriptors +
                                                          set_layout
@@ -104,55 +104,47 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
          struct terakan_hw_config_sqk_set_functions const * const sqk_set_functions =
             &terakan_hw_config_sqk_stage_set_functions[shader_stage];
 
-         /* Resources. */
+         /* SRVs. */
 
-         uint8_t const shader_resource_set_base = layout_set->first_shader_resources[shader_stage];
-         struct terakan_descriptor_set_layout_shader_range const * const resource_ranges =
-            set_layout->shader_ranges + set_layout_shader->first_resource_range;
-         for (uint8_t range_index = 0; range_index < set_layout_shader->resource_range_count;
+         uint8_t const shader_srv_set_base = layout_set->first_shader_srvs[shader_stage];
+         struct terakan_descriptor_set_layout_shader_range const * const srv_ranges =
+            set_layout->shader_ranges + set_layout_shader->first_srv_range;
+         for (uint8_t range_index = 0; range_index < set_layout_shader->srv_range_count;
               ++range_index) {
             struct terakan_descriptor_set_layout_shader_range const * const range =
-               &resource_ranges[range_index];
-            struct terakan_descriptor_set_resource const * const range_set_resources =
-               set_resources + range->first_set_descriptor;
-            uint8_t const range_shader_base =
-               shader_resource_set_base + range->first_shader_descriptor;
+               &srv_ranges[range_index];
+            struct terakan_descriptor_set_srv const * const range_set_srvs =
+               set_srvs + range->first_set_descriptor;
+            uint8_t const range_shader_base = shader_srv_set_base + range->first_shader_descriptor;
             if (range->first_dynamic_offset != UINT16_MAX) {
                uint32_t const * const range_dynamic_offsets =
                   set_dynamic_offsets + range->first_dynamic_offset;
-               for (uint8_t resource_index = 0; resource_index < range->descriptor_count;
-                    ++resource_index) {
-                  struct terakan_descriptor_set_resource const * const set_resource =
-                     &range_set_resources[resource_index];
-                  struct terakan_resource_descriptor resource = set_resource->resource;
+               for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
+                  struct terakan_descriptor_set_srv const * const set_srv =
+                     &range_set_srvs[srv_index];
+                  struct terakan_srv_descriptor srv = set_srv->srv;
                   /* Because descriptors for bindings not statically referenced by the pipeline can
                    * be undefined, the BO pointer must not be dereferenced here as it may be
                    * outdated.
                    */
                   /* TODO(Triang3l): #MemoryIntegrity with an additional remaining size variable. */
-                  if (set_resource->bo != NULL) {
-                     assert(G_03001C_TYPE(resource.resource[7]) ==
-                            V_03001C_SQ_TEX_VTX_VALID_BUFFER);
-                     uint64_t const resource_address =
-                        (resource.resource[0] |
-                         ((uint64_t)G_030008_BASE_ADDRESS_HI(resource.resource[2]) << 32)) +
-                        range_dynamic_offsets[resource_index];
-                     resource.resource[0] = (uint32_t)resource_address;
-                     resource.resource[2] = (resource.resource[2] & C_030008_BASE_ADDRESS_HI) |
-                                            S_030008_BASE_ADDRESS_HI(resource_address >> 32);
+                  if (set_srv->bo != NULL) {
+                     assert(G_03001C_TYPE(srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER);
+                     uint64_t const srv_address =
+                        (srv.srv[0] | ((uint64_t)G_030008_BASE_ADDRESS_HI(srv.srv[2]) << 32)) +
+                        range_dynamic_offsets[srv_index];
+                     srv.srv[0] = (uint32_t)srv_address;
+                     srv.srv[2] = (srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                  S_030008_BASE_ADDRESS_HI(srv_address >> 32);
                   }
-                  sqk_set_functions->resource(&command_writer->hw_config_sqk,
-                                              range_shader_base + resource_index, set_resource->bo,
-                                              &resource);
+                  sqk_set_functions->srv(&command_writer->hw_config_sqk,
+                                         range_shader_base + srv_index, set_srv->bo, &srv);
                }
             } else {
-               for (uint8_t resource_index = 0; resource_index < range->descriptor_count;
-                    ++resource_index) {
-                  struct terakan_descriptor_set_resource const * const resource =
-                     &range_set_resources[resource_index];
-                  sqk_set_functions->resource(&command_writer->hw_config_sqk,
-                                              range_shader_base + resource_index, resource->bo,
-                                              &resource->resource);
+               for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
+                  struct terakan_descriptor_set_srv const * const srv = &range_set_srvs[srv_index];
+                  sqk_set_functions->srv(&command_writer->hw_config_sqk,
+                                         range_shader_base + srv_index, srv->bo, &srv->srv);
                }
             }
          }
@@ -194,10 +186,9 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
          struct terakan_descriptor_set_uav const * const set_uavs =
             (struct terakan_descriptor_set_uav const *)(set->descriptors +
                                                         set_layout->pool_first_uav_offset_bytes);
-         assert(layout_set->first_shader_resources[uav_shader_stage] >=
-                TERAKAN_RESOURCE_RANGE_MUTABLE_BASE);
-         uint8_t const shader_uav_set_base = layout_set->first_shader_resources[uav_shader_stage] -
-                                             TERAKAN_RESOURCE_RANGE_MUTABLE_BASE;
+         assert(layout_set->first_shader_srvs[uav_shader_stage] >= TERAKAN_SRV_RANGE_MUTABLE_BASE);
+         uint8_t const shader_uav_set_base =
+            layout_set->first_shader_srvs[uav_shader_stage] - TERAKAN_SRV_RANGE_MUTABLE_BASE;
          struct terakan_descriptor_set_layout_shader_range const * const uav_ranges =
             set_layout->shader_ranges + set_layout_uav_shader->first_uav_range;
          for (uint8_t range_index = 0; range_index < set_layout_uav_shader->uav_range_count;
@@ -209,9 +200,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
             uint8_t const range_shader_base = shader_uav_set_base + range->first_shader_descriptor;
             for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
                uint8_t const shader_uav_index = range_shader_base + uav_index;
-               assert(shader_uav_index < (is_compute
-                                             ? TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL
-                                             : TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL));
+               assert(shader_uav_index < (is_compute ? TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL
+                                                     : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL));
                struct terakan_descriptor_set_uav const * const set_uav = &range_set_uavs[uav_index];
                /* Because descriptors for bindings not statically referenced by the pipeline can be
                 * undefined, the BO pointer must not be dereferenced here as it may be outdated.
@@ -325,10 +315,9 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
          hw_descriptor_set_layout->first_shader_samplers[stage] +
          descriptor_set_binding->first_shader_samplers[stage];
    }
-   if (terakan_descriptor_type_has_resource(descriptor_set_binding->descriptor_type)) {
-      pipeline_layout_binding.resource_base =
-         hw_descriptor_set_layout->first_shader_resources[stage] +
-         descriptor_set_binding->first_shader_resources[stage];
+   if (terakan_descriptor_type_has_srv(descriptor_set_binding->descriptor_type)) {
+      pipeline_layout_binding.srv_base = hw_descriptor_set_layout->first_shader_srvs[stage] +
+                                         descriptor_set_binding->first_shader_srvs[stage];
    }
 
    /* Return the binding if the type is compatible. */
@@ -442,7 +431,7 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
    }
    layout->sets = sets;
 
-   uint8_t next_first_mutable_shader_resources[MESA_SHADER_STAGES] = {};
+   uint8_t next_first_mutable_shader_srvs[MESA_SHADER_STAGES] = {};
    uint8_t next_first_shader_uniform_buffers[MESA_SHADER_STAGES] = {};
    uint8_t next_first_shader_samplers[MESA_SHADER_STAGES] = {};
 
@@ -463,15 +452,14 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
          struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[stage_index];
 
-         uint8_t const first_mutable_shader_resource =
-            next_first_mutable_shader_resources[stage_index];
-         if (terakan_resource_range_mutable_max_count(stage_index) - first_mutable_shader_resource <
-             set_layout_shader->resource_count) {
+         uint8_t const first_mutable_shader_srv = next_first_mutable_shader_srvs[stage_index];
+         if (terakan_srv_range_mutable_max_count(stage_index) - first_mutable_shader_srv <
+             set_layout_shader->srv_count) {
             goto too_many_descriptors;
          }
-         set->first_shader_resources[stage_index] =
-            TERAKAN_RESOURCE_RANGE_MUTABLE_BASE + first_mutable_shader_resource;
-         next_first_mutable_shader_resources[stage_index] += set_layout_shader->resource_count;
+         set->first_shader_srvs[stage_index] =
+            TERAKAN_SRV_RANGE_MUTABLE_BASE + first_mutable_shader_srv;
+         next_first_mutable_shader_srvs[stage_index] += set_layout_shader->srv_count;
 
          set->first_shader_uniform_buffers[stage_index] =
             next_first_shader_uniform_buffers[stage_index];

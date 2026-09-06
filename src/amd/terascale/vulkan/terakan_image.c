@@ -92,19 +92,19 @@ terakan_vk_rect_to_screen_rect(VkRect2D rect, struct terakan_screen_rect const c
 }
 
 /* While old versions of AMD's PAL included the code of an implementation of the AddrLib for
- * R8xx/R9xx (the R800Lib class), its usage involves various inconveniences, such as:
+ * R8xx/R9xx (the `R800Lib` class), its usage involves various inconveniences, such as:
  *
- * - 8_8_8, 16_16_16, 32_32_32 formats are handled in a strange way, with pitch returned in channels
- *   rather than in whole pixels, and its value doesn't even fit into PITCH_TILE_MAX for large image
- *   widths. Mesa GFX6+ drivers work around this by passing FMT_INVALID with an explicit number of
- *   bits per pixel instead.
+ * - `8_8_8`, `16_16_16`, `32_32_32` formats are handled in a strange way, with pitch returned in
+ *   channels rather than in whole pixels, and its value doesn't even fit into `PITCH_TILE_MAX` for
+ *   large image widths. Mesa GFX6+ drivers work around this by passing `FMT_INVALID` with an
+ *   explicit number of bits per pixel instead.
  *
- * - The code of R800Lib contains a few references to a workaround for some hardware bug related to
- *   block-compressed images and padding of their storage to power of two dimensions. For "ECO'd or
- *   RTL fixed" revisions of R8xx, it contains an assertion that checks if the input width and
+ * - The code of `R800Lib` contains a few references to a workaround for some hardware bug related
+ *   to block-compressed images and padding of their storage to power of two dimensions. For "ECO'd
+ *   or RTL fixed" revisions of R8xx, it contains an assertion that checks if the input width and
  *   height are powers of two, and for that hardware bug on the A11 revision of Cypress and Juniper
  *   it doesn't have a workaround at all. There are also some related assumptions in
- *   ElemLib::AdjustSurfaceInfo, and it's not clear how safe they would be if that power of two
+ *   `ElemLib::AdjustSurfaceInfo`, and it's not clear how safe they would be if that power of two
  *   assertion is bypassed. However, it's not certain if any such workaround is needed at all, and
  *   what exactly is affected by that bug - and as of this writing, the Gallium R600 driver and
  *   libdrm_radeon don't have any related code.
@@ -131,17 +131,17 @@ terakan_image_compute_tc_non_display(struct terakan_format_info const * const fo
     *
     * However, on R8xx (tested on Barts), it seems like there's some inconsistency between CB and TC
     * for non-displayable tiling order for 64bpp and 128bpp. This causes:
-    * - With buffer to image copying for BC implemented by drawing to a 32_32 / 32_32_32_32 CB
-    *   target, and image to buffer copying via reading from a 32_32 / 32_32_32_32 TC texture,
+    * - With buffer to image copying for BC implemented by drawing to a `32_32` / `32_32_32_32` CB
+    *   target, and image to buffer copying via reading from a `32_32` / `32_32_32_32` TC texture,
     *   failures of:
-    *   dEQP-VK.api.copy_and_blit.core.image_to_buffer.2d_images.mip_copies_bc*_universal
-    * - Broken SSAO in Sascha Willems's `ssao` example with the VK_FORMAT_R32G32B32A32_SFLOAT
+    *   `dEQP-VK.api.copy_and_blit.core.image_to_buffer.2d_images.mip_copies_bc*_universal`
+    * - Broken SSAO in Sascha Willems's `ssao` example with the `VK_FORMAT_R32G32B32A32_SFLOAT`
     *   G-buffer containing position and depth.
     *
     * Because of that, unless there are other requirements, using non-displayable tiling order only
     * for depth / stencil formats (regardless of the usage). As of March 2023, this matches how the
-    * Gallium R600 driver selects the tiling order. SQ_TEX_RESOURCE_WORD0_0 documentation in the
-    * Evergreen and Cayman 3D Register Reference Guides also describes NON_DISP_TILING_ORDER as
+    * Gallium R600 driver selects the tiling order. `SQ_TEX_RESOURCE_WORD0_0` documentation in the
+    * Evergreen and Cayman 3D Register Reference Guides also describes `NON_DISP_TILING_ORDER` as
     * "Memory tiling type (Color vs. Depth)".
     */
    if (is_r9xx &&
@@ -160,7 +160,7 @@ terakan_image_macro_tile_bytes_log2(unsigned const bytes_per_block_log2,
                                     unsigned const samples_log2,
                                     unsigned const tile_split_bytes_log2)
 {
-   /* From AddrLib's EgBasedLib::ComputeSurfaceAlignmentsMacroTiled.
+   /* From AddrLib's `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`.
     * For thick tiling modes, thickness should be one of the multipliers also, but they aren't used.
     */
    return MIN2(6 + bytes_per_block_log2 + samples_log2, tile_split_bytes_log2);
@@ -172,7 +172,7 @@ terakan_image_macro_tile_bank_height_alignment_log2(
    struct terakan_physical_device_tiling_info const * const tiling_info,
    unsigned const tile_bytes_log2, unsigned const bank_width_log2)
 {
-   /* From AddrLib's EgBasedLib::ComputeSurfaceAlignmentsMacroTiled. */
+   /* From AddrLib's `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`. */
    return (unsigned)MAX2(
       (int)(tiling_info->pipe_interleave_bytes_log2 + tiling_info->bank_interleave_log2) -
          (int)(tile_bytes_log2 + bank_width_log2),
@@ -188,7 +188,7 @@ terakan_image_macro_tile_aspect_ratio_single_sample_alignment_log2(
    struct terakan_physical_device_tiling_info const * const tiling_info,
    unsigned const tile_bytes_log2, unsigned const bank_width_log2)
 {
-   /* From AddrLib's EgBasedLib::ComputeSurfaceAlignmentsMacroTiled. */
+   /* From AddrLib's `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`. */
    return (unsigned)MAX2(
       (int)(tiling_info->pipe_interleave_bytes_log2 + tiling_info->bank_interleave_log2) -
          (int)(tile_bytes_log2 + tiling_info->pipes_log2 + bank_width_log2),
@@ -205,8 +205,8 @@ static struct terakan_image_alignments
 terakan_image_alignments_linear(unsigned const pipe_interleave_bytes_log2,
                                 unsigned const bytes_per_block)
 {
-   /* From AddrLib's R800Lib::HwlGetPitchAlignmentLinear.
-    * Must not be smaller than what DRM Radeon evergreen_surface_check_linear_aligned computes for
+   /* From AddrLib's `R800Lib::HwlGetPitchAlignmentLinear`.
+    * Must not be smaller than what DRM Radeon `evergreen_surface_check_linear_aligned` computes for
     * command submission validation.
     */
    return (struct terakan_image_alignments){
@@ -222,10 +222,10 @@ terakan_image_alignments_linear(unsigned const pipe_interleave_bytes_log2,
 #define TERAKAN_IMAGE_MICRO_TILE_WIDTH_HEIGHT      (1 << TERAKAN_IMAGE_MICRO_TILE_WIDTH_HEIGHT_LOG2)
 
 /* Note that with 1D thin tiling, stencil requires a larger pitch alignment compared to depth, yet
- * there's only one DB_DEPTH_SIZE::PITCH_TILE_MAX for both depth and stencil.
+ * there's only one `DB_DEPTH_SIZE::PITCH_TILE_MAX` for both depth and stencil.
  *
  * For the base level, this can be worked around by overaligning the depth surface in combined depth
- * and stencil images - this is handled here when is_combined_depth_stencil_base_level is true.
+ * and stencil images - this is handled here when `is_combined_depth_stencil_base_level` is true.
  *
  * This can't be done for mips, however, as TC computes their pitch implicitly from the width.
  * Neither can 2D tiling be forced for mips, because TC automatically degrades small mips to 1D
@@ -238,10 +238,10 @@ terakan_image_alignments_1d_thin(unsigned const pipe_interleave_bytes_log2,
                                  unsigned const bytes_per_block_log2,
                                  bool const is_combined_depth_stencil_base_level_used_by_db)
 {
-   /* From AddrLib's EgBasedLib::ComputeSurfaceAlignmentsMicroTiled.
-    * Must not be smaller than what DRM Radeon evergreen_surface_check_1d computes for command
+   /* From AddrLib's `EgBasedLib::ComputeSurfaceAlignmentsMicroTiled`.
+    * Must not be smaller than what DRM Radeon `evergreen_surface_check_1d` computes for command
     * submission validation.
-    * If is_combined_depth_stencil_base_level_used_by_db, align depth like stencil (1 byte per
+    * If `is_combined_depth_stencil_base_level_used_by_db`, align depth like stencil (1 byte per
     * pixel).
     */
    unsigned const pixels_per_pipe_interleave_log2 =
@@ -265,8 +265,8 @@ terakan_image_alignments_2d_thin(
    unsigned const tile_bytes_log2, unsigned const bank_width_log2, unsigned const bank_height_log2,
    unsigned const macro_tile_aspect_ratio_log2)
 {
-   /* From AddrLib's EgBasedLib::ComputeSurfaceAlignmentsMacroTiled.
-    * Must not be smaller than what DRM Radeon evergreen_surface_check_2d computes for command
+   /* From AddrLib's `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`.
+    * Must not be smaller than what DRM Radeon `evergreen_surface_check_2d` computes for command
     * submission validation.
     */
    assert(macro_tile_aspect_ratio_log2 <= 3);
@@ -285,14 +285,14 @@ terakan_image_alignments_2d_thin(
    };
 }
 
-/* According to AddrLib's AdjustPitchAlignment, display engine hardwires lower 5 bit of GRPH_PITCH
- * to zero, which means 32 pixel alignment.
+/* According to AddrLib's `AdjustPitchAlignment`, display engine hardwires lower 5 bit of
+ * `GRPH_PITCH` to zero, which means 32 pixel alignment.
  */
 #define TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS_LOG2 5
 #define TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS                                               \
    (1 << TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS_LOG2)
 
-/* format_info must be the result of terakan_format_info_get for image_create_info->format.
+/* `format_info` must be the result of `terakan_format_info_get` for `image_create_info->format`.
  * Returns the preferred base level array mode, though it may need to be degraded from 2D to 1D
  * afterwards.
  */
@@ -452,7 +452,8 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
 
       /* Reduce the bank width and height if needed and possible to meet the constraint:
        * tile size * bank width * bank height <= row size
-       * See the HwlReduceBankWidthHeight call in EgBasedLib::ComputeSurfaceAlignmentsMacroTiled.
+       * See the `HwlReduceBankWidthHeight` call in
+       * `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`.
        * This is moved above aligning the bank height compared to where it's done in AddrLib for
        * consistency of bank height and macro-tile aspect ratio calculations.
        */
@@ -575,7 +576,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
             MAX2(macro_tile_aspect_ratio_log2, macro_tile_aspect_ratio_alignment_log2);
       }
 
-      /* Try to degrade to 1D (AddrLib DegradeTo1D) to save space. Multisampled images must be
+      /* Try to degrade to 1D (AddrLib `DegradeTo1D`) to save space. Multisampled images must be
        * 2D-tiled, however. AddrLib also doesn't perform this optimization for swapchain images.
        */
       if (optimize_for_space && samples_log2 == 0) {
@@ -594,7 +595,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
                 3 * width_blocks * (uint64_t)height_blocks) {
             array_mode = V_028C70_ARRAY_1D_TILED_THIN1;
          }
-         /* AddrLib's OptimizeTileMode has additional cases when degradation to 1D happens for
+         /* AddrLib's `OptimizeTileMode` has additional cases when degradation to 1D happens for
           * alignment minimization, but RadeonSI doesn't enable them.
           */
       }
@@ -676,7 +677,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
       /* Aspect offset in memory will be added later. */
       level->offset_in_memory_bytes_shr8 = level_offset_in_aspect_bytes_shr8;
 
-      /* From AddrLib's Lib::ComputeSurfaceInfo:
+      /* From AddrLib's `Lib::ComputeSurfaceInfo`:
        *
        *     "For 96 bit surface, the pixelPitch returned might be an odd number, but it is okay to
        *     program texture pitch as HW's mip calculator would multiply 3 first, then do the
@@ -709,10 +710,10 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
          if (level_array_mode == V_028C70_ARRAY_2D_TILED_THIN1) {
             /* Check if TC degrades tiling to 1D starting from this level.
              *
-             * The condition matches AddrLib's EgBasedLib::ComputeSurfaceMipLevelTileMode and also
-             * the kernel validation (evergreen_cs_track_validate_texture).
+             * The condition matches AddrLib's `EgBasedLib::ComputeSurfaceMipLevelTileMode` and also
+             * the kernel validation (`evergreen_cs_track_validate_texture`).
              *
-             * Note that EgBasedLib::ComputeSurfaceMipLevelTileMode also contains two conditions
+             * Note that `EgBasedLib::ComputeSurfaceMipLevelTileMode` also contains two conditions
              * that are OR'd, which are missing from DRM Radeon 2.50.0:
              * (1) pipe interleave * bank interleave >
              *     bytes per tile * pipes * bank width * macro-tile aspect ratio
@@ -1040,10 +1041,10 @@ terakan_image_descriptor_subresource_range_sanitize(
 }
 
 bool
-terakan_image_create_resource_descriptor(
+terakan_image_create_srv_descriptor(
    struct terakan_image_descriptor_create_info const * const descriptor_create_info,
    uint32_t const desired_dimensionality, VkComponentMapping const * const component_mapping_opt,
-   struct terakan_resource_descriptor * const descriptor_out)
+   struct terakan_srv_descriptor * const descriptor_out)
 {
    struct terascale_format_info const view_format = descriptor_create_info->view_format;
 
@@ -1196,7 +1197,7 @@ terakan_image_create_resource_descriptor(
          hw_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
          break;
       default:
-         assert(!"Unsupported image resource descriptor dimensionality");
+         assert(!"Unsupported image SRV descriptor dimensionality");
          return false;
       }
    }
@@ -1230,7 +1231,7 @@ terakan_image_create_resource_descriptor(
        * dEQP-VK.api.copy_and_blit.core.image_to_buffer.2d_images.mip_copies_bc*_universal
        * (the copy source being a block-compressed 64x192 array image with mips - assuming that the
        * implementation of `vkCmdCopyImageToBuffer` reads from a size-compatible uncompressed format
-       * SQ texture resource).
+       * texture SRV).
        */
       if (origin_level_view_width > 1) {
          descriptor_width = origin_level_view_width << 1;
@@ -1296,9 +1297,9 @@ terakan_image_create_resource_descriptor(
     * exceeds it.
     *
     * For 3x-expanded formats, it's also pre-aligned to both the hardware linear image pitch
-    * alignment requirement as surfels and 8 texels (the granularity of `PITCH` in resource
-    * descriptors), while pitches of non-base mips of 3x-expanded format images may not always be
-    * representable by the `PITCH` field of the descriptor.
+    * alignment requirement as surfels and 8 texels (the granularity of `PITCH` in SRV descriptors),
+    * while pitches of non-base mips of 3x-expanded format images may not always be representable by
+    * the `PITCH` field of the descriptor.
     *
     * Note that macro-tiled images may have a smaller pitch alignment requirement than
     * non-macro-tiled images. For example, for 1 byte per surfel, the pitch alignment for `1D_THIN`
@@ -1323,17 +1324,17 @@ terakan_image_create_resource_descriptor(
       container_of(image->vk.base.device->physical, struct terakan_physical_device const, vk);
 
    /* Fill the descriptor. Must not return false from now on. */
-   descriptor_out->resource[0] =
+   descriptor_out->srv[0] =
       S_030000_DIM(hw_dimensionality) |
       (physical_device->chip_info.is_r9xx
           ? CM_S_030000_NON_DISP_TILING_ORDER(surface_aspect->tiling.tc_non_display)
           : S_030000_NON_DISP_TILING_ORDER(surface_aspect->tiling.tc_non_display)) |
       S_030000_PITCH(descriptor_pitch_texels / 8 - 1) | S_030000_TEX_WIDTH(descriptor_width - 1);
-   descriptor_out->resource[1] = S_030004_TEX_HEIGHT(descriptor_height - 1) |
-                                 S_030004_TEX_DEPTH(descriptor_depth_or_array_layers - 1) |
-                                 S_030004_ARRAY_MODE(surface_aspect->levels[0].array_mode);
-   descriptor_out->resource[2] = image_va_shr8 + surface_aspect->offset_in_memory_bytes_shr8;
-   descriptor_out->resource[4] =
+   descriptor_out->srv[1] = S_030004_TEX_HEIGHT(descriptor_height - 1) |
+                            S_030004_TEX_DEPTH(descriptor_depth_or_array_layers - 1) |
+                            S_030004_ARRAY_MODE(surface_aspect->levels[0].array_mode);
+   descriptor_out->srv[2] = image_va_shr8 + surface_aspect->offset_in_memory_bytes_shr8;
+   descriptor_out->srv[4] =
       S_030010_FORMAT_COMP_X(view_format.channels_signed & (1u << 0)
                                 ? V_030010_SQ_FORMAT_COMP_SIGNED
                                 : V_030010_SQ_FORMAT_COMP_UNSIGNED) |
@@ -1354,21 +1355,20 @@ terakan_image_create_resource_descriptor(
                               ? terascale_format_big_endian_swap[view_format.format]
                               : TERASCALE_ENDIAN_SWAP_NONE);
    if (component_mapping_opt != NULL) {
-      descriptor_out->resource[4] |=
-         S_030010_DST_SEL_X(terakan_format_apply_component_swizzle(
-            view_format, component_mapping_opt->r, VK_COMPONENT_SWIZZLE_R)) |
-         S_030010_DST_SEL_Y(terakan_format_apply_component_swizzle(
-            view_format, component_mapping_opt->g, VK_COMPONENT_SWIZZLE_G)) |
-         S_030010_DST_SEL_Z(terakan_format_apply_component_swizzle(
-            view_format, component_mapping_opt->b, VK_COMPONENT_SWIZZLE_B)) |
-         S_030010_DST_SEL_W(terakan_format_apply_component_swizzle(
-            view_format, component_mapping_opt->a, VK_COMPONENT_SWIZZLE_A));
+      descriptor_out->srv[4] |= S_030010_DST_SEL_X(terakan_format_apply_component_swizzle(
+                                   view_format, component_mapping_opt->r, VK_COMPONENT_SWIZZLE_R)) |
+                                S_030010_DST_SEL_Y(terakan_format_apply_component_swizzle(
+                                   view_format, component_mapping_opt->g, VK_COMPONENT_SWIZZLE_G)) |
+                                S_030010_DST_SEL_Z(terakan_format_apply_component_swizzle(
+                                   view_format, component_mapping_opt->b, VK_COMPONENT_SWIZZLE_B)) |
+                                S_030010_DST_SEL_W(terakan_format_apply_component_swizzle(
+                                   view_format, component_mapping_opt->a, VK_COMPONENT_SWIZZLE_A));
    } else {
-      descriptor_out->resource[4] |=
+      descriptor_out->srv[4] |=
          S_030010_DST_SEL_X(view_format.swizzle_r) | S_030010_DST_SEL_Y(view_format.swizzle_g) |
          S_030010_DST_SEL_Z(view_format.swizzle_b) | S_030010_DST_SEL_W(view_format.swizzle_a);
    }
-   descriptor_out->resource[5] =
+   descriptor_out->srv[5] =
       hw_dimensionality == V_030000_SQ_TEX_DIM_3D
          ? S_030014_LAST_ARRAY(descriptor_depth_or_array_layers - 1)
          : S_030014_BASE_ARRAY(descriptor_create_info->subresource_range.base_z_or_array_layer) |
@@ -1378,8 +1378,8 @@ terakan_image_create_resource_descriptor(
    /* TODO(Triang3l): `MIN_LOD` for `VK_EXT_image_view_min_lod` (research the base level and out of
     * bounds behavior).
     */
-   descriptor_out->resource[6] = S_030018_TILE_SPLIT(surface_aspect->tiling.attrib_tile_split);
-   descriptor_out->resource[7] =
+   descriptor_out->srv[6] = S_030018_TILE_SPLIT(surface_aspect->tiling.attrib_tile_split);
+   descriptor_out->srv[7] =
       S_03001C_DATA_FORMAT(view_format.format) |
       S_03001C_MACRO_TILE_ASPECT(surface_aspect->tiling.attrib_macro_tile_aspect) |
       S_03001C_BANK_WIDTH(surface_aspect->tiling.attrib_bank_width) |
@@ -1390,32 +1390,31 @@ terakan_image_create_resource_descriptor(
       S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_TEXTURE);
    if (is_multisampled) {
       /* TODO(Triang3l): FMask (address in `MIP_ADDRESS`, `FMASK_BANK_HEIGHT`). */
-      descriptor_out->resource[3] = descriptor_out->resource[2];
+      descriptor_out->srv[3] = descriptor_out->srv[2];
       unsigned const samples_log2 = util_logbase2((uint32_t)image->vk.samples);
       if (physical_device->chip_info.is_r9xx) {
-         descriptor_out->resource[4] |= S_030010_LOG2_NUM_FRAGMENTS(samples_log2);
+         descriptor_out->srv[4] |= S_030010_LOG2_NUM_FRAGMENTS(samples_log2);
       }
       /* `LAST_LEVEL` is used for the sample count instead. */
-      descriptor_out->resource[5] |= S_030014_LAST_LEVEL(samples_log2);
+      descriptor_out->srv[5] |= S_030014_LAST_LEVEL(samples_log2);
    } else {
       if (extract_single_level) {
-         descriptor_out->resource[3] =
-            image_va_shr8 + surface_origin_level->offset_in_memory_bytes_shr8;
+         descriptor_out->srv[3] = image_va_shr8 + surface_origin_level->offset_in_memory_bytes_shr8;
          if (origin_level != 0) {
-            descriptor_out->resource[4] |= S_030010_BASE_LEVEL(1);
-            descriptor_out->resource[5] |= S_030014_LAST_LEVEL(1);
+            descriptor_out->srv[4] |= S_030010_BASE_LEVEL(1);
+            descriptor_out->srv[5] |= S_030014_LAST_LEVEL(1);
          }
       } else {
-         descriptor_out->resource[3] =
+         descriptor_out->srv[3] =
             image_va_shr8 +
             surface_aspect->levels[MIN2(image->vk.mip_levels - 1u, 1u)].offset_in_memory_bytes_shr8;
-         descriptor_out->resource[4] |=
+         descriptor_out->srv[4] |=
             S_030010_BASE_LEVEL(descriptor_create_info->subresource_range.base_mip_level);
-         descriptor_out->resource[5] |=
+         descriptor_out->srv[5] |=
             S_030014_LAST_LEVEL(descriptor_create_info->subresource_range.base_mip_level +
                                 (descriptor_create_info->subresource_range.max_level_count - 1));
       }
-      descriptor_out->resource[6] |= S_030018_MAX_ANISO_RATIO(4);
+      descriptor_out->srv[6] |= S_030018_MAX_ANISO_RATIO(4);
    }
    return true;
 }
@@ -1450,10 +1449,10 @@ terakan_image_create_color_descriptor(
    /* Only `LINEAR_ALIGNED` is currently supported for linear, not `LINEAR_GENERAL`. */
    assert(surface_level->array_mode != V_028C70_ARRAY_LINEAR_GENERAL);
 
-   /* Color descriptors support fewer slices than texture resource descriptors, but meta draws may
-    * still need to access all the slices. Between the slices, there's bank rotation in the tiling,
-    * so it's not possible to just adjust the base pointer directly to `base_z_or_array_layer` all
-    * the time, only by numbers of slices aligned to the rotation granularity on the chip.
+   /* Color descriptors support fewer slices than SRV descriptors, but meta draws may still need to
+    * access all the slices. Between the slices, there's bank rotation in the tiling, so it's not
+    * possible to just adjust the base pointer directly to `base_z_or_array_layer` all the time,
+    * only by numbers of slices aligned to the rotation granularity on the chip.
     * Restrict the descriptor to the range of `TERAKAN_IMAGE_MAX_TARGET_SLICES` slices that includes
     * `base_z_or_array_layer`.
     */
@@ -1827,7 +1826,7 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
 
    /* Using a view with both depth and stencil aspects for sampled or storage image descriptors is
     * not valid according to the `VkImageSubresourceRange` documentation, but very easy to produce,
-    * so create depth-only resource and color descriptors unless only stencil is needed.
+    * so create depth-only SRV and color descriptors unless only stencil is needed.
     */
    unsigned view_format_main_aspect_index = 0, image_format_main_aspect_index = 0;
    if ((pCreateInfo->subresourceRange.aspectMask &
@@ -1838,56 +1837,55 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
          terakan_format_aspect_index(image->format_info.aspect_map, VK_IMAGE_ASPECT_STENCIL_BIT, 0);
    }
    /* TODO(Triang3l): For multi-planar images, select the correct plane for the main aspect, and
-    * also create resource descriptors for all planes if requested (the aspect mask is COLOR).
+    * also create SRV descriptors for all planes if requested (the aspect mask is COLOR).
     */
 
    descriptor_create_info.view_format =
       view_format_info.aspect_formats[view_format_main_aspect_index];
    descriptor_create_info.image_aspect_index = image_format_main_aspect_index;
 
-   uint32_t resource_dimensionality = V_030000_SQ_TEX_DIM_1D;
+   uint32_t srv_dimensionality = V_030000_SQ_TEX_DIM_1D;
    uint32_t color_resource_type = V_028C70_TEXTURE1D;
    switch (pCreateInfo->viewType) {
    case VK_IMAGE_VIEW_TYPE_1D:
-      resource_dimensionality = V_030000_SQ_TEX_DIM_1D;
+      srv_dimensionality = V_030000_SQ_TEX_DIM_1D;
       color_resource_type = V_028C70_TEXTURE1D;
       break;
    case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          pCreateInfo->subresourceRange.layerCount;
-      resource_dimensionality = V_030000_SQ_TEX_DIM_1D_ARRAY;
+      srv_dimensionality = V_030000_SQ_TEX_DIM_1D_ARRAY;
       color_resource_type = V_028C70_TEXTURE1DARRAY;
       break;
    case VK_IMAGE_VIEW_TYPE_2D:
-      resource_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT
-                                   ? V_030000_SQ_TEX_DIM_2D_MSAA
-                                   : V_030000_SQ_TEX_DIM_2D;
+      srv_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT ? V_030000_SQ_TEX_DIM_2D_MSAA
+                                                                     : V_030000_SQ_TEX_DIM_2D;
       color_resource_type = V_028C70_TEXTURE2D;
       break;
    case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          pCreateInfo->subresourceRange.layerCount;
-      resource_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT
-                                   ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
-                                   : V_030000_SQ_TEX_DIM_2D_ARRAY;
+      srv_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT
+                              ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
+                              : V_030000_SQ_TEX_DIM_2D_ARRAY;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
       break;
    case VK_IMAGE_VIEW_TYPE_3D:
       descriptor_create_info.subresource_range.base_z_or_array_layer = 0;
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          u_minify(image->vk.extent.depth, pCreateInfo->subresourceRange.baseMipLevel);
-      resource_dimensionality = V_030000_SQ_TEX_DIM_3D;
+      srv_dimensionality = V_030000_SQ_TEX_DIM_3D;
       color_resource_type = V_028C70_TEXTURE3D;
       break;
    case VK_IMAGE_VIEW_TYPE_CUBE:
       descriptor_create_info.subresource_range.max_depth_or_layer_count = 6;
-      resource_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
+      srv_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
       break;
    case VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          pCreateInfo->subresourceRange.layerCount;
-      resource_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
+      srv_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
       break;
    default:
@@ -1897,16 +1895,15 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
    /* TODO(Triang3l): Verify sanitization for cubemaps. */
    if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
           image, &descriptor_create_info.subresource_range,
-          resource_dimensionality == V_030000_SQ_TEX_DIM_CUBEMAP))) {
-      image_view->resource = (struct terakan_resource_descriptor){};
+          srv_dimensionality == V_030000_SQ_TEX_DIM_CUBEMAP))) {
+      image_view->srv = (struct terakan_srv_descriptor){};
       image_view->color = (struct terakan_color_descriptor){};
       image_view->color_meta = (struct terakan_color_meta_descriptor){};
       image_view->depth_stencil = (struct terakan_depth_stencil_descriptor){};
    } else {
-      if (!terakan_image_create_resource_descriptor(
-             &descriptor_create_info, resource_dimensionality, &pCreateInfo->components,
-             &image_view->resource)) {
-         image_view->resource = (struct terakan_resource_descriptor){};
+      if (!terakan_image_create_srv_descriptor(&descriptor_create_info, srv_dimensionality,
+                                               &pCreateInfo->components, &image_view->srv)) {
+         image_view->srv = (struct terakan_srv_descriptor){};
       }
       if (!descriptor_create_info.view_format.supports_cb_color ||
           terakan_image_create_color_descriptor(&descriptor_create_info, color_resource_type,

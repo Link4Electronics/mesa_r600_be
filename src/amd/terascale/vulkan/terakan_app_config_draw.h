@@ -279,15 +279,15 @@ struct terakan_app_config_draw {
    } sq_pgm_fetch_;
 
    struct {
-      /* Binding configuration (for application binding indices, not hardware resource indices). */
-      struct terakan_bo const * bo[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-      uint64_t va[TERAKAN_RESOURCE_HW_COUNT_FETCH];
-      uint32_t size_minus_1[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+      /* Binding configuration (for application binding indices, not hardware SRV indices). */
+      struct terakan_bo const * bo[TERAKAN_SRV_HW_COUNT_FETCH];
+      uint64_t va[TERAKAN_SRV_HW_COUNT_FETCH];
+      uint32_t size_minus_1[TERAKAN_SRV_HW_COUNT_FETCH];
       /* Must be 1024 if using the #2048StrideAs1024 stride workaround for the binding. */
-      uint16_t hw_stride[TERAKAN_RESOURCE_HW_COUNT_FETCH];
+      uint16_t hw_stride[TERAKAN_SRV_HW_COUNT_FETCH];
 
       struct {
-         struct terakan_vertex_input_fs_resource_usage usage;
+         struct terakan_vertex_input_fs_srv_usage usage;
       } from_apply_sq_pgm_fetch;
    } sq_resources_fetch_;
 
@@ -497,19 +497,19 @@ struct terakan_app_config_draw {
 
    struct {
       /* For descriptor set binding simplicity, storing UAV descriptors in the configuration at the
-       * same indices as the read-only resources corresponding to them, but to calculate UAV
-       * indices, compacting the indices of the resources that have corresponding UAVs.
+       * same indices as the SRVs corresponding to them, but to calculate UAV indices, compacting
+       * the indices of the SRVs that have corresponding UAVs.
        *
        * The UAV array is large, so it's not initialized. Rather, if `uav_bound` doesn't have the
        * corresponding bit set for a UAV, the BO pointer and the color target descriptor are
        * undefined.
        */
-      BITSET_DECLARE(uav_bound, TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL);
-      struct terakan_bo_and_color_descriptor uav[TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL];
+      BITSET_DECLARE(uav_bound, TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL);
+      struct terakan_bo_and_color_descriptor uav[TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL];
 
       struct {
          uint8_t rtv_dsb_export_count;
-         BITSET_DECLARE(uav_used, TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL);
+         BITSET_DECLARE(uav_used, TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL);
       } from_apply_sq_pgm_fragment;
    } cb_color_uav_and_unused_mrt_;
 
@@ -718,7 +718,7 @@ static inline void
 terakan_app_config_draw_set_sq_pgm_fetch_dynamic_attribute_unbound(
    struct terakan_app_config_draw * const config, unsigned const attribute_index)
 {
-   assert(attribute_index < TERAKAN_RESOURCE_HW_COUNT_FETCH);
+   assert(attribute_index < TERAKAN_SRV_HW_COUNT_FETCH);
    config->sq_pgm_fetch_.desired_2048_stride_as_1024_and_dynamic_fs_layout
       .attribute_format_fetch_word1[attribute_index] = 0;
    /* Making pending regardless of whether a static fetch shader layout is used, because in Vulkan,
@@ -738,7 +738,7 @@ terakan_app_config_draw_set_sq_pgm_fetch_dynamic_attribute(
    uint32_t const format_fetch_word1, uint8_t const binding, uint16_t const offset,
    bool const is_instance_rate, uint32_t const instance_divisor)
 {
-   assert(attribute_index < TERAKAN_RESOURCE_HW_COUNT_FETCH);
+   assert(attribute_index < TERAKAN_SRV_HW_COUNT_FETCH);
 
    if (G_SQ_VTX_WORD1_DATA_FORMAT(format_fetch_word1) == TERASCALE_FORMAT_INDEX_INVALID) {
       terakan_app_config_draw_set_sq_pgm_fetch_dynamic_attribute_unbound(config, attribute_index);
@@ -791,7 +791,7 @@ terakan_app_config_draw_set_sq_resource_fetch_base_size(
    struct terakan_app_config_draw * const config, unsigned const binding,
    struct terakan_bo const * bo, uint64_t const va, uint32_t size_minus_1)
 {
-   assert(binding < TERAKAN_RESOURCE_HW_COUNT_FETCH);
+   assert(binding < TERAKAN_SRV_HW_COUNT_FETCH);
    if (config->sq_resources_fetch_.bo[binding] != bo) {
       config->sq_resources_fetch_.bo[binding] = bo;
       terakan_app_config_draw_set_pending(config, TERAKAN_APP_CONFIG_DRAW_ENTRY_SQ_RESOURCES_FETCH);
@@ -812,7 +812,7 @@ terakan_app_config_draw_set_sq_pgm_and_resource_fetch_stride(
    struct terakan_app_config_draw * const config, unsigned const binding, uint16_t const stride,
    bool const fetch_with_2048_stride_as_1024)
 {
-   assert(binding < TERAKAN_RESOURCE_HW_COUNT_FETCH);
+   assert(binding < TERAKAN_SRV_HW_COUNT_FETCH);
    uint16_t hw_stride = stride;
    uint32_t const binding_bit = BITFIELD_BIT(binding);
    if (fetch_with_2048_stride_as_1024 && stride == 2048) {
@@ -1320,7 +1320,7 @@ terakan_app_config_draw_get_cb_color_rtv(struct terakan_app_config_draw const * 
  * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_app_config_draw_set_cb_color_uav(struct terakan_app_config_draw * config,
-                                              unsigned mutable_resource_index,
+                                              unsigned mutable_srv_index,
                                               struct terakan_bo const * bo,
                                               struct terakan_color_descriptor const * color);
 

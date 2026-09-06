@@ -75,7 +75,7 @@ static uint32_t const terakan_meta_copy_image_ps_r8xx[] = {
    0,
    0,
    S_SQ_TEX_WORD0_TEX_INST(3) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(0) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -122,7 +122,7 @@ static uint32_t const terakan_meta_copy_image_ps_r9xx[] = {
 
    /* 6-7: Fetch from the source texture to R0. */
    S_SQ_TEX_WORD0_TEX_INST(3) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(0) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -190,7 +190,7 @@ struct terakan_meta_shader const terakan_meta_copy_image_ps = {
             },
       },
    .kcache_used = BITFIELD_BIT(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS),
-   .primary_meta_resource_used = true,
+   .primary_meta_srv_used = true,
 };
 
 VKAPI_ATTR void VKAPI_CALL
@@ -330,10 +330,10 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
          dst_descriptor_create_info.subresource_range.max_depth_or_layer_count =
             src_descriptor_create_info.subresource_range.max_depth_or_layer_count;
 
-         struct terakan_resource_descriptor src_descriptor;
-         if (unlikely(!terakan_image_create_resource_descriptor(&src_descriptor_create_info,
-                                                                V_030000_SQ_TEX_DIM_2D_ARRAY, NULL,
-                                                                &src_descriptor))) {
+         struct terakan_srv_descriptor src_descriptor;
+         if (unlikely(!terakan_image_create_srv_descriptor(&src_descriptor_create_info,
+                                                           V_030000_SQ_TEX_DIM_2D_ARRAY, NULL,
+                                                           &src_descriptor))) {
             continue;
          }
 
@@ -348,10 +348,9 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
                command_writer, 0xF, &dst_image->bo, &dst_descriptor, NULL,
                TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY);
 
-            terakan_hw_config_sqk_set_resource_fs(
-               &command_writer->hw_config_sqk,
-               TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META, src_image->bo,
-               &src_descriptor);
+            terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
+                                             TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                             src_image->bo, &src_descriptor);
 
             terakan_meta_draw_rect(
                command_writer,
@@ -366,9 +365,9 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
                dst_descriptor_slices;
             dst_descriptor_create_info.subresource_range.max_depth_or_layer_count -=
                dst_descriptor_slices;
-            src_descriptor.resource[5] = (src_descriptor.resource[5] & C_030014_BASE_ARRAY) |
-                                         S_030014_BASE_ARRAY(G_030014_BASE_ARRAY(
-                                            src_descriptor.resource[5] + dst_descriptor_slices));
+            src_descriptor.srv[5] = (src_descriptor.srv[5] & C_030014_BASE_ARRAY) |
+                                    S_030014_BASE_ARRAY(G_030014_BASE_ARRAY(src_descriptor.srv[5] +
+                                                                            dst_descriptor_slices));
          } while (dst_descriptor_create_info.subresource_range.max_depth_or_layer_count != 0);
       }
    }

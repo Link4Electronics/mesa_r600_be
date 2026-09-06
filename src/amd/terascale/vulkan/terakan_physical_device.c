@@ -356,7 +356,7 @@ terakan_physical_device_get_capabilities(
 
    /* Vulkan 1.0. */
 
-   /* Buffer resource bounds checking behavior on pre-R9xx hardware according to testing on Barts:
+   /* Buffer SRV bounds checking behavior on pre-R9xx hardware according to testing on Barts:
     *
     * For element sizes within 4 bytes, the entire element size must be in bounds for the data to be
     * fetched. Otherwise, 0 is loaded into all channels.
@@ -385,7 +385,7 @@ terakan_physical_device_get_capabilities(
     * out-of-bounds vertex input loads must not read from outside the memory range bound to the
     * buffer. One approach is to subtract element size minus 4 from the size of the buffer.
     *
-    * During a buffer resource fetch, the global address (which is the base address plus index times
+    * During a buffer SRV fetch, the global address (which is the base address plus index times
     * stride plus the offset from the fetch instruction) is implicitly rounded down to the alignment
     * requirement of the element format: min(bytes per element, 4), which matches the alignment
     * restriction for structures like vertices described in "4.4.6 Element Alignment" of the
@@ -393,11 +393,10 @@ terakan_physical_device_get_capabilities(
     * important because during testing on Barts, 8_8_8 and 16_16_16 buffer fetches produced
     * completely invalid values.)
     *
-    * Bounds checking doesn't involve the base address from the buffer resource descriptor, only the
-    * index and offset part. Therefore, if the base address is misaligned, it's possible to read
-    * bytes that precede the base address. However, that doesn't permit reading from beyond the end
-    * of the [unaligned base, unaligned base + size) range, as long as elements are up to 4 bytes
-    * large.
+    * Bounds checking doesn't involve the base address from the SRV descriptor, only the index and
+    * offset part. Therefore, if the base address is misaligned, it's possible to read bytes that
+    * precede the base address. However, that doesn't permit reading from beyond the end of the
+    * [unaligned base, unaligned base + size) range, as long as elements are up to 4 bytes large.
     *
     * On R9xx, according to testing on Devastator, bounds checking is performed for the full element
     * size, not just for up to the first 4 bytes.
@@ -572,9 +571,9 @@ terakan_physical_device_get_capabilities(
    properties_out->maxVertexInputAttributes = TERAKAN_VK_STATE_MAX_VERTEX_ATTRIBUTES;
    properties_out->maxVertexInputBindings = TERAKAN_VK_STATE_MAX_VERTEX_BINDINGS;
    properties_out->maxVertexInputAttributeOffset = UINT16_MAX;
-   /* R9xx expanded the buffer resource descriptor stride field from 11 to 12 bits, but prior to it,
-    * the mandatory 2048 stride value is implemented via the #2048StrideAs1024 fetch shader index
-    * fixup workaround.
+   /* R9xx expanded the buffer SRV descriptor stride field from 11 to 12 bits, but prior to it, the
+    * mandatory 2048 stride value is implemented via the #2048StrideAs1024 fetch shader index fixup
+    * workaround.
     */
    properties_out->maxVertexInputBindingStride = chip_info->is_r9xx ? 0xFFF : 0x800;
 

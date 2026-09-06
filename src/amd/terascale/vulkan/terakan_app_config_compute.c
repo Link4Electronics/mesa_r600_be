@@ -35,23 +35,22 @@
 
 void
 terakan_app_config_compute_set_cb_color(struct terakan_app_config_compute * const config,
-                                        unsigned const mutable_resource_index,
+                                        unsigned const mutable_srv_index,
                                         struct terakan_bo const * const bo,
                                         struct terakan_color_descriptor const * const color)
 {
-   assert(mutable_resource_index < TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
+   assert(mutable_srv_index < TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
 
    if (!terakan_color_descriptor_is_bound(bo, color)) {
-      BITSET_CLEAR(config->cb_color_.uav_bound, mutable_resource_index);
+      BITSET_CLEAR(config->cb_color_.uav_bound, mutable_srv_index);
       return;
    }
 
    assert(G_028C70_RAT(color->info));
-   struct terakan_bo_and_color_descriptor * const uav =
-      &config->cb_color_.uav[mutable_resource_index];
+   struct terakan_bo_and_color_descriptor * const uav = &config->cb_color_.uav[mutable_srv_index];
    uav->bo = bo;
    uav->color = *color;
-   BITSET_SET(config->cb_color_.uav_bound, mutable_resource_index);
+   BITSET_SET(config->cb_color_.uav_bound, mutable_srv_index);
 }
 
 void
@@ -119,13 +118,12 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
    unsigned uav_count = 0;
 
    unsigned uav_uncompacted_index;
-   BITSET_FOREACH_SET (uav_uncompacted_index,
-                       sq_pgm_ls->uav_usage.uavs_for_mutable_resources_needed,
-                       TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL) {
+   BITSET_FOREACH_SET (uav_uncompacted_index, sq_pgm_ls->uav_usage.uavs_for_mutable_srvs_needed,
+                       TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL) {
       assert(uav_count < TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT);
 
-      unsigned const uav_immediate_resource_index =
-         TERAKAN_RESOURCE_RANGE_UAV_IMMEDIATE_BASE_COMPUTE + uav_count;
+      unsigned const uav_immediate_srv_index =
+         TERAKAN_SRV_RANGE_UAV_IMMEDIATE_BASE_COMPUTE + uav_count;
 
       if (BITSET_SET(config->cb_color_.uav_bound, uav_uncompacted_index)) {
          struct terakan_bo_and_color_descriptor const * const uav =
@@ -156,18 +154,17 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
          terakan_hw_config_compute_set_cb_immed(
             &command_writer->hw_config_compute, uav_count,
             util_logbase2(terascale_format_bytes_per_block[G_028C70_FORMAT(uav->color.info)]));
-         struct terakan_resource_descriptor const uav_immediate_resource =
-            terakan_color_descriptor_info_to_uav_immediate_resource(device, uav->color.info);
-         terakan_hw_config_sqk_set_resource_cs(&command_writer->hw_config_sqk,
-                                               uav_immediate_resource_index,
-                                               device->uav_immediate_bo, &uav_immediate_resource);
+         struct terakan_srv_descriptor const uav_immediate_srv =
+            terakan_color_descriptor_info_to_uav_immediate_srv(device, uav->color.info);
+         terakan_hw_config_sqk_set_srv_cs(&command_writer->hw_config_sqk, uav_immediate_srv_index,
+                                          device->uav_immediate_bo, &uav_immediate_srv);
       } else {
          terakan_hw_config_compute_set_cb_color(&command_writer->hw_config_compute, uav_count, NULL,
                                                 NULL);
 
          /* Make 0 the return value of all operations using the unbound UAV. */
-         terakan_hw_config_sqk_set_resource_cs(&command_writer->hw_config_sqk,
-                                               uav_immediate_resource_index, NULL, NULL);
+         terakan_hw_config_sqk_set_srv_cs(&command_writer->hw_config_sqk, uav_immediate_srv_index,
+                                          NULL, NULL);
       }
 
       ++uav_count;

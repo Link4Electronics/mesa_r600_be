@@ -339,8 +339,8 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
       for (unsigned input_index = 0; input_index < shader->shader.ninput; ++input_index) {
          struct r600_shader_io const * const input = &shader->shader.input[input_index];
          assert(input->gpr > 0);
-         assert(input->gpr - 1 < TERAKAN_RESOURCE_HW_COUNT_FETCH);
-         if (input->gpr > 0 && input->gpr - 1 < TERAKAN_RESOURCE_HW_COUNT_FETCH) {
+         assert(input->gpr - 1 < TERAKAN_SRV_HW_COUNT_FETCH);
+         if (input->gpr > 0 && input->gpr - 1 < TERAKAN_SRV_HW_COUNT_FETCH) {
             shader->vs.vertex_attributes_needed |= BITFIELD_BIT(input->gpr - 1);
          }
       }

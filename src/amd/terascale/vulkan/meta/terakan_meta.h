@@ -55,12 +55,12 @@ struct terakan_meta_shader {
    struct terakan_meta_shader_description r9xx;
 
    uint16_t kcache_used;
-   /* Whether `TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META` is used. */
-   bool primary_meta_resource_used;
-   /* Whether `TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC` is used.
+   /* Whether `TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META` is used. */
+   bool primary_meta_srv_used;
+   /* Whether `TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC` is used.
     * Must not be used in pixel shaders.
     */
-   bool non_pixel_stage_specific_resource_used;
+   bool non_pixel_stage_specific_srv_used;
 };
 
 enum terakan_meta_shader_index {

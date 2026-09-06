@@ -202,8 +202,7 @@ def is_swizzle_supported_by_cb_color(format_swizzle, cb_color_swap_export_compon
             # allowed even if the pipe_format uses only depth or only stencil, as well as on R8xx
             # where depth and stencil are separate, and 24-bit depth is packed into 32 bits with
             # 8 upper bits unused. The client API implementation is expected to replace the void
-            # channel with 0 where necessary (such as in the swizzle of the UAV IMMED buffer
-            # resource).
+            # channel with 0 where necessary (such as in the swizzle of the UAV IMMED buffer SRV).
             continue
         # Export component is actually used - check if it goes to the correct data channel.
         if (component_swizzle_index !=

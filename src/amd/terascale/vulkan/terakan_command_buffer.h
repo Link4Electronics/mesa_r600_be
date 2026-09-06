@@ -72,9 +72,9 @@ extern "C" {
  * driver.
  */
 
-/* Must be large enough to hold all the necessary setup, including up to 1024 resources (up to 14
- * dwords per resource - 2 for the SET_RESOURCE header, 8 for the constant, and 4 dwords for 2
- * relocations for textures), for at least one draw / dispatch command.
+/* Must be large enough to hold all the necessary setup, including up to 1024 SRVs (up to 14 dwords
+ * per SRV: 2 for the `SET_RESOURCE` header, 8 for the descriptor, and 4 dwords for 2 relocations
+ * for textures), for at least one draw / dispatch command.
  * Command buffers using virtual memory on the DRM Radeon kernel driver must not be larger than
  * RADEON_INFO_IB_VM_MAX_SIZE dwords reported by the kernel driver, however.
  * Twice the size in the Gallium R600 driver as of May 2023.
@@ -83,8 +83,8 @@ extern "C" {
 
 /* Must be large enough to hold all bindings for a single command even if they all point to
  * different BOs.
- * Assuming that new references may be needed every 8 dwords on average (resource constants are
- * 2 SET_RESOURCE dwords plus 10-12 dwords, DRAW_INDEX_2 is 6 dwords plus 2 dwords for the
+ * Assuming that new references may be needed every 8 dwords on average (SRV setting consists of
+ * 2 `SET_RESOURCE` dwords plus 10-12 dwords, `DRAW_INDEX_2` is 6 dwords plus 2 dwords for the
  * relocation).
  */
 #define TERAKAN_BO_REFERENCE_WRITER_REFERENCE_COUNT_LOG2 12
@@ -93,7 +93,7 @@ extern "C" {
 
 /* With the current rationale behind the optimal indirect buffer size and BO reference count (around
  * 1 address per 8 dwords), 1 address per reference is optimal, but 40-bit addresses require 2
- * relocations, and also texture resources have separate base and mip addresses, and RTVs may have
+ * relocations, and also texture SRVs have separate base and mip addresses, and RTVs may have
  * metadata, so expecting around 2 relocations per 8 dwords.
  */
 #define TERAKAN_GFX_OPTIMAL_WDDM_RELOCATION_COUNT (2 * TERAKAN_BO_REFERENCE_WRITER_REFERENCE_COUNT)
@@ -450,9 +450,9 @@ terakan_gfx_command_writer_emit_done(struct terakan_gfx_command_writer * const c
  * writing the packets. Drivers for other GPUs may reserve a fixed upper bound estimate for every
  * draw or dispatch, for instance, and then append all needed configuration without explicitly
  * allocating, but due to the binding model of TeraScale, the amount of configuration changes needed
- * for a single draw or dispatch may vary greatly and be very high, with shader resources alone for
- * a draw potentially occupying up to 47 KB (1024 - 176 resources each using 10 dwords for the
- * `SET_RESOURCE` packet and 4 dwords for the DRM Radeon relocation packets).
+ * for a single draw or dispatch may vary greatly and be very high, with SRVs alone for a draw
+ * potentially occupying up to 47 KB (1024 - 176 SRVs each using 10 dwords for the `SET_RESOURCE`
+ * packet and 4 dwords for the DRM Radeon relocation packets).
  *
  * A Vulkan command buffer may need to be split into multiple kernel driver submissions, and the
  * kernel may not preserve the GPU state between those submissions. Therefore, there are two types

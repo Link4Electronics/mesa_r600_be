@@ -46,7 +46,7 @@ terakan_hw_config_sqk_stage_emission_flags_set_all(
 
    emission_flags->samplers = BITFIELD_MASK(TERAKAN_SAMPLER_HW_COUNT_PER_STAGE);
 
-   BITSET_ONES(emission_flags->resources);
+   BITSET_ONES(emission_flags->srvs);
 }
 
 /* Returns whether the binding was changed. */
@@ -226,125 +226,125 @@ terakan_hw_config_sqk_set_sampler_cs(struct terakan_hw_config_sqk * const config
 }
 
 void
-terakan_hw_config_sqk_set_resource_vi(struct terakan_hw_config_sqk * const config,
-                                      unsigned const index, struct terakan_bo const * const bo,
-                                      struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_vi(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                 struct terakan_bo const * const bo,
+                                 struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_FETCH);
-   uint32_t const resource_bit = BITFIELD_BIT(index);
+   assert(index < TERAKAN_SRV_HW_COUNT_FETCH);
+   uint32_t const srv_bit = BITFIELD_BIT(index);
    if (bo == NULL || descriptor == NULL) {
-      if (!(config->vi_.resources_bound & resource_bit)) {
+      if (!(config->vi_.srvs_bound & srv_bit)) {
          return;
       }
-      config->vi_.resources_bound &= ~resource_bit;
+      config->vi_.srvs_bound &= ~srv_bit;
    } else {
-      struct terakan_hw_config_sqk_resource * const stage_resource = &config->resources_vi_[index];
-      if ((config->vi_.resources_bound & resource_bit) && stage_resource->bo == bo &&
-          memcmp(&stage_resource->descriptor, descriptor, sizeof(*descriptor)) == 0) {
+      struct terakan_hw_config_sqk_srv * const stage_srv = &config->srvs_vi_[index];
+      if ((config->vi_.srvs_bound & srv_bit) && stage_srv->bo == bo &&
+          memcmp(&stage_srv->descriptor, descriptor, sizeof(*descriptor)) == 0) {
          return;
       }
-      stage_resource->bo = bo;
-      stage_resource->descriptor = *descriptor;
-      config->vi_.resources_bound |= resource_bit;
+      stage_srv->bo = bo;
+      stage_srv->descriptor = *descriptor;
+      config->vi_.srvs_bound |= srv_bit;
    }
-   config->vi_.resources_modified |= resource_bit;
+   config->vi_.srvs_modified |= srv_bit;
 }
 
 /* Returns whether the binding was changed. */
 static bool
-terakan_hw_config_sqk_set_resource(struct terakan_hw_config_sqk_stage * const stage,
-                                   unsigned const index, struct terakan_bo const * const bo,
-                                   struct terakan_resource_descriptor const * const descriptor,
-                                   struct terakan_hw_config_sqk_resource * const resources)
+terakan_hw_config_sqk_set_srv(struct terakan_hw_config_sqk_stage * const stage,
+                              unsigned const index, struct terakan_bo const * const bo,
+                              struct terakan_srv_descriptor const * const descriptor,
+                              struct terakan_hw_config_sqk_srv * const srvs)
 {
    if (bo == NULL || descriptor == NULL) {
-      if (!BITSET_TEST(stage->resources_bound, index)) {
+      if (!BITSET_TEST(stage->srvs_bound, index)) {
          return false;
       }
-      BITSET_CLEAR(stage->resources_bound, index);
+      BITSET_CLEAR(stage->srvs_bound, index);
    } else {
-      struct terakan_hw_config_sqk_resource * const stage_resource = &resources[index];
-      if (BITSET_TEST(stage->resources_bound, index) && stage_resource->bo == bo &&
-          memcmp(&stage_resource->descriptor, descriptor, sizeof(*descriptor)) == 0) {
+      struct terakan_hw_config_sqk_srv * const stage_srv = &srvs[index];
+      if (BITSET_TEST(stage->srvs_bound, index) && stage_srv->bo == bo &&
+          memcmp(&stage_srv->descriptor, descriptor, sizeof(*descriptor)) == 0) {
          return false;
       }
-      stage_resource->bo = bo;
-      stage_resource->descriptor = *descriptor;
-      BITSET_SET(stage->resources_bound, index);
+      stage_srv->bo = bo;
+      stage_srv->descriptor = *descriptor;
+      BITSET_SET(stage->srvs_bound, index);
    }
-   BITSET_SET(stage->modified.resources, index);
+   BITSET_SET(stage->modified.srvs, index);
    return true;
 }
 
 void
-terakan_hw_config_sqk_set_resource_vs(struct terakan_hw_config_sqk * const config,
-                                      unsigned const index, struct terakan_bo const * const bo,
-                                      struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_vs(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                 struct terakan_bo const * const bo,
+                                 struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_VERTEX);
-   if (terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_VERTEX], index, bo,
-                                          descriptor, config->resources_vs_)) {
-      BITSET_SET(config->modified_in_sw_vs_as_other_hw_stage_.resources, index);
+   assert(index < TERAKAN_SRV_HW_COUNT_VERTEX);
+   if (terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_VERTEX], index, bo, descriptor,
+                                     config->srvs_vs_)) {
+      BITSET_SET(config->modified_in_sw_vs_as_other_hw_stage_.srvs, index);
       config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_VERTEX);
    }
 }
 
 void
-terakan_hw_config_sqk_set_resource_tcs(struct terakan_hw_config_sqk * const config,
-                                       unsigned const index, struct terakan_bo const * const bo,
-                                       struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_tcs(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                  struct terakan_bo const * const bo,
+                                  struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_VERTEX);
-   if (terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_TESS_CTRL], index, bo,
-                                          descriptor, config->resources_tcs_)) {
+   assert(index < TERAKAN_SRV_HW_COUNT_VERTEX);
+   if (terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_TESS_CTRL], index, bo, descriptor,
+                                     config->srvs_tcs_)) {
       config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_TESS_CTRL);
    }
 }
 
 void
-terakan_hw_config_sqk_set_resource_tes(struct terakan_hw_config_sqk * const config,
-                                       unsigned const index, struct terakan_bo const * const bo,
-                                       struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_tes(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                  struct terakan_bo const * const bo,
+                                  struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_VERTEX);
-   if (terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_TESS_EVAL], index, bo,
-                                          descriptor, config->resources_tes_)) {
+   assert(index < TERAKAN_SRV_HW_COUNT_VERTEX);
+   if (terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_TESS_EVAL], index, bo, descriptor,
+                                     config->srvs_tes_)) {
       config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_TESS_EVAL);
    }
 }
 
 void
-terakan_hw_config_sqk_set_resource_gs(struct terakan_hw_config_sqk * const config,
-                                      unsigned const index, struct terakan_bo const * const bo,
-                                      struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_gs(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                 struct terakan_bo const * const bo,
+                                 struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_VERTEX);
-   if (terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_GEOMETRY], index, bo,
-                                          descriptor, config->resources_gs_)) {
+   assert(index < TERAKAN_SRV_HW_COUNT_VERTEX);
+   if (terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_GEOMETRY], index, bo, descriptor,
+                                     config->srvs_gs_)) {
       config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_GEOMETRY);
    }
 }
 
 void
-terakan_hw_config_sqk_set_resource_fs(struct terakan_hw_config_sqk * const config,
-                                      unsigned const index, struct terakan_bo const * const bo,
-                                      struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_fs(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                 struct terakan_bo const * const bo,
+                                 struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
-   if (terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_FRAGMENT], index, bo,
-                                          descriptor, config->resources_fs_)) {
+   assert(index < TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
+   if (terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_FRAGMENT], index, bo, descriptor,
+                                     config->srvs_fs_)) {
       config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_FRAGMENT);
    }
 }
 
 void
-terakan_hw_config_sqk_set_resource_cs(struct terakan_hw_config_sqk * const config,
-                                      unsigned const index, struct terakan_bo const * const bo,
-                                      struct terakan_resource_descriptor const * const descriptor)
+terakan_hw_config_sqk_set_srv_cs(struct terakan_hw_config_sqk * const config, unsigned const index,
+                                 struct terakan_bo const * const bo,
+                                 struct terakan_srv_descriptor const * const descriptor)
 {
-   assert(index < TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
-   terakan_hw_config_sqk_set_resource(&config->stages_[MESA_SHADER_COMPUTE], index, bo, descriptor,
-                                      config->resources_cs_);
+   assert(index < TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
+   terakan_hw_config_sqk_set_srv(&config->stages_[MESA_SHADER_COMPUTE], index, bo, descriptor,
+                                 config->srvs_cs_);
 }
 
 struct terakan_hw_config_sqk_set_functions const
@@ -353,37 +353,37 @@ struct terakan_hw_config_sqk_set_functions const
          {
             .kcache = terakan_hw_config_sqk_set_kcache_vs,
             .sampler = terakan_hw_config_sqk_set_sampler_vs,
-            .resource = terakan_hw_config_sqk_set_resource_vs,
+            .srv = terakan_hw_config_sqk_set_srv_vs,
          },
       [MESA_SHADER_TESS_CTRL] =
          {
             .kcache = terakan_hw_config_sqk_set_kcache_tcs,
             .sampler = terakan_hw_config_sqk_set_sampler_tcs,
-            .resource = terakan_hw_config_sqk_set_resource_tcs,
+            .srv = terakan_hw_config_sqk_set_srv_tcs,
          },
       [MESA_SHADER_TESS_EVAL] =
          {
             .kcache = terakan_hw_config_sqk_set_kcache_tes,
             .sampler = terakan_hw_config_sqk_set_sampler_tes,
-            .resource = terakan_hw_config_sqk_set_resource_tes,
+            .srv = terakan_hw_config_sqk_set_srv_tes,
          },
       [MESA_SHADER_GEOMETRY] =
          {
             .kcache = terakan_hw_config_sqk_set_kcache_gs,
             .sampler = terakan_hw_config_sqk_set_sampler_gs,
-            .resource = terakan_hw_config_sqk_set_resource_gs,
+            .srv = terakan_hw_config_sqk_set_srv_gs,
          },
       [MESA_SHADER_FRAGMENT] =
          {
             .kcache = terakan_hw_config_sqk_set_kcache_fs,
             .sampler = terakan_hw_config_sqk_set_sampler_fs,
-            .resource = terakan_hw_config_sqk_set_resource_fs,
+            .srv = terakan_hw_config_sqk_set_srv_fs,
          },
       [MESA_SHADER_COMPUTE] =
          {
             .kcache = terakan_hw_config_sqk_set_kcache_cs,
             .sampler = terakan_hw_config_sqk_set_sampler_cs,
-            .resource = terakan_hw_config_sqk_set_resource_cs,
+            .srv = terakan_hw_config_sqk_set_srv_cs,
          },
 };
 
@@ -399,51 +399,48 @@ terakan_hw_config_sqk_hw_ls_vses_used_for_vs_tes(struct terakan_hw_config_sqk co
 }
 
 void
-terakan_hw_config_sqk_update_uncached_resources_(
-   struct terakan_hw_config_sqk_stage * const stage,
-   BITSET_WORD * const resources_last_used_as_uncached,
-   struct terakan_hw_config_sqk_resource const * const resources)
+terakan_hw_config_sqk_update_uncached_srvs_(struct terakan_hw_config_sqk_stage * const stage,
+                                            BITSET_WORD * const srvs_last_used_as_uncached,
+                                            struct terakan_hw_config_sqk_srv const * const srvs)
 {
    if (stage->usage == NULL) {
       /* Nothing to do for this stage at all. Likely called while unbinding the fragment shader. */
       return;
    }
 
-   /* Get the resources, skipping the unused ones to avoid spuriously marking them as modified, for
-    * which uncached enablement needs to be changed, and update the uncached enablement.
+   /* Get the SRVs, skipping the unused ones to avoid spuriously marking them as modified, for which
+    * uncached enablement needs to be changed, and update the uncached enablement.
     */
-   BITSET_DECLARE(uncached_toggled_for_bound, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
-   for (unsigned word_index = 0; word_index < BITSET_WORDS(TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(uncached_toggled_for_bound, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
+   for (unsigned word_index = 0; word_index < BITSET_WORDS(TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
         ++word_index) {
-      BITSET_WORD const uncached_toggled_word = (resources_last_used_as_uncached[word_index] ^
-                                                 stage->usage->resources_uncached[word_index]) &
-                                                stage->usage->resources[word_index];
-      /* Update the uncached enablement for the resource index, but only actually check and re-emit
-       * the descriptor itself if it's bound.
+      BITSET_WORD const uncached_toggled_word =
+         (srvs_last_used_as_uncached[word_index] ^ stage->usage->srvs_uncached[word_index]) &
+         stage->usage->srvs[word_index];
+      /* Update the uncached enablement for the SRV index, but only actually check and re-emit the
+       * descriptor itself if it's bound.
        */
       uncached_toggled_for_bound[word_index] =
-         uncached_toggled_word & stage->resources_bound[word_index];
-      resources_last_used_as_uncached[word_index] ^= uncached_toggled_word;
+         uncached_toggled_word & stage->srvs_bound[word_index];
+      srvs_last_used_as_uncached[word_index] ^= uncached_toggled_word;
    }
 
    /* Mark buffers for which uncached enablement needs to be toggled as modified to re-emit them
     * with the new uncached flag value.
     */
-   unsigned resource_index;
-   BITSET_FOREACH_SET (resource_index, uncached_toggled_for_bound,
-                       TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE) {
-      /* Unbound resources, for which the elements of the `resources` array are undefined, should
-       * have already been excluded from the check earlier.
+   unsigned srv_index;
+   BITSET_FOREACH_SET (srv_index, uncached_toggled_for_bound, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE) {
+      /* Unbound SRVs, for which the elements of the `srvs` array are undefined, should have already
+       * been excluded from the check earlier.
        */
-      assert(BITSET_TEST(stage->resources_bound, resource_index));
-      struct terakan_resource_descriptor const * const resource =
-         &resources[resource_index].descriptor;
-      /* Also don't mark the resource as modified if uncached access is forced for it via the
-       * descriptor itself anyway.
+      assert(BITSET_TEST(stage->srvs_bound, srv_index));
+      struct terakan_srv_descriptor const * const srv = &srvs[srv_index].descriptor;
+      /* Also don't mark the SRV as modified if uncached access is forced for it via the descriptor
+       * itself anyway.
        */
-      if (G_03001C_TYPE(resource->resource[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER &&
-          !G_03000C_UNCACHED(resource->resource[3])) {
-         BITSET_SET(stage->modified.resources, resource_index);
+      if (G_03001C_TYPE(srv->srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER &&
+          !G_03000C_UNCACHED(srv->srv[3])) {
+         BITSET_SET(stage->modified.srvs, srv_index);
       }
    }
 }
@@ -496,33 +493,33 @@ terakan_hw_config_sqk_set_usage_vs_tes(struct terakan_hw_config_sqk * const conf
          are_hw_ls_vses_used_for_vs_tes ? stage_tes : stage_vs;
       if (new_vses_stage->usage != NULL) {
          struct terakan_hw_config_sqk_stage const * old_vses_stage;
-         struct terakan_hw_config_sqk_resource const * new_vses_resources;
-         struct terakan_hw_config_sqk_resource const * old_vses_resources;
+         struct terakan_hw_config_sqk_srv const * new_vses_srvs;
+         struct terakan_hw_config_sqk_srv const * old_vses_srvs;
          struct terakan_hw_config_sqk_stage_emission_flags vses_usage_toggled;
          if (are_hw_ls_vses_used_for_vs_tes) {
             config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_TESS_EVAL);
 
             old_vses_stage = stage_vs;
-            new_vses_resources = config->resources_tes_;
-            old_vses_resources = config->resources_vs_;
+            new_vses_srvs = config->srvs_tes_;
+            old_vses_srvs = config->srvs_vs_;
 
             /* Need to update the registers for which the flag was 0. */
             vses_usage_toggled.kcache = ~config->vses_last_used_by_tes_.kcache;
             vses_usage_toggled.samplers = ~config->vses_last_used_by_tes_.samplers;
-            /* Using `ARRAY_SIZE` instead `BITSET_WORDS(TERAKAN_RESOURCE_HW_COUNT_VERTEX)` to
-             * initialize the [160, 176) word to avoid undefined behavior.
+            /* Using `ARRAY_SIZE` instead `BITSET_WORDS(TERAKAN_SRV_HW_COUNT_VERTEX)` to initialize
+             * the [160, 176) word to avoid undefined behavior.
              */
-            for (unsigned word_index = 0; word_index < ARRAY_SIZE(vses_usage_toggled.resources);
+            for (unsigned word_index = 0; word_index < ARRAY_SIZE(vses_usage_toggled.srvs);
                  ++word_index) {
-               vses_usage_toggled.resources[word_index] =
-                  ~config->vses_last_used_by_tes_.resources[word_index];
+               vses_usage_toggled.srvs[word_index] =
+                  ~config->vses_last_used_by_tes_.srvs[word_index];
             }
          } else {
             config->draw_stages_pending_ |= BITFIELD_BIT(MESA_SHADER_VERTEX);
 
             old_vses_stage = stage_tes;
-            new_vses_resources = config->resources_vs_;
-            old_vses_resources = config->resources_tes_;
+            new_vses_srvs = config->srvs_vs_;
+            old_vses_srvs = config->srvs_tes_;
 
             /* Need to update the registers for which the flag was 1. */
             vses_usage_toggled = config->vses_last_used_by_tes_;
@@ -530,13 +527,12 @@ terakan_hw_config_sqk_set_usage_vs_tes(struct terakan_hw_config_sqk * const conf
 
          vses_usage_toggled.kcache &= new_vses_stage->usage->kcache;
          vses_usage_toggled.samplers &= new_vses_stage->usage->samplers;
-         BITSET_AND(vses_usage_toggled.resources, vses_usage_toggled.resources,
-                    new_vses_stage->usage->resources);
+         BITSET_AND(vses_usage_toggled.srvs, vses_usage_toggled.srvs, new_vses_stage->usage->srvs);
 
          config->vses_last_used_by_tes_.kcache ^= vses_usage_toggled.kcache;
          config->vses_last_used_by_tes_.samplers ^= vses_usage_toggled.samplers;
-         BITSET_XOR(config->vses_last_used_by_tes_.resources,
-                    config->vses_last_used_by_tes_.resources, vses_usage_toggled.resources);
+         BITSET_XOR(config->vses_last_used_by_tes_.srvs, config->vses_last_used_by_tes_.srvs,
+                    vses_usage_toggled.srvs);
 
          /* Make the registers marked as modified in the old hardware stage also modified in the new
           * one, as the up to date constants for them haven't been emitted yet, and the contents of
@@ -561,15 +557,12 @@ terakan_hw_config_sqk_set_usage_vs_tes(struct terakan_hw_config_sqk * const conf
             (old_vses_stage->modified.samplers & vses_usage_toggled.samplers);
          vses_usage_toggled.samplers &= ~old_vses_stage->modified.samplers;
 
-         for (unsigned word_index = 0; word_index < BITSET_WORDS(TERAKAN_RESOURCE_HW_COUNT_VERTEX);
+         for (unsigned word_index = 0; word_index < BITSET_WORDS(TERAKAN_SRV_HW_COUNT_VERTEX);
               ++word_index) {
-            new_vses_stage->modified.resources[word_index] =
-               (new_vses_stage->modified.resources[word_index] &
-                ~vses_usage_toggled.resources[word_index]) |
-               (old_vses_stage->modified.resources[word_index] &
-                vses_usage_toggled.resources[word_index]);
-            vses_usage_toggled.resources[word_index] &=
-               ~old_vses_stage->modified.resources[word_index];
+            new_vses_stage->modified.srvs[word_index] =
+               (new_vses_stage->modified.srvs[word_index] & ~vses_usage_toggled.srvs[word_index]) |
+               (old_vses_stage->modified.srvs[word_index] & vses_usage_toggled.srvs[word_index]);
+            vses_usage_toggled.srvs[word_index] &= ~old_vses_stage->modified.srvs[word_index];
          }
 
          u_foreach_bit (kcache_buffer_index, vses_usage_toggled.kcache) {
@@ -593,26 +586,23 @@ terakan_hw_config_sqk_set_usage_vs_tes(struct terakan_hw_config_sqk * const conf
             new_vses_stage->modified.samplers |= BITFIELD_BIT(sampler_index);
          }
 
-         unsigned resource_index;
-         BITSET_FOREACH_SET (resource_index, vses_usage_toggled.resources,
-                             TERAKAN_RESOURCE_HW_COUNT_VERTEX) {
-            struct terakan_hw_config_sqk_resource const * const new_resource =
-               &new_vses_resources[resource_index];
-            struct terakan_hw_config_sqk_resource const * const old_resource =
-               &old_vses_resources[resource_index];
-            if (BITSET_TEST(new_vses_stage->resources_bound, resource_index)) {
-               if (BITSET_TEST(old_vses_stage->resources_bound, resource_index) &&
-                   new_resource->bo == old_resource->bo &&
-                   memcmp(&new_resource->descriptor, &old_resource->descriptor,
-                          sizeof(new_resource->descriptor)) == 0) {
+         unsigned srv_index;
+         BITSET_FOREACH_SET (srv_index, vses_usage_toggled.srvs, TERAKAN_SRV_HW_COUNT_VERTEX) {
+            struct terakan_hw_config_sqk_srv const * const new_srv = &new_vses_srvs[srv_index];
+            struct terakan_hw_config_sqk_srv const * const old_srv = &old_vses_srvs[srv_index];
+            if (BITSET_TEST(new_vses_stage->srvs_bound, srv_index)) {
+               if (BITSET_TEST(old_vses_stage->srvs_bound, srv_index) &&
+                   new_srv->bo == old_srv->bo &&
+                   memcmp(&new_srv->descriptor, &old_srv->descriptor,
+                          sizeof(new_srv->descriptor)) == 0) {
                   continue;
                }
             } else {
-               if (!BITSET_TEST(old_vses_stage->resources_bound, resource_index)) {
+               if (!BITSET_TEST(old_vses_stage->srvs_bound, srv_index)) {
                   continue;
                }
             }
-            BITSET_SET(new_vses_stage->modified.resources, resource_index);
+            BITSET_SET(new_vses_stage->modified.srvs, srv_index);
          }
       }
    }
@@ -626,21 +616,21 @@ terakan_hw_config_sqk_begin_emitting_first_draw_dispatch_in_indirect_buffer(
 
    config->draw_stages_pending_ = BITFIELD_MASK(MESA_SHADER_COMPUTE);
 
-   /* Clearing all resources in a new indirect buffer to avoid emitting every unbound resource
-    * individually later, as the number of resource registers is large.
+   /* Clearing all SRVs in a new indirect buffer to avoid emitting every unbound SRV individually
+    * later, as the number of SRV registers is large.
     * Radeon Evergreen / Northern Islands Acceleration says that `SET_CTL_CONST` packets always have
     * the shader type set to graphics, and according to testing, even with the shader type in the
     * packet header set to compute, `SQ_TEX_RESOURCE_CLEAR` for ~0 clears both graphics and compute
-    * resources.
+    * SRVs.
     */
 
-   config->vi_.resources_modified = config->vi_.resources_bound;
+   config->vi_.srvs_modified = config->vi_.srvs_bound;
 
    for (size_t stage_index = 0; stage_index < ARRAY_SIZE(config->stages_); ++stage_index) {
       struct terakan_hw_config_sqk_stage * const stage = &config->stages_[stage_index];
       stage->modified.kcache = BITFIELD_MASK(TERAKAN_KCACHE_HW_BUFFERS_PER_STAGE);
       stage->modified.samplers = BITFIELD_MASK(TERAKAN_SAMPLER_HW_COUNT_PER_STAGE);
-      BITSET_COPY(stage->modified.resources, stage->resources_bound);
+      BITSET_COPY(stage->modified.srvs, stage->srvs_bound);
    }
 
    config->modified_in_sw_vs_as_other_hw_stage_ = config->stages_[MESA_SHADER_VERTEX].modified;
@@ -673,7 +663,7 @@ terakan_hw_config_sqk_compute_state_cleared(struct terakan_hw_config_sqk * const
    /* For simplicity, not storing unbound or invalid samplers in `terakan_hw_config_sqk`. */
    stage->modified.samplers = BITFIELD_MASK(TERAKAN_SAMPLER_HW_COUNT_PER_STAGE);
 
-   BITSET_COPY(stage->modified.resources, stage->resources_bound);
+   BITSET_COPY(stage->modified.srvs, stage->srvs_bound);
 }
 
 static void
@@ -829,8 +819,8 @@ terakan_hw_config_sqk_emit_modified_samplers(
 }
 
 static void
-terakan_hw_config_sqk_emit_unbound_resource(
-   struct terakan_gfx_command_writer * const command_writer, uint32_t const resource_hw_index)
+terakan_hw_config_sqk_emit_unbound_srv(struct terakan_gfx_command_writer * const command_writer,
+                                       uint32_t const srv_hw_index)
 {
    uint32_t * packet = terakan_gfx_command_writer_emit(
       command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2 + 1);
@@ -839,17 +829,18 @@ terakan_hw_config_sqk_emit_unbound_resource(
    }
    *packet++ = PKT3(PKT3_SET_CTL_CONST, 1, 0);
    *packet++ = TERAKAN_CTL_CONST_OFFSET(R_03FF04_SQ_TEX_RESOURCE_CLEAR);
-   *packet++ = resource_hw_index;
+   *packet++ = srv_hw_index;
    terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
 
 /* Returns the pointer to the descriptor in the indirect buffer, or NULL if couldn't emit. */
 static uint32_t *
-terakan_hw_config_sqk_emit_bound_resource(
-   struct terakan_gfx_command_writer * const command_writer, uint32_t const resource_hw_index,
-   struct terakan_hw_config_sqk_resource const * const resource, uint32_t const shader_type_flag)
+terakan_hw_config_sqk_emit_bound_srv(struct terakan_gfx_command_writer * const command_writer,
+                                     uint32_t const srv_hw_index,
+                                     struct terakan_hw_config_sqk_srv const * const srv,
+                                     uint32_t const shader_type_flag)
 {
-   uint32_t const * const descriptor = resource->descriptor.resource;
+   uint32_t const * const descriptor = srv->descriptor.srv;
 
    bool const is_texture = G_03001C_TYPE(descriptor[7]) == V_03001C_SQ_TEX_VTX_VALID_TEXTURE;
    bool const is_multisampled =
@@ -861,8 +852,7 @@ terakan_hw_config_sqk_emit_bound_resource(
    bool const relocate_mips_or_fmask =
       is_texture && (!is_multisampled || G_03000C_MIP_ADDRESS(descriptor[3]) != 0);
 
-   unsigned const descriptor_dword_count =
-      sizeof(struct terakan_resource_descriptor) / sizeof(uint32_t);
+   unsigned const descriptor_dword_count = sizeof(struct terakan_srv_descriptor) / sizeof(uint32_t);
 
    uint32_t * packet = terakan_gfx_command_writer_emit_with_bo(
       command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_CONFIG, 2 + descriptor_dword_count,
@@ -872,19 +862,19 @@ terakan_hw_config_sqk_emit_bound_resource(
    }
 
    *packet++ = PKT3(PKT3_SET_RESOURCE, descriptor_dword_count, 0) | shader_type_flag;
-   *packet++ = descriptor_dword_count * resource_hw_index;
+   *packet++ = descriptor_dword_count * srv_hw_index;
    uint32_t * const packet_descriptor = packet;
    memcpy(packet_descriptor, descriptor, sizeof(uint32_t) * descriptor_dword_count);
    if (!is_texture) {
-      packet_descriptor[TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = 0;
+      packet_descriptor[TERAKAN_SRV_BUFFER_PRIORITY_WORD] = 0;
    }
    packet += descriptor_dword_count;
 
    uint32_t const bo_reference = terakan_bo_reference_writer_add_reference(
-      &command_writer->base.bo_reference_writer, resource->bo, true, false,
+      &command_writer->base.bo_reference_writer, srv->bo, true, false,
       is_texture ? (is_multisampled ? TERAKAN_BO_PRIORITY_SHADER_READ_IMAGE_MS
                                     : TERAKAN_BO_PRIORITY_SHADER_READ_IMAGE)
-                 : descriptor[TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD]);
+                 : descriptor[TERAKAN_SRV_BUFFER_PRIORITY_WORD]);
    if (is_texture) {
       terakan_gfx_command_writer_add_relocation(
          command_writer, &packet, &packet_descriptor[2], packet_descriptor[2],
@@ -907,107 +897,104 @@ terakan_hw_config_sqk_emit_bound_resource(
 }
 
 static void
-terakan_hw_config_sqk_emit_modified_resources_vertex_input(
+terakan_hw_config_sqk_emit_modified_srvs_vertex_input(
    struct terakan_gfx_command_writer * const command_writer)
 {
    struct terakan_hw_config_sqk * const config = &command_writer->hw_config_sqk;
-   u_foreach_bit (resource_index, config->vi_.resources_used & config->vi_.resources_modified) {
-      unsigned const resource_hw_index = TERAKAN_RESOURCE_HW_OFFSET_FS + resource_index;
-      if (!(config->vi_.resources_bound & BITFIELD_BIT(resource_index))) {
-         terakan_hw_config_sqk_emit_unbound_resource(command_writer, resource_hw_index);
+   u_foreach_bit (srv_index, config->vi_.srvs_used & config->vi_.srvs_modified) {
+      unsigned const srv_hw_index = TERAKAN_SRV_HW_OFFSET_FS + srv_index;
+      if (!(config->vi_.srvs_bound & BITFIELD_BIT(srv_index))) {
+         terakan_hw_config_sqk_emit_unbound_srv(command_writer, srv_hw_index);
          continue;
       }
-      terakan_hw_config_sqk_emit_bound_resource(command_writer, resource_hw_index,
-                                                &config->resources_vi_[resource_index], 0);
+      terakan_hw_config_sqk_emit_bound_srv(command_writer, srv_hw_index,
+                                           &config->srvs_vi_[srv_index], 0);
    }
-   config->vi_.resources_modified &= ~config->vi_.resources_used;
+   config->vi_.srvs_modified &= ~config->vi_.srvs_used;
 }
 
 static void
-terakan_hw_config_sqk_emit_modified_resources_vertex(
+terakan_hw_config_sqk_emit_modified_srvs_vertex(
    struct terakan_gfx_command_writer * const command_writer,
    struct terakan_hw_config_sqk_stage * const stage,
-   struct terakan_hw_config_sqk_resource const * const resources, unsigned const resource_hw_offset)
+   struct terakan_hw_config_sqk_srv const * const srvs, unsigned const srv_hw_offset)
 {
-   BITSET_DECLARE(resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_VERTEX);
+   BITSET_DECLARE(srvs_to_emit, TERAKAN_SRV_HW_COUNT_VERTEX);
    assert(stage->usage != NULL);
-   __bitset_and(resources_to_emit, stage->usage->resources, stage->modified.resources,
-                ARRAY_SIZE(resources_to_emit));
+   __bitset_and(srvs_to_emit, stage->usage->srvs, stage->modified.srvs, ARRAY_SIZE(srvs_to_emit));
 
-   unsigned resource_index;
-   BITSET_FOREACH_SET (resource_index, resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_VERTEX) {
-      unsigned const resource_hw_index = resource_hw_offset + resource_index;
-      if (!BITSET_TEST(stage->resources_bound, resource_index)) {
-         terakan_hw_config_sqk_emit_unbound_resource(command_writer, resource_hw_index);
+   unsigned srv_index;
+   BITSET_FOREACH_SET (srv_index, srvs_to_emit, TERAKAN_SRV_HW_COUNT_VERTEX) {
+      unsigned const srv_hw_index = srv_hw_offset + srv_index;
+      if (!BITSET_TEST(stage->srvs_bound, srv_index)) {
+         terakan_hw_config_sqk_emit_unbound_srv(command_writer, srv_hw_index);
          continue;
       }
-      terakan_hw_config_sqk_emit_bound_resource(command_writer, resource_hw_index,
-                                                &resources[resource_index], 0);
+      terakan_hw_config_sqk_emit_bound_srv(command_writer, srv_hw_index, &srvs[srv_index], 0);
    }
 
-   __bitset_andnot(stage->modified.resources, stage->modified.resources, stage->usage->resources,
-                   TERAKAN_RESOURCE_HW_COUNT_VERTEX);
+   __bitset_andnot(stage->modified.srvs, stage->modified.srvs, stage->usage->srvs,
+                   TERAKAN_SRV_HW_COUNT_VERTEX);
 }
 
 static void
-terakan_hw_config_sqk_emit_modified_resources_fragment(
+terakan_hw_config_sqk_emit_modified_srvs_fragment(
    struct terakan_gfx_command_writer * const command_writer)
 {
    struct terakan_hw_config_sqk * const config = &command_writer->hw_config_sqk;
    struct terakan_hw_config_sqk_stage * const stage = &config->stages_[MESA_SHADER_FRAGMENT];
 
-   BITSET_DECLARE(resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_to_emit, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
    assert(stage->usage != NULL);
-   BITSET_AND(resources_to_emit, stage->usage->resources, stage->modified.resources);
+   BITSET_AND(srvs_to_emit, stage->usage->srvs, stage->modified.srvs);
 
-   unsigned resource_index;
-   BITSET_FOREACH_SET (resource_index, resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE) {
-      unsigned const resource_hw_index = TERAKAN_RESOURCE_HW_OFFSET_PS + resource_index;
-      if (!BITSET_TEST(stage->resources_bound, resource_index)) {
-         terakan_hw_config_sqk_emit_unbound_resource(command_writer, resource_hw_index);
+   unsigned srv_index;
+   BITSET_FOREACH_SET (srv_index, srvs_to_emit, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE) {
+      unsigned const srv_hw_index = TERAKAN_SRV_HW_OFFSET_PS + srv_index;
+      if (!BITSET_TEST(stage->srvs_bound, srv_index)) {
+         terakan_hw_config_sqk_emit_unbound_srv(command_writer, srv_hw_index);
          continue;
       }
-      uint32_t * const packet_descriptor = terakan_hw_config_sqk_emit_bound_resource(
-         command_writer, resource_hw_index, &config->resources_fs_[resource_index], 0);
-      if (BITSET_TEST(config->resources_last_used_as_uncached_fs_, resource_index) &&
+      uint32_t * const packet_descriptor = terakan_hw_config_sqk_emit_bound_srv(
+         command_writer, srv_hw_index, &config->srvs_fs_[srv_index], 0);
+      if (BITSET_TEST(config->srvs_last_used_as_uncached_fs_, srv_index) &&
           likely(packet_descriptor != NULL) &&
           G_03001C_TYPE(packet_descriptor[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER) {
          packet_descriptor[3] |= S_03000C_UNCACHED(true);
       }
    }
 
-   BITSET_ANDNOT(stage->modified.resources, stage->modified.resources, stage->usage->resources);
+   BITSET_ANDNOT(stage->modified.srvs, stage->modified.srvs, stage->usage->srvs);
 }
 
 static void
-terakan_hw_config_sqk_emit_modified_resources_compute(
+terakan_hw_config_sqk_emit_modified_srvs_compute(
    struct terakan_gfx_command_writer * const command_writer)
 {
    struct terakan_hw_config_sqk * const config = &command_writer->hw_config_sqk;
    struct terakan_hw_config_sqk_stage * const stage = &config->stages_[MESA_SHADER_COMPUTE];
 
-   BITSET_DECLARE(resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_to_emit, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
    assert(stage->usage != NULL);
-   BITSET_AND(resources_to_emit, stage->usage->resources, stage->modified.resources);
+   BITSET_AND(srvs_to_emit, stage->usage->srvs, stage->modified.srvs);
 
-   unsigned resource_index;
-   BITSET_FOREACH_SET (resource_index, resources_to_emit, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE) {
-      unsigned const resource_hw_index = TERAKAN_RESOURCE_HW_OFFSET_CS + resource_index;
-      if (!BITSET_TEST(stage->resources_bound, resource_index)) {
-         terakan_hw_config_sqk_emit_unbound_resource(command_writer, resource_hw_index);
+   unsigned srv_index;
+   BITSET_FOREACH_SET (srv_index, srvs_to_emit, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE) {
+      unsigned const srv_hw_index = TERAKAN_SRV_HW_OFFSET_CS + srv_index;
+      if (!BITSET_TEST(stage->srvs_bound, srv_index)) {
+         terakan_hw_config_sqk_emit_unbound_srv(command_writer, srv_hw_index);
          continue;
       }
-      uint32_t * const packet_descriptor = terakan_hw_config_sqk_emit_bound_resource(
-         command_writer, resource_hw_index, &config->resources_cs_[resource_index],
-         TERAKAN_PACKET3_COMPUTE);
-      if (BITSET_TEST(config->resources_last_used_as_uncached_cs_, resource_index) &&
+      uint32_t * const packet_descriptor = terakan_hw_config_sqk_emit_bound_srv(
+         command_writer, srv_hw_index, &config->srvs_cs_[srv_index], TERAKAN_PACKET3_COMPUTE);
+      if (BITSET_TEST(config->srvs_last_used_as_uncached_cs_, srv_index) &&
           likely(packet_descriptor != NULL) &&
           G_03001C_TYPE(packet_descriptor[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER) {
          packet_descriptor[3] |= S_03000C_UNCACHED(true);
       }
    }
 
-   BITSET_ANDNOT(stage->modified.resources, stage->modified.resources, stage->usage->resources);
+   BITSET_ANDNOT(stage->modified.srvs, stage->modified.srvs, stage->usage->srvs);
 }
 
 typedef void (*terakan_hw_config_sqk_emit_modified_function)(
@@ -1025,8 +1012,8 @@ terakan_hw_config_sqk_emit_modified_vs(struct terakan_gfx_command_writer * const
          TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_LS_VS, 0);
       terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                    TERAKAN_DESCRIPTOR_HW_STAGE_LS);
-      terakan_hw_config_sqk_emit_modified_resources_vertex(
-         command_writer, stage, config->resources_vs_, TERAKAN_RESOURCE_HW_OFFSET_LS);
+      terakan_hw_config_sqk_emit_modified_srvs_vertex(command_writer, stage, config->srvs_vs_,
+                                                      TERAKAN_SRV_HW_OFFSET_LS);
    } else {
       terakan_hw_config_sqk_emit_modified_kcache(
          command_writer, stage, TERAKAN_CONTEXT_REG_OFFSET(R_028180_ALU_CONST_BUFFER_SIZE_VS_0),
@@ -1034,8 +1021,8 @@ terakan_hw_config_sqk_emit_modified_vs(struct terakan_gfx_command_writer * const
          TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_LS_VS, 0);
       terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                    TERAKAN_DESCRIPTOR_HW_STAGE_VSES);
-      terakan_hw_config_sqk_emit_modified_resources_vertex(
-         command_writer, stage, config->resources_vs_, TERAKAN_RESOURCE_HW_OFFSET_VSES);
+      terakan_hw_config_sqk_emit_modified_srvs_vertex(command_writer, stage, config->srvs_vs_,
+                                                      TERAKAN_SRV_HW_OFFSET_VSES);
    }
 }
 
@@ -1050,9 +1037,8 @@ terakan_hw_config_sqk_emit_modified_tcs(struct terakan_gfx_command_writer * cons
       TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_HS, 0);
    terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                 TERAKAN_DESCRIPTOR_HW_STAGE_HS);
-   terakan_hw_config_sqk_emit_modified_resources_vertex(
-      command_writer, stage, command_writer->hw_config_sqk.resources_tcs_,
-      TERAKAN_RESOURCE_HW_OFFSET_HS);
+   terakan_hw_config_sqk_emit_modified_srvs_vertex(
+      command_writer, stage, command_writer->hw_config_sqk.srvs_tcs_, TERAKAN_SRV_HW_OFFSET_HS);
 }
 
 static void
@@ -1067,9 +1053,8 @@ terakan_hw_config_sqk_emit_modified_tes(struct terakan_gfx_command_writer * cons
       TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_LS_VS, 0);
    terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                 TERAKAN_DESCRIPTOR_HW_STAGE_VSES);
-   terakan_hw_config_sqk_emit_modified_resources_vertex(
-      command_writer, stage, command_writer->hw_config_sqk.resources_tes_,
-      TERAKAN_RESOURCE_HW_OFFSET_VSES);
+   terakan_hw_config_sqk_emit_modified_srvs_vertex(
+      command_writer, stage, command_writer->hw_config_sqk.srvs_tes_, TERAKAN_SRV_HW_OFFSET_VSES);
 }
 
 static void
@@ -1083,9 +1068,8 @@ terakan_hw_config_sqk_emit_modified_gs(struct terakan_gfx_command_writer * const
       TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_GS, 0);
    terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                 TERAKAN_DESCRIPTOR_HW_STAGE_GS);
-   terakan_hw_config_sqk_emit_modified_resources_vertex(command_writer, stage,
-                                                        command_writer->hw_config_sqk.resources_gs_,
-                                                        TERAKAN_RESOURCE_HW_OFFSET_GS);
+   terakan_hw_config_sqk_emit_modified_srvs_vertex(
+      command_writer, stage, command_writer->hw_config_sqk.srvs_gs_, TERAKAN_SRV_HW_OFFSET_GS);
 }
 
 static void
@@ -1099,7 +1083,7 @@ terakan_hw_config_sqk_emit_modified_fs(struct terakan_gfx_command_writer * const
       TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_PS, 0);
    terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                 TERAKAN_DESCRIPTOR_HW_STAGE_PS);
-   terakan_hw_config_sqk_emit_modified_resources_fragment(command_writer);
+   terakan_hw_config_sqk_emit_modified_srvs_fragment(command_writer);
 }
 
 static terakan_hw_config_sqk_emit_modified_function const
@@ -1116,7 +1100,7 @@ terakan_hw_config_sqk_emit_modified_for_draw(
    struct terakan_gfx_command_writer * const command_writer)
 {
    struct terakan_hw_config_sqk * const config = &command_writer->hw_config_sqk;
-   terakan_hw_config_sqk_emit_modified_resources_vertex_input(command_writer);
+   terakan_hw_config_sqk_emit_modified_srvs_vertex_input(command_writer);
    u_foreach_bit (stage_index, config->draw_stages_used_ & config->draw_stages_pending_) {
       terakan_hw_config_sqk_emit_draw_stage_modified[stage_index](command_writer);
    }
@@ -1148,7 +1132,7 @@ terakan_hw_config_sqk_emit_modified_for_compute(
       TERASCALE_WDDM_PATCH_IDS_SQ_ALU_CONST_CACHE_CS, TERAKAN_PACKET3_COMPUTE);
    terakan_hw_config_sqk_emit_modified_samplers(command_writer, stage,
                                                 TERAKAN_DESCRIPTOR_HW_STAGE_CS);
-   terakan_hw_config_sqk_emit_modified_resources_compute(command_writer);
+   terakan_hw_config_sqk_emit_modified_srvs_compute(command_writer);
 }
 
 void
@@ -1166,11 +1150,11 @@ terakan_hw_config_sqk_reset(struct terakan_hw_config_sqk * const config,
    config->draw_stages_used_ = 0b0;
    config->draw_stages_pending_ = BITFIELD_MASK(MESA_SHADER_COMPUTE);
 
-   config->vi_.resources_used = 0b0;
+   config->vi_.srvs_used = 0b0;
    /* The current hardware register contents are unknown. */
-   config->vi_.resources_modified = BITFIELD_MASK(TERAKAN_RESOURCE_HW_COUNT_FETCH);
+   config->vi_.srvs_modified = BITFIELD_MASK(TERAKAN_SRV_HW_COUNT_FETCH);
    /* Initialize to unbound. */
-   config->vi_.resources_bound = 0b0;
+   config->vi_.srvs_bound = 0b0;
 
    for (unsigned stage_index = 0; stage_index <= MESA_SHADER_COMPUTE; ++stage_index) {
       struct terakan_hw_config_sqk_stage * const stage = &config->stages_[stage_index];
@@ -1203,7 +1187,7 @@ terakan_hw_config_sqk_reset(struct terakan_hw_config_sqk * const config,
       }
 
       /* Initialize to unbound. */
-      BITSET_ZERO(stage->resources_bound);
+      BITSET_ZERO(stage->srvs_bound);
    }
 
    terakan_hw_config_sqk_stage_emission_flags_set_all(
@@ -1217,6 +1201,6 @@ terakan_hw_config_sqk_reset(struct terakan_hw_config_sqk * const config,
       config->vses_last_used_by_tes_ = (struct terakan_hw_config_sqk_stage_emission_flags){};
    }
 
-   BITSET_ZERO(config->resources_last_used_as_uncached_fs_);
-   BITSET_ZERO(config->resources_last_used_as_uncached_cs_);
+   BITSET_ZERO(config->srvs_last_used_as_uncached_fs_);
+   BITSET_ZERO(config->srvs_last_used_as_uncached_cs_);
 }

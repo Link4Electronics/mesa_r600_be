@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 /* "Surfel" (surface element) here means what "element" is in AddrLib terms: a block, or, for
- * 3x-expanded formats (8_8_8, 16_16_16, 32_32_32), a channel.
+ * 3x-expanded formats (`8_8_8`, `16_16_16`, `32_32_32`), a channel.
  */
 
 static inline bool
@@ -150,7 +150,7 @@ static inline uint32_t
 terakan_format_pitch_alignment_linear_surfels(unsigned const bytes_per_surfel,
                                               unsigned const tile_pipe_interleave_bytes_log2)
 {
-   /* From AddrLib's R800Lib::HwlGetPitchAlignmentLinear. */
+   /* From AddrLib's `R800Lib::HwlGetPitchAlignmentLinear`. */
    uint32_t const tile_pipe_interleave_bytes = (uint32_t)1 << tile_pipe_interleave_bytes_log2;
    uint32_t const surfels_per_pipe_interleave = tile_pipe_interleave_bytes / bytes_per_surfel;
    return MAX2(surfels_per_pipe_interleave, 64);

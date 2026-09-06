@@ -42,9 +42,8 @@
 #include <string.h>
 
 struct terakan_bo const *
-terakan_buffer_create_uniform_buffer_descriptor(
-   VkDescriptorBufferInfo const * const buffer_info,
-   struct terakan_resource_descriptor * const resource_out)
+terakan_buffer_create_uniform_buffer_descriptor(VkDescriptorBufferInfo const * const buffer_info,
+                                                struct terakan_srv_descriptor * const srv_out)
 {
    struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
    if (buffer == NULL) {
@@ -52,17 +51,16 @@ terakan_buffer_create_uniform_buffer_descriptor(
    }
    if (!terakan_descriptor_create_for_uniform_buffer(
           buffer->bo, buffer->va + buffer_info->offset,
-          vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range), resource_out)) {
+          vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range), srv_out)) {
       return NULL;
    }
    return buffer->bo;
 }
 
 struct terakan_bo const *
-terakan_buffer_create_storage_buffer_descriptor(
-   VkDescriptorBufferInfo const * const buffer_info,
-   struct terakan_resource_descriptor * const resource_out,
-   struct terakan_color_descriptor * const color_out)
+terakan_buffer_create_storage_buffer_descriptor(VkDescriptorBufferInfo const * const buffer_info,
+                                                struct terakan_srv_descriptor * const srv_out,
+                                                struct terakan_color_descriptor * const color_out)
 {
    struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
    if (buffer == NULL) {
@@ -73,7 +71,7 @@ terakan_buffer_create_storage_buffer_descriptor(
           vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range),
           container_of(buffer->vk.base.device->physical, struct terakan_physical_device const, vk)
              ->tiling_info.pipe_interleave_bytes_log2,
-          resource_out, color_out)) {
+          srv_out, color_out)) {
       return NULL;
    }
    return buffer->bo;
@@ -144,9 +142,9 @@ terakan_vk_GetDeviceBufferMemoryRequirements(VkDevice const deviceHandle,
    } else {
       /* Required in many places: largest in vertex fetch instructions, largest possible vertex
        * index size, a storage buffer vertex fetch and UAV element, indirect buffer alignment.
-       * Additionally, because storage buffers use 32-bit UAVs, and with VK_EXT_robustness2 their
-       * ranges are rounded up (not down) to robustStorageBufferAccessSizeAlignment, which is
-       * sizeof(uint32_t) because of that, aligning all buffers and images to sizeof(uint32_t)
+       * Additionally, because storage buffers use 32-bit UAVs, and with `VK_EXT_robustness2` their
+       * ranges are rounded up (not down) to `robustStorageBufferAccessSizeAlignment`, which is
+       * `sizeof(uint32_t)` because of that, aligning all buffers and images to `sizeof(uint32_t)`
        * prevents writes to the end of storage buffers with an unaligned size from affecting the
        * resource placed next to them.
        */
@@ -265,7 +263,7 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
 
    buffer_view->bo = buffer->bo;
 
-   buffer_view->resource = (struct terakan_resource_descriptor){};
+   buffer_view->srv = (struct terakan_srv_descriptor){};
    buffer_view->color = (struct terakan_color_descriptor){};
 
    /* As of Vulkan 1.3.262, the requirement that `range` must be greater than 0 applies only to
@@ -283,22 +281,21 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
             UTIL_ARCH_BIG_ENDIAN ? terascale_format_big_endian_swap[format_info.format]
                                  : TERASCALE_ENDIAN_SWAP_NONE;
 
-         buffer_view->resource.resource[0] = (uint32_t)va;
-         buffer_view->resource.resource[1] =
-            (uint32_t)(bytes_per_element * buffer_view->vk.elements - 1);
-         buffer_view->resource.resource[2] =
-            S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(bytes_per_element) |
-            S_030008_DATA_FORMAT(format_info.format) |
-            S_030008_NUM_FORMAT_ALL(terascale_format_get_sq_num_format(
-               (enum terascale_format_number_type)format_info.number_type)) |
-            S_030008_FORMAT_COMP_ALL(format_info.channels_signed != 0b0) |
-            S_030008_ENDIAN_SWAP(endian_swap);
-         buffer_view->resource.resource[3] =
+         buffer_view->srv.srv[0] = (uint32_t)va;
+         buffer_view->srv.srv[1] = (uint32_t)(bytes_per_element * buffer_view->vk.elements - 1);
+         buffer_view->srv.srv[2] = S_030008_BASE_ADDRESS_HI(va >> 32) |
+                                   S_030008_STRIDE(bytes_per_element) |
+                                   S_030008_DATA_FORMAT(format_info.format) |
+                                   S_030008_NUM_FORMAT_ALL(terascale_format_get_sq_num_format(
+                                      (enum terascale_format_number_type)format_info.number_type)) |
+                                   S_030008_FORMAT_COMP_ALL(format_info.channels_signed != 0b0) |
+                                   S_030008_ENDIAN_SWAP(endian_swap);
+         buffer_view->srv.srv[3] =
             S_03000C_DST_SEL_X(format_info.swizzle_r) | S_03000C_DST_SEL_Y(format_info.swizzle_g) |
             S_03000C_DST_SEL_Z(format_info.swizzle_b) | S_03000C_DST_SEL_W(format_info.swizzle_a);
-         buffer_view->resource.resource[4] = (uint32_t)buffer_view->vk.elements;
-         buffer_view->resource.resource[7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER);
-         buffer_view->resource.resource[TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] =
+         buffer_view->srv.srv[4] = (uint32_t)buffer_view->vk.elements;
+         buffer_view->srv.srv[7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER);
+         buffer_view->srv.srv[TERAKAN_SRV_BUFFER_PRIORITY_WORD] =
             TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER;
 
          /* The vertex buffer format is also used for the UAV IMMED buffer, so creating the UAV

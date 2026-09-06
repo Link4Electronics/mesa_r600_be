@@ -392,8 +392,8 @@ static inline struct terascale_format_info
 terakan_meta_transfer_image_block_format_info(unsigned const bytes_per_block)
 {
    enum pipe_format format = PIPE_FORMAT_R8_UNORM;
-   /* Note that writing to 3x-expanded images must be done via a buffer UAV rather than an RTV or an
-    * image UAV, but an image resource may still be used for reading whole texels, and also this
+   /* Note that writing to 3x-expanded images must be done via a buffer UAV rather than an RTV or a
+    * texture UAV, but a texture SRV may still be used for reading whole texels, and also this
     * function may be called by common helpers even for 3x-expanded format writes.
     */
    switch (bytes_per_block) {
@@ -461,11 +461,11 @@ bool terakan_meta_copy_buffer_image_translate_region_image(
  * as the base address of an image slice is already aligned to the pipe interleave.
  */
 
-/* Creates a buffer resource descriptor (without the actual memory range) for reading the full texel
- * of a 3x-expanded image accepting the index in surfels.
+/* Creates a buffer SRV descriptor (without the actual memory range) for reading the full texel of a
+ * 3x-expanded image accepting the index in surfels.
  */
-static inline struct terakan_resource_descriptor
-terakan_meta_transfer_expand_3x_resource(unsigned const bytes_per_surfel)
+static inline struct terakan_srv_descriptor
+terakan_meta_transfer_expand_3x_srv(unsigned const bytes_per_surfel)
 {
    enum terascale_format_index data_format;
    switch (bytes_per_surfel) {
@@ -483,18 +483,18 @@ terakan_meta_transfer_expand_3x_resource(unsigned const bytes_per_surfel)
       data_format = TERASCALE_FORMAT_INDEX_INVALID;
    }
 
-   return (struct terakan_resource_descriptor){
-      .resource = {
+   return (struct terakan_srv_descriptor){
+      .srv = {
          [2] = S_030008_STRIDE(bytes_per_surfel) | S_030008_DATA_FORMAT(data_format) |
                S_030008_NUM_FORMAT_ALL(TERASCALE_FORMAT_SQ_NUM_FORMAT_INT),
          [3] = S_03000C_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_03000C_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
                S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_1),
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
       }};
 }
 
-/* Creates a buffer resource descriptor (without the actual memory range) for accessing individual
+/* Creates a buffer SRV descriptor (without the actual memory range) for accessing individual
  * surfels of a 3x-expanded image.
  */
 static inline struct terakan_color_descriptor

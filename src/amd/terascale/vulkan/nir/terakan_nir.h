@@ -37,17 +37,15 @@
 extern "C" {
 #endif
 
-/* Emits a buffer resource load intrinsic for a buffer resource with a stride of 1 producing a NIR
- * vector.
+/* Emits a buffer SRV load intrinsic for a buffer SRV with a stride of 1 producing a NIR vector.
  * Supports 1, 2 and 4 components for 8 and 16 bits, and 1, 2, 3 and 4 components for 32 bits.
  * Vectorization is expected to be done externally before lowering to this intrinsic if needed,
  * taking alignment and robustness requirements into account.
  */
-nir_def * terakan_nir_load_raw_resource_buffer(nir_builder * builder, unsigned num_components,
-                                               unsigned bit_size, enum gl_access_qualifier access,
-                                               unsigned resource_index_base,
-                                               nir_def * resource_index, unsigned byte_address_base,
-                                               nir_def * byte_address);
+nir_def * terakan_nir_load_raw_buffer_srv(nir_builder * builder, unsigned num_components,
+                                          unsigned bit_size, enum gl_access_qualifier access,
+                                          unsigned srv_index_base, nir_def * srv_index,
+                                          unsigned byte_address_base, nir_def * byte_address);
 
 /*
  * I/O driver location assignment, expecting I/O variable access lowered to load / store intrinsics.
@@ -116,13 +114,12 @@ struct terakan_nir_pipeline_layout_binding {
    /* `TERAKAN_NIR_BINDING_BASE_INVALID` if the binding doesn't use the given hardware register
     * range.
     * The bases are relative to the beginning of the hardware register range for the stage. In
-    * particular, `resource_base` is not relative to `TERAKAN_RESOURCE_RANGE_MUTABLE_BASE`, for
-    * example, however, lowerings may expect that the resource range of the binding is in the
-    * mutable resource range.
+    * particular, `srv_base` is not relative to `TERAKAN_SRV_RANGE_MUTABLE_BASE`, for example,
+    * however, lowerings may expect that the SRV range of the binding is in the mutable SRV range.
     */
    uint8_t kcache_base;
    uint8_t sampler_base;
-   uint8_t resource_base;
+   uint8_t srv_base;
 };
 
 extern struct terakan_nir_pipeline_layout_binding const terakan_nir_pipeline_layout_binding_empty;

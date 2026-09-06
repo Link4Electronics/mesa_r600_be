@@ -311,24 +311,24 @@ struct terakan_shader_sqk_usage {
 
    uint32_t samplers;
 
-   BITSET_DECLARE(resources, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
-   /* If a buffer is bound at an index included in `resources_uncached`, it needs to be bound with
-    * `UNCACHED = 1`. This is needed primarily for coherence between UAV writes and resource reads
-    * within an invocation, and for reading the UAV operation return value.
+   BITSET_DECLARE(srvs, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
+   /* If a buffer is bound at an index included in `srvs_uncached`, it needs to be bound with
+    * `UNCACHED = 1`. This is needed primarily for coherence between UAV writes and SRV reads within
+    * an invocation, and for reading the UAV operation return value.
     */
-   BITSET_DECLARE(resources_uncached, TERAKAN_RESOURCE_HW_COUNT_PIXEL_COMPUTE);
+   BITSET_DECLARE(srvs_uncached, TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE);
 };
 
 struct terakan_shader_uav_usage {
    /* The actual `CB_COLOR` indices of UAVs are the counts of set bits prior to the bit for the
-    * given index of the resource corresponding to the UAV in the mutable resource range, and for
-    * fragment shaders, the number of set bits in `rtv_dsb_uncompacted_exports` is added (but not
-    * for the `IMMED` buffer read resource index) to them.
+    * given index of the SRV corresponding to the UAV in the mutable SRV range, and for fragment
+    * shaders, the number of set bits in `rtv_dsb_uncompacted_exports` is added (but not for the
+    * IMMED buffer SRV index) to them.
     * Expected to be padded to the bitset size with zero bits, so it can be used in `memcmp`.
     */
-   BITSET_DECLARE(uavs_for_mutable_resources_needed,
-                  MAX2(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL,
-                       TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL));
+   BITSET_DECLARE(uavs_for_mutable_srvs_needed,
+                  MAX2(TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL,
+                       TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL));
 };
 
 /* Information about the mapping between application and hardware RTV indices.
@@ -366,13 +366,13 @@ struct terakan_shader_uav_usage {
  * Otherwise, UAV MRT indices must not be smaller than `util_bitcount(rtv_uncompacted_exports)`.
  * The current convention in Terakan is that UAV MRTs are placed immediately after RTV and DSB MRTs.
  *
- * Advanced blending equation feedback loop resources may share the resource range with UAV IMMED
- * buffers. However, in order to keep the length of the range 11 rather than 12 (to make it possible
- * to provide one more mutable-type resource descriptor to the application), the
+ * Advanced blending equation feedback loop SRVs may share the SRV range with UAV IMMED buffers.
+ * However, in order to keep the length of the range 11 rather than 12 (to make it possible to
+ * provide one more mutable-type SRV descriptor to the application), the
  * `layout(location = 0, index = 1)` dual-source blending factor must not occupy space in the range.
  * The current convention in Terakan, for simplicity and to reduce register changes when the color
- * attachment MRT count is changed, is to place UAV IMMED resources upward at the beginning of the
- * range, and the advanced blending equation feedback loop resources downward at the end.
+ * attachment MRT count is changed, is to place UAV IMMED SRVs upward at the beginning of the range,
+ * and the advanced blending equation feedback loop SRVs downward at the end.
  */
 struct terakan_shader_rtv_mapping {
    uint8_t rtv_uncompacted_exports;

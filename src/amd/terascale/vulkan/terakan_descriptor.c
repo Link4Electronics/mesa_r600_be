@@ -53,9 +53,9 @@ terakan_color_descriptor_calculate_buffer_base_dim_offset(
    descriptor->dim = (uint32_t)(alignment_offset_bytes / bytes_per_element + elements - 1u);
 }
 
-struct terakan_resource_descriptor
-terakan_color_descriptor_info_to_uav_immediate_resource(struct terakan_device const * const device,
-                                                        uint32_t const color_info)
+struct terakan_srv_descriptor
+terakan_color_descriptor_info_to_uav_immediate_srv(struct terakan_device const * const device,
+                                                   uint32_t const color_info)
 {
    enum terascale_format_index const format =
       (enum terascale_format_index)G_028C70_FORMAT(color_info);
@@ -74,8 +74,8 @@ terakan_color_descriptor_info_to_uav_immediate_resource(struct terakan_device co
       terascale_format_cb_color_read_swizzle[terascale_format_channel_count[format]]
                                             [G_028C70_COMP_SWAP(color_info)];
 
-   return (struct terakan_resource_descriptor){
-      .resource = {
+   return (struct terakan_srv_descriptor){
+      .srv = {
          [0] = (uint32_t)(va_shr8 << 8),
          [1] = (uav_immediate_size_elements * bytes_per_element) - 1,
          [2] = S_030008_BASE_ADDRESS_HI(va_shr8 >> (32 - 8)) | S_030008_STRIDE(bytes_per_element) |
@@ -100,14 +100,14 @@ terakan_color_descriptor_info_to_uav_immediate_resource(struct terakan_device co
                S_03000C_DST_SEL_Z(swizzle[2]) | S_03000C_DST_SEL_W(swizzle[3]),
          [4] = uav_immediate_size_elements,
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_RW_BUFFER,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_RW_BUFFER,
       }};
 }
 
 bool
 terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * const bo, uint64_t const va,
                                              VkDeviceSize const range,
-                                             struct terakan_resource_descriptor * const resource_out)
+                                             struct terakan_srv_descriptor * const srv_out)
 {
    assert((va & (TERAKAN_KCACHE_HW_LINE_BYTES - 1)) == 0);
    assert(range != VK_WHOLE_SIZE);
@@ -120,8 +120,8 @@ terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * const bo,
     */
    VkDeviceSize const range_aligned = ALIGN_POT(range, (VkDeviceSize)TERAKAN_KCACHE_HW_LINE_BYTES);
 
-   *resource_out = (struct terakan_resource_descriptor){
-      .resource = {
+   *srv_out = (struct terakan_srv_descriptor){
+      .srv = {
          [0] = (uint32_t)va,
          [1] = (uint32_t)(range_aligned - 1),
          [2] = S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(1),
@@ -129,7 +129,7 @@ terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * const bo,
                S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W),
          [4] = (uint32_t)range_aligned,
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
       }};
 
    return true;
@@ -139,7 +139,7 @@ bool
 terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * const bo, uint64_t const va,
                                              VkDeviceSize const range,
                                              unsigned const pipe_interleave_bytes_log2,
-                                             struct terakan_resource_descriptor * const resource_out,
+                                             struct terakan_srv_descriptor * const srv_out,
                                              struct terakan_color_descriptor * const color_out)
 {
    assert((va & (sizeof(uint32_t) - 1)) == 0);
@@ -151,8 +151,8 @@ terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * const bo,
    /* VK_EXT_robustness2 behavior: rounding up. */
    VkDeviceSize const range_aligned = ALIGN_POT(range, (VkDeviceSize)sizeof(uint32_t));
 
-   *resource_out = (struct terakan_resource_descriptor){
-      .resource = {
+   *srv_out = (struct terakan_srv_descriptor){
+      .srv = {
          [0] = (uint32_t)va,
          [1] = (uint32_t)(range_aligned - 1),
          [2] = S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(1),
@@ -160,7 +160,7 @@ terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * const bo,
                S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W),
          [4] = (uint32_t)range_aligned,
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
       }};
 
    terakan_color_descriptor_calculate_buffer_base_view_dim(

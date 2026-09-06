@@ -213,20 +213,18 @@ terakan_instance_init(struct terakan_instance * instance,
    /* Direct3D 11 limit. */
    instance->max_per_stage_uniform_buffers = 15;
    /* 4 is the Vulkan minimum, but use all space not usable by vertex stages. */
-   instance->max_per_stage_input_attachments =
-      MAX2(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL -
-              TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL,
-           4);
-   /* Give all remaining resource bindings to sampled images.
-    * The sum of maxPerStageDescriptorStorageBuffers and maxPerStageDescriptorStorageImages is
-    * TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT.
-    * In pixel shaders, it's limited by maxFragmentCombinedOutputResources regardless of how each
-    * storage buffer/image is accessed, however.
+   instance->max_per_stage_input_attachments = MAX2(
+      TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL - TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL, 4);
+   /* Give all remaining SRV bindings to sampled images.
+    * The sum of `maxPerStageDescriptorStorageBuffers` and `maxPerStageDescriptorStorageImages` is
+    * `TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT`.
+    * In pixel shaders, it's limited by `maxFragmentCombinedOutputResources` regardless of how each
+    * storage buffer / image is accessed, however.
     */
    instance->max_per_stage_sampled_images =
-      MIN2(TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL - TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT -
+      MIN2(TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL - TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT -
               instance->max_per_stage_uniform_buffers,
-           TERAKAN_RESOURCE_RANGE_MUTABLE_MAX_COUNT_PIXEL - TERAKAN_COLOR_UAV_COUNT_PIXEL -
+           TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL - TERAKAN_COLOR_UAV_COUNT_PIXEL -
               instance->max_per_stage_uniform_buffers - instance->max_per_stage_input_attachments);
 
    return VK_SUCCESS;

@@ -71,8 +71,8 @@
                },                                                                                  \
          },                                                                                        \
       .kcache_used = BITFIELD_BIT(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS),                           \
-      .primary_meta_resource_used = true,                                                          \
-      .non_pixel_stage_specific_resource_used = true,                                              \
+      .primary_meta_srv_used = true,                                                               \
+      .non_pixel_stage_specific_srv_used = true,                                                   \
    };
 
 enum {
@@ -178,7 +178,7 @@ enum {
 
 #define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(sample_fetch_address_gpr) \
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                  \
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |                  \
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),                                       \
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
@@ -206,7 +206,7 @@ enum {
 #define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(                         \
    sample_fetch_address_gpr)                                                                       \
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                  \
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),                   \
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |                                              \
@@ -299,7 +299,7 @@ enum {
                                                    offset_counter_pairs, mega_fetch_dwords,        \
                                                    is_mega_fetch)                                  \
    (S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                      \
-    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |              \
+    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |                   \
     S_SQ_VTX_WORD0_SRC_GPR(src_y_gpr) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_Y) |            \
     S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * (mega_fetch_dwords) - 1)),                  \
    (S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_##dst_sel_x) |                                      \
@@ -319,7 +319,7 @@ enum {
                                                    dst_sel_z, dst_sel_w, src_y_gpr,                \
                                                    offset_counter_pairs)                           \
    (S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                      \
-    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |              \
+    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |                   \
     S_SQ_VTX_WORD0_SRC_GPR(src_y_gpr) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_Y)),            \
    (S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_##dst_sel_x) |                                      \
     S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_##dst_sel_y) |                                      \
@@ -1422,7 +1422,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1439,7 +1439,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
 
    /* 14-15: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1523,7 +1523,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_MASK) |
@@ -1538,7 +1538,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
 
    /* 18-19: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_MASK) |
@@ -1615,7 +1615,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |
@@ -1631,7 +1631,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
 
    /* 14-15: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 2 - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_Y : TERASCALE_SWIZZLE_X) |
@@ -1718,7 +1718,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_MASK) |
@@ -1732,7 +1732,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
 
    /* 18-19: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_Y : TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_X : TERASCALE_SWIZZLE_Y) |
@@ -2090,8 +2090,8 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
    uint32_t * packet;
 
    /* Always assuming `VK_QUERY_RESULT_WAIT_BIT` because there's no concept of a partial
-    * `EVENT_WRITE`, and the buffer resource fetch cache needs to be flushed for the latest value to
-    * be visible to the copy shader.
+    * `EVENT_WRITE`, and the buffer SRV fetch cache needs to be flushed for the latest value to be
+    * visible to the copy shader.
     */
    /* TODO(Triang3l): Only insert the barrier if a query was reset or ended in the indirect buffer
     * without a barrier so far.
@@ -2101,31 +2101,31 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
 
    uint32_t const src_samples_size_bytes = sizeof(uint64_t) * query_pool->samples_size_counters;
 
-   /* Buffer resource size limit is 2^32 bytes, thus 2^(32-3) counters.
-    * Availability is also bound as a buffer resource, but it's smaller than samples.
+   /* Buffer SRV size limit is 2^32 bytes, thus 2^(32-3) counters.
+    * Availability is also bound as a buffer SRV, but it's smaller than samples.
     */
-   uint32_t const src_resource_max_queries = ((uint32_t)1 << (32 - 3)) / src_samples_size_bytes;
+   uint32_t const src_srv_max_queries = ((uint32_t)1 << (32 - 3)) / src_samples_size_bytes;
 
    uint64_t src_samples_va =
       query_pool->bo->va + terakan_query_pool_samples_offset_bytes(query_pool, firstQuery);
-   struct terakan_resource_descriptor src_samples_resource = {
-      .resource = {
+   struct terakan_srv_descriptor src_samples_srv = {
+      .srv = {
          [2] = S_030008_STRIDE(src_samples_size_bytes),
          [3] = S_03000C_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_03000C_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
                S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W),
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_QUERY,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_QUERY,
       }};
 
    uint64_t src_availability_va =
       query_pool->bo->va + terakan_query_pool_availability_offset_bytes(query_pool, firstQuery);
-   struct terakan_resource_descriptor src_availability_resource = {
-      .resource = {
+   struct terakan_srv_descriptor src_availability_srv = {
+      .srv = {
          [2] = S_030008_STRIDE(sizeof(uint32_t)),
          [3] = S_03000C_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_03000C_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
                S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W),
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
-         [TERAKAN_RESOURCE_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_QUERY,
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_QUERY,
       }};
 
    uint64_t dst_va = dst_buffer->va + dstOffset;
@@ -2154,7 +2154,7 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
    /* TODO(Triang3l): Batch multiple queries, carefully avoiding integer overflow.
     * Batch size limits:
     * - Actual remaining query count (already clamped).
-    * - Source resource: 2^32 bytes (2^29 / sample counter count).
+    * - Source SRV: 2^32 bytes (2^29 / sample counter count).
     * - Destination UAV: 2^32 elements.
     *   1 + (2^32 - UAV alignment offset dwords - result and availability dwords) / stride
     *   (if stride is not 0, which, with valid usage, may be the case for 1 query).
@@ -2162,7 +2162,7 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
    for (uint32_t query_index = 0; query_index < queryCount;) {
       /* Limit the batch size to prevent integer overflow in sizes and addresses on the GPU. */
 
-      uint32_t batch_query_count = MIN2(queryCount - query_index, src_resource_max_queries);
+      uint32_t batch_query_count = MIN2(queryCount - query_index, src_srv_max_queries);
 
       uint64_t const dst_va_aligned =
          dst_va >> physical_device->tiling_info.pipe_interleave_bytes_log2
@@ -2184,29 +2184,27 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
          batch_query_count = (uint32_t)MIN2((VkDeviceSize)batch_query_count, dst_uav_max_queries);
       }
 
-      /* Source samples resource. */
-      src_samples_resource.resource[0] = (uint32_t)src_samples_va;
-      src_samples_resource.resource[2] =
-         (src_samples_resource.resource[2] & C_030008_BASE_ADDRESS_HI) |
-         S_030008_BASE_ADDRESS_HI(src_samples_va >> 32);
-      src_samples_resource.resource[1] =
+      /* Source samples SRV. */
+      src_samples_srv.srv[0] = (uint32_t)src_samples_va;
+      src_samples_srv.srv[2] = (src_samples_srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                               S_030008_BASE_ADDRESS_HI(src_samples_va >> 32);
+      src_samples_srv.srv[1] =
          (uint32_t)((uint64_t)src_samples_size_bytes * batch_query_count - 1u);
-      terakan_hw_config_sqk_set_resource_vs(&command_writer->hw_config_sqk,
-                                            TERAKAN_RESOURCE_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
-                                            query_pool->bo, &src_samples_resource);
+      terakan_hw_config_sqk_set_srv_vs(&command_writer->hw_config_sqk,
+                                       TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                       query_pool->bo, &src_samples_srv);
 
-      /* Source availability resource. */
-      src_availability_resource.resource[0] = (uint32_t)src_availability_va;
-      src_availability_resource.resource[2] =
-         (src_availability_resource.resource[2] & C_030008_BASE_ADDRESS_HI) |
-         S_030008_BASE_ADDRESS_HI(src_availability_va >> 32);
+      /* Source availability SRV. */
+      src_availability_srv.srv[0] = (uint32_t)src_availability_va;
+      src_availability_srv.srv[2] = (src_availability_srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                    S_030008_BASE_ADDRESS_HI(src_availability_va >> 32);
       /* 32-bit multiplication by 4 is sufficient due to `batch_query_count` limiting to no more
        * than 2^(32-3).
        */
-      src_availability_resource.resource[1] = (uint32_t)sizeof(uint32_t) * batch_query_count - 1u;
-      terakan_hw_config_sqk_set_resource_vs(&command_writer->hw_config_sqk,
-                                            TERAKAN_RESOURCE_RANGE_NON_PIXEL_STAGE_SPECIFIC,
-                                            query_pool->bo, &src_availability_resource);
+      src_availability_srv.srv[1] = (uint32_t)sizeof(uint32_t) * batch_query_count - 1u;
+      terakan_hw_config_sqk_set_srv_vs(&command_writer->hw_config_sqk,
+                                       TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC, query_pool->bo,
+                                       &src_availability_srv);
 
       /* Destination UAV. */
       dst_uav.base = (uint32_t)(dst_va_aligned >> 8);
@@ -2251,8 +2249,8 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
       terakan_meta_draw_auto(command_writer, batch_query_count, 1);
 
       query_index += batch_query_count;
-      src_samples_va += (uint64_t)src_samples_resource.resource[1] + 1u;
-      src_availability_va += src_availability_resource.resource[1] + 1u;
+      src_samples_va += (uint64_t)src_samples_srv.srv[1] + 1u;
+      src_availability_va += src_availability_srv.srv[1] + 1u;
       dst_va = dst_va_aligned + sizeof(uint32_t) * ((VkDeviceSize)dst_uav.dim + 1u);
    }
 
