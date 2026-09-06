@@ -30,8 +30,11 @@
 #include "compiler/shader_enums.h"
 #include "gallium/drivers/r600/eg_sq.h"
 #include "gallium/drivers/r600/evergreend.h"
+#include "util/macros.h"
+#include "util/u_math.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -219,6 +222,38 @@ struct terakan_sampler_descriptor {
    /* May be uninitialized if not used by the sampler. */
    uint32_t register_border_color[4];
 };
+
+static inline int32_t
+terakan_sampler_lod_bias_from_float(float const lod_bias)
+{
+   if (unlikely(isnan(lod_bias))) {
+      return 0;
+   }
+   return (int32_t)(CLAMP(lod_bias, -0x1.0p5f, 0x1.0p5f - 0x1.0p-8f) * 0x1.0p8f);
+}
+
+static inline uint32_t
+terakan_sampler_min_max_lod_from_float(float lod)
+{
+   lod = fmaxf(lod, 0.0f);
+   lod = MIN2(lod, 0x1.0p4f - 0x1.0p-8f);
+   /* Convert to fixed-point rounding down.
+    * This is particularly important for image view minimum LOD clamping, as
+    * `minLodInteger_imageView` is defined as `floor(minLodFloat_imageView)` in the
+    * `VkImageViewMinLodCreateInfoEXT` specification, and section 5.8.4 "Fractional Clamping" of the
+    * Direct3D 11.3 Functional Specification also defines the most detailed mip that needs to be
+    * resident as `floor(MinLOD)`.
+    */
+   return (uint32_t)(lod * 0x1.0p8f);
+}
+
+static inline uint32_t
+terakan_sampler_max_aniso_ratio_from_float(float max_aniso_ratio)
+{
+   max_aniso_ratio = fmaxf(max_aniso_ratio, 1.0f);
+   max_aniso_ratio = MIN2(max_aniso_ratio, 0x1.0p4f);
+   return util_logbase2((unsigned)max_aniso_ratio);
+}
 
 /* `CB_COLOR[0-11]` register intermediate representation used for both RTVs and UAVs.
  * Throughout the driver, descriptors containing as detailed information as possible are passed, and

@@ -21,18 +21,15 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_SAMPLER_H
-#define TERAKAN_SAMPLER_H
+#ifndef TERAKAN_VK_SAMPLER_H
+#define TERAKAN_VK_SAMPLER_H
 
 #include "terakan_descriptor.h"
 
 #include "gallium/drivers/r600/evergreend.h"
-#include "util/macros.h"
-#include "util/u_math.h"
 #include "vk_sampler.h"
 
 #include <assert.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -41,7 +38,7 @@ extern "C" {
 #endif
 
 static inline uint32_t
-terakan_sampler_translate_filter(VkFilter const filter, bool const aniso)
+terakan_vk_sampler_translate_filter(VkFilter const filter, bool const aniso)
 {
    if (filter == VK_FILTER_LINEAR) {
       return aniso ? V_03C000_SQ_TEX_XY_FILTER_ANISO_BILINEAR : V_03C000_SQ_TEX_XY_FILTER_BILINEAR;
@@ -51,7 +48,7 @@ terakan_sampler_translate_filter(VkFilter const filter, bool const aniso)
 }
 
 static inline uint32_t
-terakan_sampler_translate_mipmap_mode(VkSamplerMipmapMode const mipmap_mode)
+terakan_vk_sampler_translate_mipmap_mode(VkSamplerMipmapMode const mipmap_mode)
 {
    if (mipmap_mode == VK_SAMPLER_MIPMAP_MODE_LINEAR) {
       return V_03C000_SQ_TEX_Z_FILTER_LINEAR;
@@ -61,7 +58,7 @@ terakan_sampler_translate_mipmap_mode(VkSamplerMipmapMode const mipmap_mode)
 }
 
 static inline uint32_t
-terakan_sampler_translate_address_mode(VkSamplerAddressMode const address_mode)
+terakan_vk_sampler_translate_address_mode(VkSamplerAddressMode const address_mode)
 {
    switch (address_mode) {
    case VK_SAMPLER_ADDRESS_MODE_REPEAT:
@@ -80,40 +77,8 @@ terakan_sampler_translate_address_mode(VkSamplerAddressMode const address_mode)
    }
 }
 
-static inline int32_t
-terakan_sampler_translate_mip_lod_bias(float const mip_lod_bias)
-{
-   if (unlikely(isnan(mip_lod_bias))) {
-      return 0;
-   }
-   return (int32_t)(CLAMP(mip_lod_bias, -0x1.0p5f, 0x1.0p5f - 0x1.0p-8f) * 0x1.0p8f);
-}
-
 static inline uint32_t
-terakan_sampler_translate_min_max_lod(float lod)
-{
-   lod = fmaxf(lod, 0.0f);
-   lod = MIN2(lod, 0x1.0p4f - 0x1.0p-8f);
-   /* Convert to fixed-point rounding down.
-    * This is particularly important for image view minimum LOD clamping, as
-    * `minLodInteger_imageView` is defined as `floor(minLodFloat_imageView)` in the
-    * `VkImageViewMinLodCreateInfoEXT` specification, and section 5.8.4 "Fractional Clamping" of the
-    * Direct3D 11.3 Functional Specification also defines the most detailed mip that needs to be
-    * resident as `floor(MinLOD)`.
-    */
-   return (uint32_t)(lod * 0x1.0p8f);
-}
-
-static inline uint32_t
-terakan_sampler_translate_max_anisotropy(float max_anisotropy)
-{
-   max_anisotropy = fmaxf(max_anisotropy, 1.0f);
-   max_anisotropy = MIN2(max_anisotropy, 0x1.0p4f);
-   return util_logbase2((unsigned)max_anisotropy);
-}
-
-static inline uint32_t
-terakan_sampler_translate_border_color(VkBorderColor const border_color)
+terakan_vk_sampler_translate_border_color(VkBorderColor const border_color)
 {
    switch (border_color) {
    case VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK:
@@ -134,7 +99,7 @@ terakan_sampler_translate_border_color(VkBorderColor const border_color)
    }
 }
 
-struct terakan_sampler {
+struct terakan_vk_sampler {
    struct vk_sampler vk;
 
    struct terakan_sampler_descriptor sampler;
@@ -142,10 +107,10 @@ struct terakan_sampler {
    bool unnormalized_coordinates;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_sampler, vk.base, VkSampler, VK_OBJECT_TYPE_SAMPLER)
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_sampler, vk.base, VkSampler, VK_OBJECT_TYPE_SAMPLER)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_SAMPLER_H */
+#endif /* TERAKAN_VK_SAMPLER_H */

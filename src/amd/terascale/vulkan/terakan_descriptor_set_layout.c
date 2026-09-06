@@ -26,8 +26,8 @@
 #include "terakan_descriptor.h"
 #include "terakan_descriptor_set.h"
 #include "terakan_device.h"
-#include "terakan_sampler.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_sampler.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -201,7 +201,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
                       binding_count);
    VK_MULTIALLOC_DECL(&multialloc, uint8_t, immutable_sampler_indices_in_set,
                       immutable_sampler_count);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_sampler const *, immutable_samplers,
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_sampler const *, immutable_samplers,
                       immutable_sampler_count);
    /* Mesa descriptor set layout has a different lifetime than the corresponding
     * VkDescriptorSetLayout since other objects hold additional references to them, allocation must
@@ -285,8 +285,9 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             next_immutable_sampler_index += binding_descriptor_count;
             for (uint32_t immutable_sampler_index = 0;
                  immutable_sampler_index < binding_descriptor_count; ++immutable_sampler_index) {
-               struct terakan_sampler const * const immutable_sampler = terakan_sampler_from_handle(
-                  create_info_binding->pImmutableSamplers[immutable_sampler_index]);
+               struct terakan_vk_sampler const * const immutable_sampler =
+                  terakan_vk_sampler_from_handle(
+                     create_info_binding->pImmutableSamplers[immutable_sampler_index]);
                uint32_t const layout_immutable_sampler_index =
                   layout_binding->first_immutable_sampler_or_dynamic_offset +
                   immutable_sampler_index;

@@ -27,7 +27,7 @@
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
 #include "terakan_descriptor_set_layout.h"
-#include "terakan_sampler.h"
+#include "terakan_vk_sampler.h"
 
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -59,7 +59,7 @@ struct terakan_descriptor_set_sampler {
 
 static inline void
 terakan_descriptor_set_sampler_init(struct terakan_descriptor_set_sampler * const sampler_descriptor,
-                                    struct terakan_sampler const * const sampler)
+                                    struct terakan_vk_sampler const * const sampler)
 {
    sampler_descriptor->sampler = sampler->sampler;
    sampler_descriptor->unnormalized_coordinates = sampler->unnormalized_coordinates;

@@ -21,7 +21,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_sampler.h"
+#include "terakan_vk_sampler.h"
 
 #include "terakan_device.h"
 #include "terakan_physical_device.h"
@@ -38,7 +38,7 @@ VKAPI_ATTR void VKAPI_CALL
 terakan_vk_DestroySampler(VkDevice const deviceHandle, VkSampler const samplerHandle,
                           VkAllocationCallbacks const * const pAllocator)
 {
-   struct terakan_sampler * const sampler = terakan_sampler_from_handle(samplerHandle);
+   struct terakan_vk_sampler * const sampler = terakan_vk_sampler_from_handle(samplerHandle);
 
    if (sampler == NULL) {
       return;
@@ -55,31 +55,31 @@ terakan_vk_CreateSampler(VkDevice const deviceHandle, VkSamplerCreateInfo const 
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
-   struct terakan_sampler * const sampler =
-      vk_sampler_create(&device->vk, pCreateInfo, pAllocator, sizeof(struct terakan_sampler));
+   struct terakan_vk_sampler * const sampler =
+      vk_sampler_create(&device->vk, pCreateInfo, pAllocator, sizeof(struct terakan_vk_sampler));
    if (sampler == NULL) {
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
 
    sampler->sampler = (struct terakan_sampler_descriptor){
       .sampler = {
-         S_03C000_CLAMP_X(terakan_sampler_translate_address_mode(pCreateInfo->addressModeU)) |
-            S_03C000_CLAMP_Y(terakan_sampler_translate_address_mode(pCreateInfo->addressModeV)) |
-            S_03C000_CLAMP_Z(terakan_sampler_translate_address_mode(pCreateInfo->addressModeW)) |
-            S_03C000_XY_MAG_FILTER(terakan_sampler_translate_filter(
+         S_03C000_CLAMP_X(terakan_vk_sampler_translate_address_mode(pCreateInfo->addressModeU)) |
+            S_03C000_CLAMP_Y(terakan_vk_sampler_translate_address_mode(pCreateInfo->addressModeV)) |
+            S_03C000_CLAMP_Z(terakan_vk_sampler_translate_address_mode(pCreateInfo->addressModeW)) |
+            S_03C000_XY_MAG_FILTER(terakan_vk_sampler_translate_filter(
                pCreateInfo->magFilter, pCreateInfo->anisotropyEnable)) |
-            S_03C000_XY_MIN_FILTER(terakan_sampler_translate_filter(
+            S_03C000_XY_MIN_FILTER(terakan_vk_sampler_translate_filter(
                pCreateInfo->minFilter, pCreateInfo->anisotropyEnable)) |
-            S_03C000_MIP_FILTER(terakan_sampler_translate_mipmap_mode(pCreateInfo->mipmapMode)) |
+            S_03C000_MIP_FILTER(terakan_vk_sampler_translate_mipmap_mode(pCreateInfo->mipmapMode)) |
             S_03C000_BORDER_COLOR_TYPE(
-               terakan_sampler_translate_border_color(pCreateInfo->borderColor)) |
+               terakan_vk_sampler_translate_border_color(pCreateInfo->borderColor)) |
             S_03C000_DEPTH_COMPARE_FUNCTION(
                pCreateInfo->compareEnable ? (uint32_t)pCreateInfo->compareOp : 0) |
             S_03C000_FORCE_UNNORMALIZED(pCreateInfo->unnormalizedCoordinates &&
                                         terakan_device_physical_device(device)->chip_info.is_r9xx),
-         S_03C004_MIN_LOD(terakan_sampler_translate_min_max_lod(pCreateInfo->minLod)) |
-            S_03C004_MAX_LOD(terakan_sampler_translate_min_max_lod(pCreateInfo->maxLod)),
-         S_03C008_LOD_BIAS(terakan_sampler_translate_mip_lod_bias(pCreateInfo->mipLodBias)) |
+         S_03C004_MIN_LOD(terakan_sampler_min_max_lod_from_float(pCreateInfo->minLod)) |
+            S_03C004_MAX_LOD(terakan_sampler_min_max_lod_from_float(pCreateInfo->maxLod)),
+         S_03C008_LOD_BIAS(terakan_sampler_lod_bias_from_float(pCreateInfo->mipLodBias)) |
             S_03C008_TRUNCATE_COORD(pCreateInfo->magFilter == VK_FILTER_NEAREST &&
                                     pCreateInfo->minFilter == VK_FILTER_NEAREST) |
             S_03C008_DISABLE_CUBE_WRAP(
@@ -89,7 +89,7 @@ terakan_vk_CreateSampler(VkDevice const deviceHandle, VkSamplerCreateInfo const 
 
    if (pCreateInfo->anisotropyEnable) {
       uint32_t const max_aniso_ratio =
-         terakan_sampler_translate_max_anisotropy(pCreateInfo->maxAnisotropy);
+         terakan_sampler_max_aniso_ratio_from_float(pCreateInfo->maxAnisotropy);
       sampler->sampler.sampler[0] |= S_03C000_MAX_ANISO_RATIO(max_aniso_ratio);
       sampler->sampler.sampler[1] |= S_03C004_PERF_MIP(max_aniso_ratio + 6);
       sampler->sampler.sampler[2] |= S_03C008_ANISO_BIAS(max_aniso_ratio);
@@ -99,6 +99,6 @@ terakan_vk_CreateSampler(VkDevice const deviceHandle, VkSamplerCreateInfo const 
 
    sampler->unnormalized_coordinates = pCreateInfo->unnormalizedCoordinates;
 
-   *pSampler = terakan_sampler_to_handle(sampler);
+   *pSampler = terakan_vk_sampler_to_handle(sampler);
    return VK_SUCCESS;
 }

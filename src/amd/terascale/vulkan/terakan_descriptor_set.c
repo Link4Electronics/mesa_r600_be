@@ -28,8 +28,8 @@
 #include "terakan_device.h"
 #include "terakan_format.h"
 #include "terakan_image.h"
-#include "terakan_sampler.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_sampler.h"
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "util/compiler.h"
@@ -108,7 +108,7 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
                  ++descriptor_index) {
                terakan_descriptor_set_sampler_init(
                   &dst_samplers[descriptor_index],
-                  terakan_sampler_from_handle(
+                  terakan_vk_sampler_from_handle(
                      descriptor_write->pImageInfo[descriptor_index].sampler));
             }
          }

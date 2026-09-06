@@ -115,7 +115,7 @@ struct terakan_descriptor_set_layout {
    uint8_t immutable_sampler_count;
 
    uint8_t * immutable_sampler_indices_in_set;
-   struct terakan_sampler const ** immutable_samplers;
+   struct terakan_vk_sampler const ** immutable_samplers;
 
    /* Primarily for binding. */
    struct terakan_descriptor_set_layout_shader_range * shader_ranges;
