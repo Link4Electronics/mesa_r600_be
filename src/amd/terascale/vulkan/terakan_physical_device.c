@@ -36,7 +36,7 @@
 #include "terakan_vertex_input.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
-#include "terakan_wsi.h"
+#include "terakan_vk_wsi.h"
 
 #include "amd/terascale/common/terascale_device_name.h"
 #include "compiler/shader_enums.h"
@@ -1029,7 +1029,7 @@ terakan_vk_GetPhysicalDeviceMultisamplePropertiesEXT(
 void
 terakan_physical_device_finish(struct terakan_physical_device * const device)
 {
-   terakan_wsi_finish(device);
+   terakan_vk_wsi_finish(device);
 
    vk_physical_device_finish(&device->vk);
 }
@@ -1246,7 +1246,7 @@ terakan_physical_device_init(struct terakan_physical_device * const device,
       &device->memory_properties);
 
    /* Initialize WSI after everything else as it's a layer on top of the Vulkan physical device. */
-   result = terakan_wsi_init(device);
+   result = terakan_vk_wsi_init(device);
    if (result != VK_SUCCESS) {
       goto fail_device;
    }

@@ -116,8 +116,8 @@ libterakan_files = files(
   'terakan_vk_sampler.h',
   'terakan_vk_state.c',
   'terakan_vk_state.h',
-  'terakan_wsi.c',
-  'terakan_wsi.h',
+  'terakan_vk_wsi.c',
+  'terakan_vk_wsi.h',
 )
 
 libterakan_deps = [

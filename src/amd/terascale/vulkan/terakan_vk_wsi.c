@@ -21,13 +21,13 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_wsi.h"
+#include "terakan_vk_wsi.h"
 
 #include "vk_instance.h"
 #include "wsi_common.h"
 
 static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-terakan_wsi_proc_addr(VkPhysicalDevice const physicalDevice, char const * const pName)
+terakan_vk_wsi_proc_addr(VkPhysicalDevice const physicalDevice, char const * const pName)
 {
    struct terakan_physical_device const * const physical_device =
       terakan_physical_device_from_handle(physicalDevice);
@@ -35,14 +35,14 @@ terakan_wsi_proc_addr(VkPhysicalDevice const physicalDevice, char const * const 
 }
 
 void
-terakan_wsi_finish(struct terakan_physical_device * const physical_device)
+terakan_vk_wsi_finish(struct terakan_physical_device * const physical_device)
 {
    physical_device->vk.wsi_device = NULL;
    wsi_device_finish(&physical_device->wsi_device, &physical_device->vk.instance->alloc);
 }
 
 VkResult
-terakan_wsi_init(struct terakan_physical_device * const physical_device)
+terakan_vk_wsi_init(struct terakan_physical_device * const physical_device)
 {
    /* Temporarily using the software WSI implementation because:
     * - On WDDM, as of April 2024, the DXGI path in the common Mesa WSI uses Direct3D 12, which is
@@ -56,7 +56,7 @@ terakan_wsi_init(struct terakan_physical_device * const physical_device)
    struct wsi_device_options const device_options = {.sw_device = true};
    VkResult result = wsi_device_init(
       &physical_device->wsi_device, terakan_physical_device_to_handle(physical_device),
-      terakan_wsi_proc_addr, &physical_device->vk.instance->alloc, -1, NULL, &device_options);
+      terakan_vk_wsi_proc_addr, &physical_device->vk.instance->alloc, -1, NULL, &device_options);
    if (result != VK_SUCCESS) {
       return result;
    }

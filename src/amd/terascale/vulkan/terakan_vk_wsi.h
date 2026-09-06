@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_WSI_H
-#define TERAKAN_WSI_H
+#ifndef TERAKAN_VK_WSI_H
+#define TERAKAN_VK_WSI_H
 
 #include "terakan_physical_device.h"
 
@@ -30,12 +30,12 @@
 extern "C" {
 #endif
 
-void terakan_wsi_finish(struct terakan_physical_device * physical_device);
+void terakan_vk_wsi_finish(struct terakan_physical_device * physical_device);
 
-VkResult terakan_wsi_init(struct terakan_physical_device * physical_device);
+VkResult terakan_vk_wsi_init(struct terakan_physical_device * physical_device);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_WSI_H */
+#endif /* TERAKAN_VK_WSI_H */
