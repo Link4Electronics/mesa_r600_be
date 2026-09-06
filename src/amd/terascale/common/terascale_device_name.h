@@ -39,7 +39,7 @@ struct terascale_device_name {
     * "GL" should be after XT/PRO/LE because non-GL (Radeon) and GL (FirePro) versions of one chip
     * generally have close performance characteristics, thus XT/PRO/LE is more descriptive.
     */
-   const char *chip;
+   char const * chip;
 
    /* NULL if not a production device.
     *
@@ -51,7 +51,7 @@ struct terascale_device_name {
     * different generations, were released under the same product name in some cases, so that may
     * improve the quality of issue and benchmarking reports submitted in various places by users.
     */
-   const char *product;
+   char const * product;
 };
 
 struct terascale_device_name terascale_device_name_get(uint16_t device_id,

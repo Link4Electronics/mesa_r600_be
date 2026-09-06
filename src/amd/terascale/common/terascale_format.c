@@ -37,7 +37,7 @@
 #include <stdint.h>
 #include <string.h>
 
-const uint8_t terascale_format_block_texels_log2[1 << 6][2] = {
+uint8_t const terascale_format_block_texels_log2[1 << 6][2] = {
    [TERASCALE_FORMAT_INDEX_1] = {3, 0},     [TERASCALE_FORMAT_INDEX_1_REVERSED] = {3, 0},
    [TERASCALE_FORMAT_INDEX_GB_GR] = {1, 0}, [TERASCALE_FORMAT_INDEX_BG_RG] = {1, 0},
    [TERASCALE_FORMAT_INDEX_BC1] = {2, 2},   [TERASCALE_FORMAT_INDEX_BC2] = {2, 2},
@@ -46,7 +46,7 @@ const uint8_t terascale_format_block_texels_log2[1 << 6][2] = {
    [TERASCALE_FORMAT_INDEX_BC7] = {2, 2},   [TERASCALE_FORMAT_INDEX_CTX1] = {2, 2},
 };
 
-const uint8_t terascale_format_bytes_per_block[1 << 6] = {
+uint8_t const terascale_format_bytes_per_block[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_8] = 1,
    [TERASCALE_FORMAT_INDEX_4_4] = 1,
    [TERASCALE_FORMAT_INDEX_3_3_2] = 1,
@@ -103,7 +103,7 @@ const uint8_t terascale_format_bytes_per_block[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_CTX1] = 8,
 };
 
-const uint8_t terascale_format_big_endian_swap[1 << 6] = {
+uint8_t const terascale_format_big_endian_swap[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_16] = TERASCALE_ENDIAN_SWAP_8IN16,
    [TERASCALE_FORMAT_INDEX_16_FLOAT] = TERASCALE_ENDIAN_SWAP_8IN16,
    [TERASCALE_FORMAT_INDEX_5_6_5] = TERASCALE_ENDIAN_SWAP_8IN16,
@@ -142,7 +142,7 @@ const uint8_t terascale_format_big_endian_swap[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_32_AS_32_32_32_32] = TERASCALE_ENDIAN_SWAP_8IN32,
 };
 
-const uint8_t terascale_format_channel_count[1 << 6] = {
+uint8_t const terascale_format_channel_count[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_8] = 1,
    [TERASCALE_FORMAT_INDEX_4_4] = 2,
    [TERASCALE_FORMAT_INDEX_3_3_2] = 3,
@@ -197,7 +197,7 @@ const uint8_t terascale_format_channel_count[1 << 6] = {
    [TERASCALE_FORMAT_INDEX_CTX1] = 2,
 };
 
-const uint8_t terascale_format_cb_color_export_component_masks[4 + 1][4] = {
+uint8_t const terascale_format_cb_color_export_component_masks[4 + 1][4] = {
    [0] = {},
    [1] =
       {
@@ -229,7 +229,7 @@ const uint8_t terascale_format_cb_color_export_component_masks[4 + 1][4] = {
       },
 };
 
-const uint8_t terascale_format_cb_color_read_swizzle[4 + 1][4][4] =
+uint8_t const terascale_format_cb_color_read_swizzle[4 + 1][4][4] =
    {
       [0] =
          {
@@ -289,7 +289,7 @@ const uint8_t terascale_format_cb_color_read_swizzle[4 + 1][4][4] =
 };
 
 enum terascale_r6xx_depth_stencil_format
-terascale_get_r6xx_depth_stencil_format(const enum pipe_format format)
+terascale_get_r6xx_depth_stencil_format(enum pipe_format const format)
 {
    switch (format) {
    case PIPE_FORMAT_Z16_UNORM:
@@ -313,9 +313,9 @@ terascale_get_r6xx_depth_stencil_format(const enum pipe_format format)
 }
 
 bool
-terascale_get_r8xx_depth_stencil_format(const enum pipe_format format,
-                                        enum terascale_r8xx_depth_format *const depth_format_out_opt,
-                                        bool *const has_stencil_out_opt)
+terascale_get_r8xx_depth_stencil_format(
+   enum pipe_format const format, enum terascale_r8xx_depth_format * const depth_format_out_opt,
+   bool * const has_stencil_out_opt)
 {
    enum terascale_r8xx_depth_format depth_format = TERASCALE_R8XX_DEPTH_FORMAT_INVALID;
    bool has_stencil = false;
@@ -367,8 +367,8 @@ terascale_get_r8xx_depth_stencil_format(const enum pipe_format format,
 }
 
 static uint32_t
-terascale_format_pack_fixed_point(const bool is_normalized, bool is_signed,
-                                  const unsigned bit_count, const uint32_t value)
+terascale_format_pack_fixed_point(bool const is_normalized, bool is_signed,
+                                  unsigned const bit_count, uint32_t const value)
 {
    assert(bit_count >= 1);
    if (bit_count < 2) {
@@ -379,7 +379,7 @@ terascale_format_pack_fixed_point(const bool is_normalized, bool is_signed,
     * uint32_t's range, and (float)0xFFFFFF + 0.5 not being exactly representable.
     */
    assert(bit_count < FLT_MANT_DIG);
-   const uint32_t bit_mask = BITFIELD_MASK(bit_count);
+   uint32_t const bit_mask = BITFIELD_MASK(bit_count);
 
    if (!is_normalized) {
       /* Integer or scaled (U/SSCALED is TEXTURECHANNELCLASS_UNSIGNED/SIGNED_INTEGER in CTS
@@ -387,7 +387,7 @@ terascale_format_pack_fixed_point(const bool is_normalized, bool is_signed,
        */
       if (is_signed) {
          /* Signed integer. */
-         const int32_t max_value_int = (int32_t)(bit_mask >> 1);
+         int32_t const max_value_int = (int32_t)(bit_mask >> 1);
          return (uint32_t)CLAMP((int32_t)value, -max_value_int - 1, max_value_int) & bit_mask;
       } else {
          /* Unsigned integer. */
@@ -403,22 +403,22 @@ terascale_format_pack_fixed_point(const bool is_normalized, bool is_signed,
    if (is_signed) {
       /* Signed normalized. */
       value_clamped = CLAMP(value_clamped, -1.0f, 1.0f);
-      const int32_t value_int =
+      int32_t const value_int =
          (int32_t)(value_clamped * (float)(bit_mask >> 1) + (value_clamped >= 0.0f ? 0.5f : -0.5f));
       return (uint32_t)value_int & bit_mask;
    } else {
       /* Unsigned normalized. */
       value_clamped = CLAMP(value_clamped, 0.0f, 1.0f);
-      const uint32_t value_uint = (uint32_t)(value_clamped * (float)bit_mask + 0.5f);
+      uint32_t const value_uint = (uint32_t)(value_clamped * (float)bit_mask + 0.5f);
       assert(value_uint <= bit_mask);
       return value_uint;
    }
 }
 
 static uint32_t
-terascale_format_pack_normalized_32(const bool is_signed, const uint32_t value)
+terascale_format_pack_normalized_32(bool const is_signed, uint32_t const value)
 {
-   const float value_float = uif(value);
+   float const value_float = uif(value);
    if (unlikely(isnan(value_float))) {
       return 0;
    }
@@ -439,12 +439,12 @@ terascale_format_pack_normalized_32(const bool is_signed, const uint32_t value)
 }
 
 static void
-terascale_format_pack_array_8(const unsigned channel_count, const bool is_normalized,
-                              const unsigned channels_signed, const uint32_t *const xyzw,
-                              void *const packed_out)
+terascale_format_pack_array_8(unsigned const channel_count, bool const is_normalized,
+                              unsigned const channels_signed, uint32_t const * const xyzw,
+                              void * const packed_out)
 {
    for (unsigned channel_index = 0; channel_index < channel_count; ++channel_index) {
-      const uint8_t packed_channel = (uint8_t)terascale_format_pack_fixed_point(
+      uint8_t const packed_channel = (uint8_t)terascale_format_pack_fixed_point(
          is_normalized, (channels_signed & BITFIELD_BIT(channel_index)) != 0, 8,
          xyzw[channel_index]);
       memcpy((char *)packed_out + sizeof(uint8_t) * channel_index, &packed_channel,
@@ -453,22 +453,22 @@ terascale_format_pack_array_8(const unsigned channel_count, const bool is_normal
 }
 
 static void
-terascale_format_pack_array_16(const unsigned channel_count,
-                               const enum terascale_format_number_type number_type,
-                               const unsigned channels_signed, const uint32_t *const xyzw,
-                               void *const packed_out)
+terascale_format_pack_array_16(unsigned const channel_count,
+                               enum terascale_format_number_type const number_type,
+                               unsigned const channels_signed, uint32_t const * const xyzw,
+                               void * const packed_out)
 {
    if (number_type == TERASCALE_FORMAT_NUMBER_TYPE_FLOAT) {
       for (unsigned channel_index = 0; channel_index < channel_count; ++channel_index) {
-         const uint16_t packed_channel = _mesa_float_to_float16_rtz(uif(xyzw[channel_index]));
+         uint16_t const packed_channel = _mesa_float_to_float16_rtz(uif(xyzw[channel_index]));
          memcpy((char *)packed_out + sizeof(uint16_t) * channel_index, &packed_channel,
                 sizeof(packed_channel));
       }
    } else {
-      const bool is_normalized =
+      bool const is_normalized =
          terascale_format_get_sq_num_format(number_type) == TERASCALE_FORMAT_SQ_NUM_FORMAT_NORM;
       for (unsigned channel_index = 0; channel_index < channel_count; ++channel_index) {
-         const uint16_t packed_channel = (uint16_t)terascale_format_pack_fixed_point(
+         uint16_t const packed_channel = (uint16_t)terascale_format_pack_fixed_point(
             is_normalized, (channels_signed & BITFIELD_BIT(channel_index)) != 0, 16,
             xyzw[channel_index]);
          memcpy((char *)packed_out + sizeof(uint16_t) * channel_index, &packed_channel,
@@ -478,17 +478,17 @@ terascale_format_pack_array_16(const unsigned channel_count,
 }
 
 static void
-terascale_format_pack_array_32(const unsigned channel_count,
-                               const enum terascale_format_number_type number_type,
-                               const unsigned channels_signed, const uint32_t *const xyzw,
-                               void *const packed_out)
+terascale_format_pack_array_32(unsigned const channel_count,
+                               enum terascale_format_number_type const number_type,
+                               unsigned const channels_signed, uint32_t const * const xyzw,
+                               void * const packed_out)
 {
    if (number_type == TERASCALE_FORMAT_NUMBER_TYPE_FLOAT ||
        terascale_format_get_sq_num_format(number_type) != TERASCALE_FORMAT_SQ_NUM_FORMAT_NORM) {
       memcpy(packed_out, xyzw, sizeof(uint32_t) * channel_count);
    } else {
       for (unsigned channel_index = 0; channel_index < channel_count; ++channel_index) {
-         const uint32_t packed_channel = terascale_format_pack_normalized_32(
+         uint32_t const packed_channel = terascale_format_pack_normalized_32(
             (channels_signed & BITFIELD_BIT(channel_index)) != 0, xyzw[channel_index]);
          memcpy((char *)packed_out + sizeof(uint32_t) * channel_index, &packed_channel,
                 sizeof(packed_channel));
@@ -497,16 +497,16 @@ terascale_format_pack_array_32(const unsigned channel_count,
 }
 
 static uint32_t
-terascale_format_pack_fixed_point_vec4(const bool is_normalized, const unsigned channels_signed,
-                                       const unsigned bit_count_x, const unsigned bit_count_y,
-                                       const unsigned bit_count_z, const unsigned bit_count_w,
-                                       const uint32_t *const xyzw)
+terascale_format_pack_fixed_point_vec4(bool const is_normalized, unsigned const channels_signed,
+                                       unsigned const bit_count_x, unsigned const bit_count_y,
+                                       unsigned const bit_count_z, unsigned const bit_count_w,
+                                       uint32_t const * const xyzw)
 {
    uint32_t packed = 0;
    unsigned next_channel_shift = 0;
-   const unsigned bit_counts[] = {bit_count_x, bit_count_y, bit_count_z, bit_count_w};
+   unsigned const bit_counts[] = {bit_count_x, bit_count_y, bit_count_z, bit_count_w};
    for (unsigned channel_index = 0; channel_index < 4; ++channel_index) {
-      const unsigned channel_bit_count = bit_counts[channel_index];
+      unsigned const channel_bit_count = bit_counts[channel_index];
       if (channel_bit_count == 0) {
          continue;
       }
@@ -520,15 +520,15 @@ terascale_format_pack_fixed_point_vec4(const bool is_normalized, const unsigned 
 }
 
 void
-terascale_format_pack_color(const struct terascale_format_info *const format_info,
-                            const uint32_t rgba[4], void *const packed_out)
+terascale_format_pack_color(struct terascale_format_info const * const format_info,
+                            uint32_t const rgba[4], void * const packed_out)
 {
    /* Remap from RGBA to channels. Note that in cases like luminance formats, one channel may
     * correspond to multiple color components, so the mapping will be ambiguous. Using the same
     * logic as in PAL Formats::SwizzleColor.
     */
    uint32_t xyzw[4] = {};
-   const enum terascale_swizzle swizzle_rgba[] = {
+   enum terascale_swizzle const swizzle_rgba[] = {
       (enum terascale_swizzle)format_info->swizzle_r,
       (enum terascale_swizzle)format_info->swizzle_g,
       (enum terascale_swizzle)format_info->swizzle_b,
@@ -536,7 +536,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    };
    for (unsigned rgba_index = 0; rgba_index < 4; ++rgba_index) {
       unsigned channel_index;
-      const enum terascale_swizzle swizzle_component = swizzle_rgba[rgba_index];
+      enum terascale_swizzle const swizzle_component = swizzle_rgba[rgba_index];
       if (swizzle_component >= TERASCALE_SWIZZLE_X && swizzle_component <= TERASCALE_SWIZZLE_W) {
          channel_index = (unsigned)swizzle_component - TERASCALE_SWIZZLE_X;
       } else if (format_info->format == TERASCALE_FORMAT_INDEX_5_9_9_9_SHAREDEXP) {
@@ -556,17 +556,17 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
        * AddrLib's ADDR_UNORM_R6XXDB handling: uif(0x33000000) is converted by DB to 1 even though
        * multiplying it by (float)BITFIELD_MASK(24) produces a value slightly smaller than 0.5.
        */
-      const float depth_non_negative = fmaxf(uif(xyzw[0]), 0.0f);
+      float const depth_non_negative = fmaxf(uif(xyzw[0]), 0.0f);
       /* Clamp to 1 as floating-point first to make sure the packed value is within the uint32
        * range.
        */
-      const uint32_t depth24_unclamped =
+      uint32_t const depth24_unclamped =
          (uint32_t)(MIN2(depth_non_negative, 1.0f) * (float)BITFIELD_MASK(24) + 0.5f);
       /* Clamp to 0xFFFFFF as integer because there isn't enough precision to add 0.5 to
        * (float)0xFFFFFF exactly, and adding it with rounding to the nearest even produces
        * (float)0x1000000 instead.
        */
-      const uint32_t packed =
+      uint32_t const packed =
          MIN2(depth24_unclamped, BITFIELD_MASK(24)) | (MIN2(xyzw[1], BITFIELD_MASK(8)) << 24);
       memcpy(packed_out, &packed, sizeof(packed));
       return;
@@ -578,17 +578,17 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
        * AddrLib's ADDR_UNORM_R6XXDB handling: uif(0x33000000) is converted by DB to 1 even though
        * multiplying it by (float)BITFIELD_MASK(24) produces a value slightly smaller than 0.5.
        */
-      const float depth_non_negative = fmaxf(uif(xyzw[1]), 0.0f);
+      float const depth_non_negative = fmaxf(uif(xyzw[1]), 0.0f);
       /* Clamp to 1 as floating-point first to make sure the packed value is within the uint32
        * range.
        */
-      const uint32_t depth24_unclamped =
+      uint32_t const depth24_unclamped =
          (uint32_t)(MIN2(depth_non_negative, 1.0f) * (float)BITFIELD_MASK(24) + 0.5f);
       /* Clamp to 0xFFFFFF as integer because there isn't enough precision to add 0.5 to
        * (float)0xFFFFFF exactly, and adding it with rounding to the nearest even produces
        * (float)0x1000000 instead.
        */
-      const uint32_t packed =
+      uint32_t const packed =
          (MIN2(depth24_unclamped, BITFIELD_MASK(24)) << 8) | MIN2(xyzw[0], BITFIELD_MASK(8));
       memcpy(packed_out, &packed, sizeof(packed));
       return;
@@ -604,7 +604,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
       memcpy(packed_out, &xyzw[0], sizeof(float));
       assert(terascale_format_big_endian_swap[TERASCALE_FORMAT_INDEX_X24_8_32_FLOAT] ==
              TERASCALE_ENDIAN_SWAP_8IN32);
-      const uint32_t x24_8 = MIN2(xyzw[0], BITFIELD_MASK(8));
+      uint32_t const x24_8 = MIN2(xyzw[0], BITFIELD_MASK(8));
       memcpy((char *)packed_out + sizeof(float), &x24_8, sizeof(x24_8));
       return;
    } break;
@@ -612,7 +612,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    case TERASCALE_FORMAT_INDEX_5_9_9_9_SHAREDEXP: {
       float xyz_float[3];
       memcpy(xyz_float, xyzw, sizeof(xyz_float));
-      const uint32_t packed = float3_to_rgb9e5(xyz_float);
+      uint32_t const packed = float3_to_rgb9e5(xyz_float);
       memcpy(packed_out, &packed, sizeof(packed));
       return;
    } break;
@@ -630,7 +630,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
       number_type = TERASCALE_FORMAT_NUMBER_TYPE_FLOAT;
       data_format = (enum terascale_format_index)((uint32_t)data_format - 1);
    }
-   const bool is_normalized =
+   bool const is_normalized =
       terascale_format_get_sq_num_format(number_type) == TERASCALE_FORMAT_SQ_NUM_FORMAT_NORM;
 
    switch (data_format) {
@@ -640,13 +640,13 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    } break;
 
    case TERASCALE_FORMAT_INDEX_4_4: {
-      const uint8_t packed = (uint8_t)terascale_format_pack_fixed_point_vec4(
+      uint8_t const packed = (uint8_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 4, 4, 0, 0, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
 
    case TERASCALE_FORMAT_INDEX_3_3_2: {
-      const uint8_t packed = (uint8_t)terascale_format_pack_fixed_point_vec4(
+      uint8_t const packed = (uint8_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 2, 3, 3, 0, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
@@ -662,31 +662,31 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    } break;
 
    case TERASCALE_FORMAT_INDEX_5_6_5: {
-      const uint16_t packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
+      uint16_t const packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 5, 6, 5, 0, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
 
    case TERASCALE_FORMAT_INDEX_6_5_5: {
-      const uint16_t packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
+      uint16_t const packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 5, 5, 6, 0, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
 
    case TERASCALE_FORMAT_INDEX_1_5_5_5: {
-      const uint16_t packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
+      uint16_t const packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 5, 5, 5, 1, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
 
    case TERASCALE_FORMAT_INDEX_4_4_4_4: {
-      const uint16_t packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
+      uint16_t const packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 4, 4, 4, 4, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
 
    case TERASCALE_FORMAT_INDEX_5_5_5_1: {
-      const uint16_t packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
+      uint16_t const packed = (uint16_t)terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 1, 5, 5, 5, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
@@ -726,7 +726,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    } break;
 
    case TERASCALE_FORMAT_INDEX_2_10_10_10: {
-      const uint32_t packed = terascale_format_pack_fixed_point_vec4(
+      uint32_t const packed = terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 10, 10, 10, 2, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;
@@ -748,7 +748,7 @@ terascale_format_pack_color(const struct terascale_format_info *const format_inf
    } break;
 
    case TERASCALE_FORMAT_INDEX_10_10_10_2: {
-      const uint32_t packed = terascale_format_pack_fixed_point_vec4(
+      uint32_t const packed = terascale_format_pack_fixed_point_vec4(
          is_normalized, format_info->channels_signed, 2, 10, 10, 10, xyzw);
       memcpy(packed_out, &packed, sizeof(packed));
    } break;

@@ -31,8 +31,8 @@
 #include <stddef.h>
 
 static bool
-terascale_nir_lower_txb_to_txd_instr(nir_builder *const builder, nir_tex_instr *const tex,
-                                     UNUSED void *const callback_data)
+terascale_nir_lower_txb_to_txd_instr(nir_builder * const builder, nir_tex_instr * const tex,
+                                     UNUSED void * const callback_data)
 {
    if (tex->op != nir_texop_txb) {
       return false;
@@ -40,9 +40,9 @@ terascale_nir_lower_txb_to_txd_instr(nir_builder *const builder, nir_tex_instr *
 
    builder->cursor = nir_before_instr(&tex->instr);
 
-   nir_def *const derivative_scale = nir_fexp2(builder, nir_steal_tex_src(tex, nir_tex_src_bias));
+   nir_def * const derivative_scale = nir_fexp2(builder, nir_steal_tex_src(tex, nir_tex_src_bias));
 
-   nir_def *coord = nir_get_tex_src(tex, nir_tex_src_coord);
+   nir_def * coord = nir_get_tex_src(tex, nir_tex_src_coord);
    if (tex->is_array) {
       assert(!tex->array_is_lowered_cube);
       coord = nir_trim_vector(builder, coord, coord->num_components - 1u);
@@ -59,15 +59,15 @@ terascale_nir_lower_txb_to_txd_instr(nir_builder *const builder, nir_tex_instr *
 }
 
 bool
-terascale_nir_lower_txb_to_txd(nir_shader *const shader)
+terascale_nir_lower_txb_to_txd(nir_shader * const shader)
 {
    return nir_shader_tex_pass(shader, terascale_nir_lower_txb_to_txd_instr,
                               nir_metadata_control_flow, NULL);
 }
 
 static bool
-terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const tex,
-                              UNUSED void *const callback_data)
+terascale_nir_lower_tex_instr(nir_builder * const builder, nir_tex_instr * const tex,
+                              UNUSED void * const callback_data)
 {
    bool progress = false;
 
@@ -78,15 +78,15 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
           "biasing before transforming cube map coordinates to 2D");
    if (tex->op == nir_texop_tex || tex->op == nir_texop_txl || tex->op == nir_texop_txd ||
        tex->op == nir_texop_lod || tex->op == nir_texop_tg4) {
-      const int tex_coord_src_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+      int const tex_coord_src_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
       assert(tex_coord_src_index >= 0);
-      nir_src *const tex_coord_src = &tex->src[tex_coord_src_index].src;
+      nir_src * const tex_coord_src = &tex->src[tex_coord_src_index].src;
 
       if (tex->is_array && tex->op != nir_texop_lod) {
          /* The hardware applies the `Z_FILTER` of the sampler to array layers, but Vulkan defines
           * the selection of the layer as rounding towards the nearest even.
           */
-         const unsigned array_layer_component = tex_coord_src->ssa->num_components - 1u;
+         unsigned const array_layer_component = tex_coord_src->ssa->num_components - 1u;
          nir_src_rewrite(
             tex_coord_src,
             nir_vector_insert_imm(builder, tex_coord_src->ssa,
@@ -108,27 +108,27 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
           * `cube.yx / abs(cube.z) + 1.5`.
           */
 
-         static const unsigned swizzle_xyz[3] = {0, 1, 2};
-         nir_def *const cube_tc_sc_ma2_face =
+         static unsigned const swizzle_xyz[3] = {0, 1, 2};
+         nir_def * const cube_tc_sc_ma2_face =
             nir_cube_amd(builder, nir_swizzle(builder, tex_coord_src->ssa, swizzle_xyz, 3));
 
-         nir_def *const cube_sc = nir_channel(builder, cube_tc_sc_ma2_face, 1);
-         nir_def *const cube_tc = nir_channel(builder, cube_tc_sc_ma2_face, 0);
+         nir_def * const cube_sc = nir_channel(builder, cube_tc_sc_ma2_face, 1);
+         nir_def * const cube_tc = nir_channel(builder, cube_tc_sc_ma2_face, 0);
 
-         nir_def *const cube_ma2 = nir_channel(builder, cube_tc_sc_ma2_face, 2);
-         nir_def *const cube_ma2_abs = nir_fabs(builder, cube_ma2);
-         nir_def *const cube_ma2_abs_rcp = nir_frcp(builder, cube_ma2_abs);
+         nir_def * const cube_ma2 = nir_channel(builder, cube_tc_sc_ma2_face, 2);
+         nir_def * const cube_ma2_abs = nir_fabs(builder, cube_ma2);
+         nir_def * const cube_ma2_abs_rcp = nir_frcp(builder, cube_ma2_abs);
 
-         nir_def *const cube_face = nir_channel(builder, cube_tc_sc_ma2_face, 3);
+         nir_def * const cube_face = nir_channel(builder, cube_tc_sc_ma2_face, 3);
 
-         nir_def *cube_2d_coord_components[3] = {
+         nir_def * cube_2d_coord_components[3] = {
             nir_ffma_weak_imm2(builder, cube_sc, cube_ma2_abs_rcp, 1.5),
             nir_ffma_weak_imm2(builder, cube_tc, cube_ma2_abs_rcp, 1.5),
             cube_face,
          };
 
          if (tex->is_array) {
-            nir_def *const cube_array_layer = nir_channel(builder, tex_coord_src->ssa, 3);
+            nir_def * const cube_array_layer = nir_channel(builder, tex_coord_src->ssa, 3);
             /* TODO(Triang3l): Array layer clamping if needed. */
             cube_2d_coord_components[2] =
                nir_ffma_weak_imm1(builder, cube_array_layer, 8.0, cube_2d_coord_components[2]);
@@ -179,13 +179,13 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
              * defines the derivative calculation the same way.
              */
 
-            const int cube_d_indices[2] = {
+            int const cube_d_indices[2] = {
                nir_tex_instr_src_index(tex, nir_tex_src_ddx),
                nir_tex_instr_src_index(tex, nir_tex_src_ddy),
             };
-            nir_src *cube_d[2];
+            nir_src * cube_d[2];
             for (unsigned screen_axis = 0; screen_axis < 2; ++screen_axis) {
-               const int cube_d_index = cube_d_indices[screen_axis];
+               int const cube_d_index = cube_d_indices[screen_axis];
                assert(cube_d_index >= 0);
                cube_d[screen_axis] = &tex->src[cube_d_index].src;
             }
@@ -212,32 +212,33 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
              *   - Major axis is Z or X: -y
              */
 
-            nir_def *cube_dxyz[3];
+            nir_def * cube_dxyz[3];
             for (unsigned cube_axis = 0; cube_axis < 3; ++cube_axis) {
                cube_dxyz[cube_axis] =
                   nir_vec2(builder, nir_channel(builder, cube_d[0]->ssa, cube_axis),
                            nir_channel(builder, cube_d[1]->ssa, cube_axis));
             }
-            nir_def *const cube_dz_neg = nir_fneg(builder, cube_dxyz[2]);
+            nir_def * const cube_dz_neg = nir_fneg(builder, cube_dxyz[2]);
 
             /* Independent operations, and values when the major axis is Y. */
 
-            nir_def *const cube_ma_is_xy =
+            nir_def * const cube_ma_is_xy =
                nir_fge(builder, nir_imm_float(builder, 3.0f), cube_face);
             /* 1.0 is an inline constant in the ISA. */
-            nir_def *const cube_ma_is_x = nir_fge(builder, nir_imm_float(builder, 1.0f), cube_face);
+            nir_def * const cube_ma_is_x =
+               nir_fge(builder, nir_imm_float(builder, 1.0f), cube_face);
 
-            nir_def *cube_dt = nir_fcsel_ge(builder, cube_ma2, cube_dxyz[2], cube_dz_neg);
+            nir_def * cube_dt = nir_fcsel_ge(builder, cube_ma2, cube_dxyz[2], cube_dz_neg);
 
             /* Dependencies on `cube_ma_is_xy` and `cube_ma_is_x`, and values when the major axis is
              * X or Z.
              */
 
-            nir_def *const cube_ma_is_y = nir_ixor(builder, cube_ma_is_xy, cube_ma_is_x);
+            nir_def * const cube_ma_is_y = nir_ixor(builder, cube_ma_is_xy, cube_ma_is_x);
 
-            nir_def *cube_dma2 = nir_bcsel(builder, cube_ma_is_x, cube_dxyz[0], cube_dxyz[2]);
+            nir_def * cube_dma2 = nir_bcsel(builder, cube_ma_is_x, cube_dxyz[0], cube_dxyz[2]);
 
-            nir_def *cube_ds = nir_bcsel(builder, cube_ma_is_x, cube_dz_neg, cube_dxyz[0]);
+            nir_def * cube_ds = nir_bcsel(builder, cube_ma_is_x, cube_dz_neg, cube_dxyz[0]);
             cube_ds = nir_fcsel_ge(builder, cube_ma2, cube_ds, nir_fneg(builder, cube_ds));
 
             /* Dependencies on `cube_ma_is_y`. */
@@ -252,9 +253,9 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
 
             /* Calculate the derivatives given the vectors in the major axis coordinate space. */
 
-            static const unsigned swizzle_yxyx[4] = {1, 0, 1, 0};
-            static const unsigned swizzle_xxyy[4] = {0, 0, 1, 1};
-            nir_def *const cube_ddh_ddv_2d = nir_fmul(
+            static unsigned const swizzle_yxyx[4] = {1, 0, 1, 0};
+            static unsigned const swizzle_xxyy[4] = {0, 0, 1, 1};
+            nir_def * const cube_ddh_ddv_2d = nir_fmul(
                builder,
                nir_ffma_weak(
                   builder, cube_ma2_abs,
@@ -267,7 +268,7 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
                      nir_swizzle(builder, cube_dma2, swizzle_xxyy, 4))),
                nir_fmul(builder, cube_ma2_abs_rcp, cube_ma2_abs_rcp));
 
-            nir_def *const cube_zero = nir_imm_zero(builder, 1, 32);
+            nir_def * const cube_zero = nir_imm_zero(builder, 1, 32);
             for (unsigned screen_axis = 0; screen_axis < 2; ++screen_axis) {
                nir_src_rewrite(
                   cube_d[screen_axis],
@@ -283,7 +284,7 @@ terascale_nir_lower_tex_instr(nir_builder *const builder, nir_tex_instr *const t
 }
 
 bool
-terascale_nir_lower_tex(nir_shader *const shader)
+terascale_nir_lower_tex(nir_shader * const shader)
 {
    return nir_shader_tex_pass(shader, terascale_nir_lower_tex_instr, nir_metadata_control_flow,
                               NULL);

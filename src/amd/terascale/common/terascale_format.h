@@ -162,13 +162,13 @@ enum terascale_format_index {
 #define TERASCALE_FORMATS_TILED_ONLY_R8XX TERASCALE_FORMATS_4X4_BLOCK_R8XX
 
 /* APCn formats are skipped in the arrays for simplicity of handling their index reuse on R8xx. */
-extern const uint8_t terascale_format_block_texels_log2[1 << 6][2];
+extern uint8_t const terascale_format_block_texels_log2[1 << 6][2];
 /* For 3x-expanded formats, the bytes per block array includes all three channels. */
-extern const uint8_t terascale_format_bytes_per_block[1 << 6];
+extern uint8_t const terascale_format_bytes_per_block[1 << 6];
 /* Endian swaps for big-endian hosts, up to 8IN32. For array formats, channels aren't reordered. */
-extern const uint8_t terascale_format_big_endian_swap[1 << 6];
+extern uint8_t const terascale_format_big_endian_swap[1 << 6];
 /* 32_AS formats are skipped in the channel count array for simplicity. */
-extern const uint8_t terascale_format_channel_count[1 << 6];
+extern uint8_t const terascale_format_channel_count[1 << 6];
 
 enum terascale_format_number_type {
    TERASCALE_FORMAT_NUMBER_TYPE_UNORM = 0,
@@ -189,7 +189,7 @@ enum terascale_format_sq_num_format {
 };
 
 static inline enum terascale_format_sq_num_format
-terascale_format_get_sq_num_format(const enum terascale_format_number_type number_type)
+terascale_format_get_sq_num_format(enum terascale_format_number_type const number_type)
 {
    switch (number_type) {
    case TERASCALE_FORMAT_NUMBER_TYPE_USCALED:
@@ -248,8 +248,8 @@ terascale_format_get_sq_num_format(const enum terascale_format_number_type numbe
     TERASCALE_FORMAT_BIT(16_16_16_16_FLOAT))
 
 static inline bool
-terascale_format_blend_bypass(const enum terascale_format_number_type number_type,
-                              const enum terascale_format_index format)
+terascale_format_blend_bypass(enum terascale_format_number_type const number_type,
+                              enum terascale_format_index const format)
 {
    if (number_type == TERASCALE_FORMAT_NUMBER_TYPE_UINT ||
        number_type == TERASCALE_FORMAT_NUMBER_TYPE_SINT) {
@@ -295,7 +295,7 @@ enum terascale_format_cb_color_swap {
 };
 
 /* [Format channel count][swap]. */
-extern const uint8_t terascale_format_cb_color_export_component_masks[4 + 1][4];
+extern uint8_t const terascale_format_cb_color_export_component_masks[4 + 1][4];
 
 /* [Format channel count][swap][export component index] = format channel.
  * Export components not mapped to a channel are replaced with (0, 0, 0, 1), with the exception of
@@ -304,7 +304,7 @@ extern const uint8_t terascale_format_cb_color_export_component_masks[4 + 1][4];
  * fetching in the SQ directly (hence "read" in the name), like for constructing the SQ resource
  * descriptor for a UAV IMMED buffer.
  */
-extern const uint8_t terascale_format_cb_color_read_swizzle[4 + 1][4][4];
+extern uint8_t const terascale_format_cb_color_read_swizzle[4 + 1][4][4];
 
 struct terascale_format_info {
    uint32_t format : 6;
@@ -353,12 +353,12 @@ struct terascale_format_info {
 };
 
 /* For combined depth / stencil formats, index with the combined format. */
-extern const struct terascale_format_info terascale_format_info_r6xx[PIPE_FORMAT_COUNT];
+extern struct terascale_format_info const terascale_format_info_r6xx[PIPE_FORMAT_COUNT];
 /* For combined depth / stencil formats, index with the format of the specific aspect. */
-extern const struct terascale_format_info terascale_format_info_r8xx[PIPE_FORMAT_COUNT];
+extern struct terascale_format_info const terascale_format_info_r8xx[PIPE_FORMAT_COUNT];
 
 static inline bool
-terascale_format_supports_uav_atomic_int(const struct terascale_format_info *const format_info)
+terascale_format_supports_uav_atomic_int(struct terascale_format_info const * const format_info)
 {
    /* SQ vertex fetch is required to read from the CB_IMMED buffer. */
    return format_info->supports_cb_color && format_info->supports_sq_vertex_fetch &&
@@ -381,7 +381,7 @@ enum terascale_r6xx_depth_stencil_format {
 
 static inline bool
 terascale_r6xx_depth_stencil_format_has_stencil(
-   const enum terascale_r6xx_depth_stencil_format format)
+   enum terascale_r6xx_depth_stencil_format const format)
 {
    return format == TERASCALE_R6XX_DEPTH_STENCIL_FORMAT_8_24 ||
           format == TERASCALE_R6XX_DEPTH_STENCIL_FORMAT_8_24_FLOAT ||
@@ -403,9 +403,10 @@ enum terascale_r8xx_depth_format {
  * If the format is supported (for depth only, for stencil only, or for both), returns true.
  * Otherwise returns false and doesn't modify the output arguments.
  */
-bool terascale_get_r8xx_depth_stencil_format(enum pipe_format format,
-                                             enum terascale_r8xx_depth_format *depth_format_out_opt,
-                                             bool *has_stencil_out_opt);
+bool
+terascale_get_r8xx_depth_stencil_format(enum pipe_format format,
+                                        enum terascale_r8xx_depth_format * depth_format_out_opt,
+                                        bool * has_stencil_out_opt);
 
 /* For non-blocked, non-_AS_ formats only.
  * The resulting data has the host endianness (for DB-compatible surfaces, the caller itself must
@@ -413,8 +414,8 @@ bool terascale_get_r8xx_depth_stencil_format(enum pipe_format format,
  * The amount of data written is the number of bytes per element in the format.
  * RGBA is interpreted as uint32, sint32 or float32 depending on the number format of the channel.
  */
-void terascale_format_pack_color(const struct terascale_format_info *format_info,
-                                 const uint32_t rgba[4], void *packed_out);
+void terascale_format_pack_color(struct terascale_format_info const * format_info,
+                                 uint32_t const rgba[4], void * packed_out);
 
 #ifdef __cplusplus
 }

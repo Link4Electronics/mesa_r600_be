@@ -108,7 +108,7 @@ static_assert(
 
 static inline void
 terascale_wddm_allocation_private_data_header_clear(
-   struct terascale_wddm_allocation_private_data_header *const header)
+   struct terascale_wddm_allocation_private_data_header * const header)
 {
    memset(header, 0, sizeof(*header));
    header->flags = 0x1;
@@ -118,15 +118,15 @@ terascale_wddm_allocation_private_data_header_clear(
 
 static inline void
 terascale_wddm_allocation_private_data_header_set_memory_types(
-   struct terascale_wddm_allocation_private_data_header *const header,
-   const uint8_t memory_type_priority[4], const bool host_visible)
+   struct terascale_wddm_allocation_private_data_header * const header,
+   uint8_t const memory_type_priority[4], bool const host_visible)
 {
    memcpy(header->memory_type_priority, memory_type_priority, sizeof(uint8_t) * 4);
 
    uint32_t used_memory_types = 0b0;
    for (size_t memory_type_priority_index = 0; memory_type_priority_index < 4;
         ++memory_type_priority_index) {
-      const uint8_t memory_type = memory_type_priority[memory_type_priority_index];
+      uint8_t const memory_type = memory_type_priority[memory_type_priority_index];
       assert(!(host_visible &&
                memory_type == TERASCALE_WDDM_ALLOCATION_MEMORY_TYPE_DEVICE_NON_HOST_VISIBLE));
       used_memory_types |= (uint32_t)1 << memory_type;
@@ -149,7 +149,7 @@ struct terascale_wddm_allocation_private_data_unknown_struct {
 
 static inline void
 terascale_wddm_allocation_private_data_unknown_struct_clear(
-   struct terascale_wddm_allocation_private_data_unknown_struct *const unknown_struct)
+   struct terascale_wddm_allocation_private_data_unknown_struct * const unknown_struct)
 {
    memset(unknown_struct, 0, sizeof(*unknown_struct));
    unknown_struct->struct_size_bytes = sizeof(*unknown_struct);
@@ -173,7 +173,7 @@ static_assert(
 
 static inline void
 terascale_wddm_create_allocation_private_data_clear(
-   struct terascale_wddm_create_allocation_private_data *const private_data)
+   struct terascale_wddm_create_allocation_private_data * const private_data)
 {
    memset(private_data, 0, sizeof(*private_data));
    private_data->unknown_0xC_0x78 = 0x78;
@@ -196,7 +196,7 @@ static_assert(
 
 static inline void
 terascale_wddm_create_context_private_data_clear(
-   struct terascale_wddm_create_context_private_data *const private_data)
+   struct terascale_wddm_create_context_private_data * const private_data)
 {
    memset(private_data, 0, sizeof(*private_data));
    private_data->private_data_size_bytes = sizeof(*private_data),

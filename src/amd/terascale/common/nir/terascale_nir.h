@@ -41,7 +41,7 @@ extern "C" {
  * Cube map coordinates must be in the 3D coordinate space, because 2D coordinates have
  * discontinuities between faces.
  */
-bool terascale_nir_lower_txb_to_txd(nir_shader *shader);
+bool terascale_nir_lower_txb_to_txd(nir_shader * shader);
 
 /* Applies transformations to texture instructions, primarily to sampling coordinates, needed to use
  * the hardware texture instructions.
@@ -51,10 +51,10 @@ bool terascale_nir_lower_txb_to_txd(nir_shader *shader);
  * This doesn't lower descriptor information queries, as that may depend on the bindings in the
  * shader ABI of the client API implementation.
  */
-bool terascale_nir_lower_tex(nir_shader *shader);
+bool terascale_nir_lower_tex(nir_shader * shader);
 
 /* For R7xx+, which expect the argument in [-512*PI, +512*PI] remapped to [-256, +256]. */
-bool terascale_nir_lower_sin_cos_to_wrapped_normalized_r789xx(nir_shader *shader);
+bool terascale_nir_lower_sin_cos_to_wrapped_normalized_r789xx(nir_shader * shader);
 
 #ifdef __cplusplus
 }

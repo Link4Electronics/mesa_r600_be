@@ -113,37 +113,37 @@ struct terascale_device_name_subsystem {
    uint32_t id;
 
    /* NULL if this is an array terminator. */
-   const char *product_name;
+   char const * product_name;
 };
 
 struct terascale_device_name_device {
    struct terascale_device_name generic_name;
 
    /* NULL if there are no subsystem-specific names. */
-   const struct terascale_device_name_subsystem *subsystems;
+   struct terascale_device_name_subsystem const * subsystems;
 };
 
 /* Northern Islands. */
 
 /* clang-format off */
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6738[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6738[] = {
    {0x17AF201A, "Radeon HD 6870 X2"},
    {0x17AF201B, "Radeon HD 6870 X2"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6739[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6739[] = {
    {0x17873000, "Radeon HD 6850 X2"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x673E[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x673E[] = {
    {0x148C7720, "Radeon HD 7720"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6742[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6742[] = {
    /* The devices with the subsystem device ID 0x6570 are named "Radeon HD 6500 Series" in the
     * Windows driver 15.301.1901.0000.
     */
@@ -171,7 +171,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6758[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6758[] = {
    {0x1462250A, "Radeon HD 7670"},
    {0x148C7670, "Radeon HD 7670"},
    {0x15457670, "Radeon HD 7670"},
@@ -180,7 +180,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6759[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6759[] = {
    {0x14622509, "Radeon HD 7570"},
    {0x148C7570, "Radeon HD 7570"},
    {0x16423A67, "Radeon HD 6570"},
@@ -196,12 +196,12 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x675D[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x675D[] = {
    {0x16823530, "Radeon HD 8550"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x675F[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x675F[] = {
    {0x148C6510, "Radeon HD 6510"},
    {0x148C6530, "Radeon HD 6530"},
    {0x148C7510, "Radeon HD 7510"},
@@ -219,12 +219,12 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6761[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6761[] = {
    {0x17873000, "Radeon HD 6450"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6778[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6778[] = {
    {0x1462B491, "Radeon HD 8470"},
    {0x1462B492, "Radeon HD 8470"},
    {0x1462B493, "Radeon HD 8470"},
@@ -234,7 +234,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6779[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6779[] = {
    {0x10433013, "Radeon R5 230 Series"},
    {0x10433015, "Radeon R5 230 Series"},
    {0x10433017, "Radeon R5 230 Series"},
@@ -268,7 +268,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x677B[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x677B[] = {
    /* "Radeon(TM) HD 6400 Series" from the Windows driver 15.301.1901.0000 changed to "Radeon HD
     * 6450" because it appears to be the only graphics card in the HD 64xx series, and HD xx50
     * usually corresponds to PRO (this is PRO2).
@@ -285,7 +285,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
 
 /* clang-format on */
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x6700[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x6700[] = {
    /* Cayman: 0x6700... */
 
    [0x00] = {{"Cayman XT GL Cliffhanger"}},
@@ -379,7 +379,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
 
 /* clang-format off */
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6843[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6843[] = {
    {0x148C6570, "Radeon HD 6570"},
    {0x17876570, "Radeon HD 6570"},
    {},
@@ -387,7 +387,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
 
 /* clang-format on */
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x6840[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x6840[] = {
    [0x00] = {{"Thames XT", "Radeon HD 7600M Series"}},
    [0x01] = {{"Thames PRO", "Radeon HD 7500M/7600M Series"}},
    [0x02] = {{"Thames LE", "Radeon HD 7000M Series"}},
@@ -402,17 +402,17 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
 
 /* clang-format off */
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6889[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6889[] = {
    {0x10020301, "FirePro V7800P"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x688A[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x688A[] = {
    {0x1002030C, "FirePro V9800P"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6898[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6898[] = {
    /* 1002:00D0 is "Radeon HD 6800 Series" in the Windows driver 15.301.1901.0000. */
    {0x100200D0, "Radeon HD 6870"},
    /* 174B:6870 is "Radeon HD 6870" in the Windows driver 15.301.1901.0000, but more clearly
@@ -422,7 +422,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x6899[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x6899[] = {
    {0x174B237B, "Radeon HD 5850 X2"},
    /* 174B:6850 is "Radeon HD 6850" in the Windows driver 15.301.1901.0000, but more clearly
     * differentiate from Barts PRO.
@@ -431,20 +431,20 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x689C[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x689C[] = {
    {0x10430352, "Radeon HD 5870 X2 (ASUS ARES)"},
    /* 1043:039E is ASUS EAH5870. */
    {0x1043039E, "Radeon HD 5870"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68B8[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68B8[] = {
    /* 1002:3000 is "Radeon HD 6700 Series" in the Windows driver 15.301.1901.0000. */
    {0x10023000, "Radeon HD 6770"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68BE[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68BE[] = {
    {0x148C3000, "Radeon HD 6750"},
    {0x16423982, "Radeon HD 6750"},
    {0x174B3000, "Radeon HD 6750"},
@@ -452,7 +452,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68BF[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68BF[] = {
    {0x148C3000, "Radeon HD 6750"},
    {0x174B6750, "Radeon HD 6750"},
    /* 1787:3000 is "Radeon HD 6700 Green Edition" in the Windows driver 15.301.1901.0000, but HD
@@ -462,12 +462,12 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68C7[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68C7[] = {
    {0x174B5570, "Radeon HD 5570"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68D8[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68D8[] = {
    {0x174B5690, "Radeon HD 5690"},
    {0x174B5730, "Radeon HD 5730"},
    {0x17873000, "Radeon HD 5730"},
@@ -476,7 +476,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68D9[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68D9[] = {
    {0x148C3000, "Radeon HD 6510"},
    {0x148C3001, "Radeon HD 6610"},
    {0x15457570, "Radeon HD 7570"},
@@ -489,7 +489,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68DA[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68DA[] = {
    {0x148C3000, "Radeon HD 6390"},
    {0x148C3001, "Radeon HD 6490"},
    {0x15457570, "Radeon HD 7570"},
@@ -503,7 +503,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68E0[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68E0[] = {
    {0x1682304E, "Radeon HD 5450"},
    {0x16825220, "Radeon R5 220"},
    /* 174B:E204 is "Radeon HD 5400 Series" in the Windows driver 15.301.1901.0000, but it's not
@@ -513,7 +513,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68E1[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68E1[] = {
    /* 1092:6000, 1458:21D8, 1458:21E2, 1458:21F1, 1458:2202, 1458:2548, 1462:2342, 1462:2343,
     * 148C:3000, 1682:3000, 1682:6000, 174B:3000, 174B:6000, 1787:3000, 17AF:3000 are named "Radeon
     * HD 5400 Series" in the Windows driver 15.301.1901.0000, but it's not clear which graphics
@@ -543,13 +543,13 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68E4[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68E4[] = {
    {0x15457350, "Radeon HD 7350"},
    {0x174B5450, "Radeon HD 5450"},
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68E5[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68E5[] = {
    {0x148C5450, "Radeon HD 5450"},
    {0x148C6350, "Radeon HD 6350"},
    {0x148C7350, "Radeon HD 7350"},
@@ -559,7 +559,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68F9[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68F9[] = {
    {0x103C2126, "Radeon HD 6350"},
    {0x148C3001, "Radeon HD 6250"},
    {0x148C3002, "Radeon HD 6290"},
@@ -603,7 +603,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
    {},
 };
 
-static const struct terascale_device_name_subsystem terascale_device_name_subsystems_0x68FA[] = {
+static struct terascale_device_name_subsystem const terascale_device_name_subsystems_0x68FA[] = {
    {0x103C2B32, "Radeon R5 220"},
    {0x103C2B33, "Radeon R5 220"},
    {0x14622128, "Radeon HD 7350"},
@@ -617,7 +617,7 @@ static const struct terascale_device_name_subsystem terascale_device_name_subsys
 
 /* clang-format on */
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x6880[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x6880[] = {
    /* Cypress: 0x6880...
     * Not using "Radeon HD 5800 Series" unlike in the Windows driver 15.301.1901.0000 because the
     * third digit is expected to correspond to XT/PRO/LE for higher-end graphics cards.
@@ -706,7 +706,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
  * Scrapper Lite:   4 quad pipes,   2 SIMDs and texture pipes, 1 render backend.
  */
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x9640[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x9640[] = {
    [0x0] = {{"SuperSumo", "Radeon HD 6550D"}},
    [0x1] = {{"SuperSumo", "Radeon HD 6620G"}},
    [0x2] = {{"Sumo", "Radeon HD 6370D"}},
@@ -724,7 +724,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
    [0xF] = {{"SuperSumo"}},
 };
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x9802[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x9802[] = {
    {{"Wrestler", "Radeon HD 6310"}}, /* 0x9802 */
    {{"Wrestler", "Radeon HD 6310"}}, /* 0x9803 */
    {{"Wrestler", "Radeon HD 6250"}}, /* 0x9804 */
@@ -736,7 +736,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
    {{"Wrestler", "Radeon HD 7290"}}, /* 0x980A */
 };
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x9900[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x9900[] = {
    [0x00] = {{"Devastator", "Radeon HD 7660G"}},
    [0x01] = {{"Devastator", "Radeon HD 7660D"}},
    [0x03] = {{"Devastator Lite", "Radeon HD 7640G"}},
@@ -763,7 +763,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
    [0x19] = {{"Devastator Lite", "Radeon HD 7500G"}},
 };
 
-static const struct terascale_device_name_device terascale_device_name_devices_0x9990[] = {
+static struct terascale_device_name_device const terascale_device_name_devices_0x9990[] = {
    [0x00] = {{"Scrapper", "Radeon HD 7520G"}},
    [0x01] = {{"Scrapper", "Radeon HD 7540D"}},
    [0x02] = {{"Scrapper Lite", "Radeon HD 7420G"}},
@@ -786,7 +786,7 @@ static const struct terascale_device_name_device terascale_device_name_devices_0
 struct terascale_device_name_range {
    uint16_t first_device_id;
    uint16_t device_count;
-   const struct terascale_device_name_device *devices;
+   struct terascale_device_name_device const * devices;
 };
 
 #define TERASCALE_DEVICE_NAME_RANGE(first_device_id)                                               \
@@ -795,7 +795,7 @@ struct terascale_device_name_range {
          terascale_device_name_devices_##first_device_id                                           \
    }
 
-static const struct terascale_device_name_range terascale_device_name_ranges[] = {
+static struct terascale_device_name_range const terascale_device_name_ranges[] = {
    TERASCALE_DEVICE_NAME_RANGE(0x6700), TERASCALE_DEVICE_NAME_RANGE(0x6840),
    TERASCALE_DEVICE_NAME_RANGE(0x6880), TERASCALE_DEVICE_NAME_RANGE(0x9640),
    TERASCALE_DEVICE_NAME_RANGE(0x9802), TERASCALE_DEVICE_NAME_RANGE(0x9900),
@@ -803,27 +803,28 @@ static const struct terascale_device_name_range terascale_device_name_ranges[] =
 };
 
 struct terascale_device_name
-terascale_device_name_get(const uint16_t device_id, const uint16_t subsystem_vendor_id,
-                          const uint16_t subsystem_device_id)
+terascale_device_name_get(uint16_t const device_id, uint16_t const subsystem_vendor_id,
+                          uint16_t const subsystem_device_id)
 {
-   const uint32_t subsystem_id = ((uint32_t)subsystem_vendor_id << 16) | subsystem_device_id;
+   uint32_t const subsystem_id = ((uint32_t)subsystem_vendor_id << 16) | subsystem_device_id;
 
    for (size_t range_index = 0; range_index < ARRAY_SIZE(terascale_device_name_ranges);
         ++range_index) {
-      const struct terascale_device_name_range *const range =
+      struct terascale_device_name_range const * const range =
          &terascale_device_name_ranges[range_index];
       if (device_id < range->first_device_id) {
          continue;
       }
-      const uint16_t range_device_index = device_id - range->first_device_id;
+      uint16_t const range_device_index = device_id - range->first_device_id;
       if (range_device_index >= range->device_count) {
          continue;
       }
 
-      const struct terascale_device_name_device *const device = &range->devices[range_device_index];
+      struct terascale_device_name_device const * const device =
+         &range->devices[range_device_index];
 
       {
-         const struct terascale_device_name_subsystem *subsystem = device->subsystems;
+         struct terascale_device_name_subsystem const * subsystem = device->subsystems;
          if (subsystem != NULL) {
             for (; subsystem->product_name != NULL; ++subsystem) {
                if (subsystem->id == subsystem_id) {

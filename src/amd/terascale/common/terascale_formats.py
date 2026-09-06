@@ -737,7 +737,7 @@ def print_format_info(pipe_format, is_r8xx):
 
 
 def print_format_infos(pipe_formats, is_r8xx):
-    print('const struct terascale_format_info terascale_format_info_r{0}xx[PIPE_FORMAT_COUNT] = {{'.format(
+    print('struct terascale_format_info const terascale_format_info_r{0}xx[PIPE_FORMAT_COUNT] = {{'.format(
         8 if is_r8xx else 6))
     for pipe_format in pipe_formats:
         print_format_info(pipe_format, is_r8xx)

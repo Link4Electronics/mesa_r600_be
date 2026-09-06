@@ -30,9 +30,9 @@
 #include <stddef.h>
 
 static bool
-terascale_nir_lower_sin_cos_to_wrapped_normalized_instr(nir_builder *const builder,
-                                                        nir_alu_instr *const alu,
-                                                        UNUSED void *const callback_data)
+terascale_nir_lower_sin_cos_to_wrapped_normalized_instr(nir_builder * const builder,
+                                                        nir_alu_instr * const alu,
+                                                        UNUSED void * const callback_data)
 {
    /* Similar to `nir_normalize_sin_cos`, but with `ffract` because the hardware expects the
     * argument to be in the [-256, 256] range.
@@ -46,8 +46,8 @@ terascale_nir_lower_sin_cos_to_wrapped_normalized_instr(nir_builder *const build
    builder->fp_math_ctrl = alu->fp_math_ctrl;
 
    /* The 1/(2*PI) constant is the exact value of the GFX8+ inline constant. */
-   nir_def *const src = nir_ffract(builder, nir_fmul(builder, nir_ssa_for_alu_src(builder, alu, 0),
-                                                     nir_imm_int(builder, 0x3E22F983)));
+   nir_def * const src = nir_ffract(builder, nir_fmul(builder, nir_ssa_for_alu_src(builder, alu, 0),
+                                                      nir_imm_int(builder, 0x3E22F983)));
    nir_def_replace(&alu->def, alu->op == nir_op_fsin ? nir_fsin_normalized_2_pi(builder, src)
                                                      : nir_fcos_normalized_2_pi(builder, src));
 
@@ -55,7 +55,7 @@ terascale_nir_lower_sin_cos_to_wrapped_normalized_instr(nir_builder *const build
 }
 
 bool
-terascale_nir_lower_sin_cos_to_wrapped_normalized_r789xx(nir_shader *const shader)
+terascale_nir_lower_sin_cos_to_wrapped_normalized_r789xx(nir_shader * const shader)
 {
    return nir_shader_alu_pass(shader, terascale_nir_lower_sin_cos_to_wrapped_normalized_instr,
                               nir_metadata_control_flow, NULL);
