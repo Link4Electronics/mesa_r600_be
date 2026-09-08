@@ -464,10 +464,10 @@ terakan_vk_AllocateDescriptorSets(VkDevice const deviceHandle,
           *
           *     "Entries that are not used by a pipeline can have undefined descriptors."
           *
-          * Make sure hardware binding setters can work with potentially outdated, but never with
-          * completely invalid data with potentially broken invariants. Initialize BO pointers to
-          * NULL, and samplers to TYPE = 0, border color unused, and unnormalized coordinates
-          * disabled.
+          * Make sure the internal logic of the driver can assume that undefined descriptors are
+          * still well-formed descriptors (except for the BO potentially having been destroyed) of
+          * the hardware types corresponding to them, even if never written, by initializing the
+          * descriptor set memory to null descriptors (for samplers).
           */
          memset(set->descriptors, 0, set_size);
 

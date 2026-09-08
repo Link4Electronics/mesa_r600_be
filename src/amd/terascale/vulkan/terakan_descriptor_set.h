@@ -46,6 +46,7 @@ extern "C" {
    (5 + (TERAKAN_SRV_BUFFER_PRIORITY_WORD == 5))
 
 struct terakan_descriptor_set_srv {
+   /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
    /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
     * since the base in:
@@ -74,6 +75,7 @@ terakan_descriptor_set_sampler_init(struct terakan_descriptor_set_sampler * cons
 }
 
 struct terakan_descriptor_set_uav {
+   /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
    /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
     * since the base in:
@@ -107,6 +109,24 @@ struct terakan_descriptor_set {
 
    struct terakan_descriptor_set_layout * layout;
 
+   /* Note that descriptor memory is zeroed on allocation in the driver, so undefined descriptors,
+    * as long as Vulkan valid usage rules are respected, should still be valid
+    * `terakan_descriptor_set_*` structures of the hardware descriptor types expected at the given
+    * locations in the descriptor set memory, representing either null descriptors (including ones
+    * produced by zero initialization) or non-null descriptors.
+    *
+    * This means that assumptions (such as in assertions, though preferably not those that can
+    * potentially result in bypassing #MemoryIntegrity sanitization) about the consistency of the
+    * register values can still be made in the driver logic, except for anything involving
+    * dereferencing the BO pointer (as it must not be dereferenced until it's known that the
+    * descriptor is statically used in the current draw or dispatch, because the BO for an undefined
+    * descriptor may have already been destroyed).
+    *
+    * With mutable descriptor types, however, the memory of undefined SRV and UAV descriptors may
+    * still contain SRV or UAV (respectively) descriptors of other `VkDescriptorType`s (except for
+    * types with a dynamic offset, which can't be represented by a mutable descriptor type), so the
+    * memory of an undefined buffer descriptor may still store a texture descriptor, or vice versa.
+    */
    char * descriptors;
 
    /* The part accessed exclusively by allocation or freeing. */
