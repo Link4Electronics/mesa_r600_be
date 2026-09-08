@@ -212,11 +212,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                   struct terakan_color_descriptor new_uav_color_with_dynamic_offset;
                   if (range->first_dynamic_offset != UINT16_MAX) {
                      assert(G_028C70_RESOURCE_TYPE(set_uav->color.info) == V_028C70_BUFFER);
-                     unsigned const uav_bytes_per_texel =
-                        terascale_format_bytes_per_block[G_028C70_FORMAT(set_uav->color.info)];
                      uint64_t const new_uav_va =
-                        ((uint64_t)set_uav->color.base << 8) +
-                        set_uav->color.view * uav_bytes_per_texel +
+                        ((uint64_t)set_uav->color.base << 8) + set_uav->color.view +
                         set_dynamic_offsets[range->first_dynamic_offset + uav_index];
                      unsigned const tile_pipe_interleave_bytes_log2 =
                         terakan_gfx_command_writer_physical_device(command_writer)
@@ -227,7 +224,7 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                      new_uav_color_with_dynamic_offset = set_uav->color;
                      new_uav_color_with_dynamic_offset.base = (uint32_t)(new_uav_va_aligned >> 8);
                      new_uav_color_with_dynamic_offset.view =
-                        (uint32_t)(new_uav_va - new_uav_va_aligned) * uav_bytes_per_texel;
+                        (uint32_t)(new_uav_va - new_uav_va_aligned);
                      new_uav_color = &new_uav_color_with_dynamic_offset;
                   }
                   if (is_compute) {
