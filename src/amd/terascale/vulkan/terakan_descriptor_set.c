@@ -162,8 +162,7 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          }
       } break;
 
-      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC: {
+      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
@@ -172,8 +171,31 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          }
       } break;
 
-      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: {
+      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC: {
+         for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
+              ++descriptor_index) {
+            struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
+            VkDescriptorBufferInfo const * const buffer_info =
+               &descriptor_write->pBufferInfo[descriptor_index];
+            dst_srv->bo =
+               terakan_buffer_create_uniform_buffer_descriptor(buffer_info, &dst_srv->srv);
+            if (dst_srv->bo != NULL) {
+               /* #MemoryIntegrity: Store the buffer size since the base for clamping. */
+               struct terakan_buffer const * const buffer =
+                  terakan_buffer_from_handle(buffer_info->buffer);
+               uint64_t const buffer_remaining_size =
+                  buffer->va + buffer->vk.size -
+                  (dst_srv->srv.srv[0] |
+                   ((uint64_t)G_030008_BASE_ADDRESS_HI(dst_srv->srv.srv[2]) << 32));
+               dst_srv->srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] =
+                  (uint32_t)buffer_remaining_size;
+               dst_srv->srv.srv[7] =
+                  (dst_srv->srv.srv[7] & ~(uint32_t)0xFF) | (uint32_t)(buffer_remaining_size >> 32);
+            }
+         }
+      } break;
+
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
@@ -182,6 +204,35 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
                &descriptor_write->pBufferInfo[descriptor_index], &dst_srv->srv, &dst_uav->color);
             dst_srv->bo = bo;
             dst_uav->bo = bo;
+         }
+      } break;
+
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: {
+         for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
+              ++descriptor_index) {
+            struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
+            struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
+            VkDescriptorBufferInfo const * const buffer_info =
+               &descriptor_write->pBufferInfo[descriptor_index];
+            struct terakan_bo const * const bo = terakan_buffer_create_storage_buffer_descriptor(
+               buffer_info, &dst_srv->srv, &dst_uav->color);
+            dst_srv->bo = bo;
+            dst_uav->bo = bo;
+            if (bo != NULL) {
+               /* #MemoryIntegrity: Store the buffer size since the base for clamping. */
+               struct terakan_buffer const * const buffer =
+                  terakan_buffer_from_handle(buffer_info->buffer);
+               uint64_t const buffer_remaining_size =
+                  buffer->va + buffer->vk.size -
+                  (dst_srv->srv.srv[0] |
+                   ((uint64_t)G_030008_BASE_ADDRESS_HI(dst_srv->srv.srv[2]) << 32));
+               dst_srv->srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] =
+                  (uint32_t)buffer_remaining_size;
+               dst_srv->srv.srv[7] =
+                  (dst_srv->srv.srv[7] & ~(uint32_t)0xFF) | (uint32_t)(buffer_remaining_size >> 32);
+               dst_uav->color.pitch = (uint32_t)buffer_remaining_size;
+               dst_uav->color.slice = (uint32_t)(buffer_remaining_size >> 32);
+            }
          }
       } break;
 

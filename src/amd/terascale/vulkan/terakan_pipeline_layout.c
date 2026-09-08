@@ -127,15 +127,17 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                    * be undefined, the BO pointer must not be dereferenced here as it may be
                    * outdated.
                    */
-                  /* TODO(Triang3l): #MemoryIntegrity with an additional remaining size variable. */
                   if (set_srv->bo != NULL) {
                      assert(G_03001C_TYPE(srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER);
                      uint64_t const srv_address =
                         (srv.srv[0] | ((uint64_t)G_030008_BASE_ADDRESS_HI(srv.srv[2]) << 32)) +
                         range_dynamic_offsets[srv_index];
+                     /* TODO(Triang3l): #MemoryIntegrity size clamping. */
                      srv.srv[0] = (uint32_t)srv_address;
                      srv.srv[2] = (srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
                                   S_030008_BASE_ADDRESS_HI(srv_address >> 32);
+                     srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] = 0;
+                     srv.srv[7] &= ~(uint32_t)0xFF;
                   }
                   sqk_set_functions->srv(&command_writer->hw_config_sqk,
                                          range_shader_base + srv_index, set_srv->bo, &srv);
@@ -207,7 +209,6 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                 * undefined, the BO pointer must not be dereferenced here as it may be outdated.
                 */
                if (set_uav->bo != NULL) {
-                  /* TODO(Triang3l): #MemoryIntegrity with an additional remaining size variable. */
                   struct terakan_color_descriptor const * new_uav_color = &set_uav->color;
                   struct terakan_color_descriptor new_uav_color_with_dynamic_offset;
                   if (range->first_dynamic_offset != UINT16_MAX) {
@@ -221,10 +222,13 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                      uint64_t const new_uav_va_aligned =
                         new_uav_va >> tile_pipe_interleave_bytes_log2
                                          << tile_pipe_interleave_bytes_log2;
+                     /* TODO(Triang3l): #MemoryIntegrity size clamping. */
                      new_uav_color_with_dynamic_offset = set_uav->color;
                      new_uav_color_with_dynamic_offset.base = (uint32_t)(new_uav_va_aligned >> 8);
                      new_uav_color_with_dynamic_offset.view =
                         (uint32_t)(new_uav_va - new_uav_va_aligned);
+                     new_uav_color_with_dynamic_offset.pitch = 0;
+                     new_uav_color_with_dynamic_offset.slice = 0;
                      new_uav_color = &new_uav_color_with_dynamic_offset;
                   }
                   if (is_compute) {

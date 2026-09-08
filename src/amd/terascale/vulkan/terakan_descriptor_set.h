@@ -42,8 +42,16 @@
 extern "C" {
 #endif
 
+#define TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD                                 \
+   (5 + (TERAKAN_SRV_BUFFER_PRIORITY_WORD == 5))
+
 struct terakan_descriptor_set_srv {
    struct terakan_bo const * bo;
+   /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
+    * since the base in:
+    * [31: 0] - srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD]
+    * [39:32] - srv[7][7:0]
+    */
    struct terakan_srv_descriptor srv;
 };
 
@@ -67,6 +75,11 @@ terakan_descriptor_set_sampler_init(struct terakan_descriptor_set_sampler * cons
 
 struct terakan_descriptor_set_uav {
    struct terakan_bo const * bo;
+   /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
+    * since the base in:
+    * [31: 0] - pitch
+    * [39:32] - slice
+    */
    struct terakan_color_descriptor color;
 };
 
