@@ -34,6 +34,7 @@
 #include "util/u_math.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
+#include "vk_util.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -300,8 +301,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
                }
             }
          }
-      } else if (binding_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-                 binding_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+      } else if (vk_descriptor_type_is_dynamic(binding_type)) {
          layout_binding->first_immutable_sampler_or_dynamic_offset = dynamic_offset_count;
          dynamic_offset_count += binding_descriptor_count;
       }
@@ -363,8 +363,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             &layout->shader_ranges[next_shader_range_index];
          shader_range->first_set_descriptor = binding->first_set_srv;
          shader_range->first_dynamic_offset =
-            binding->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-                  binding->descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+            vk_descriptor_type_is_dynamic(binding->descriptor_type)
                ? binding->first_immutable_sampler_or_dynamic_offset
                : UINT16_MAX;
          shader_range->first_shader_descriptor = stage_srv_count;
