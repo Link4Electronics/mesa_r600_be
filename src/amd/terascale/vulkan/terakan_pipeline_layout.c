@@ -120,27 +120,53 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                uint32_t const * const range_dynamic_offsets =
                   set_dynamic_offsets + range->first_dynamic_offset;
                for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
-                  struct terakan_descriptor_set_srv const * const set_srv =
-                     &range_set_srvs[srv_index];
-                  struct terakan_srv_descriptor srv = set_srv->srv;
+                  struct terakan_descriptor_set_srv srv = range_set_srvs[srv_index];
                   /* Because descriptors for bindings not statically referenced by the pipeline can
-                   * be undefined, the BO pointer must not be dereferenced here as it may be
-                   * outdated.
+                   * be undefined, the BO pointer must not be dereferenced here, as it may point to
+                   * an already destroyed BO.
                    */
-                  if (set_srv->bo != NULL) {
-                     assert(G_03001C_TYPE(srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER);
-                     uint64_t const srv_address =
-                        (srv.srv[0] | ((uint64_t)G_030008_BASE_ADDRESS_HI(srv.srv[2]) << 32)) +
-                        range_dynamic_offsets[srv_index];
-                     /* TODO(Triang3l): #MemoryIntegrity size clamping. */
-                     srv.srv[0] = (uint32_t)srv_address;
-                     srv.srv[2] = (srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
-                                  S_030008_BASE_ADDRESS_HI(srv_address >> 32);
-                     srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] = 0;
-                     srv.srv[7] &= ~(uint32_t)0xFF;
+                  if (likely(srv.bo != NULL)) {
+                     uint32_t const dynamic_offset = range_dynamic_offsets[srv_index];
+                     assert(G_03001C_TYPE(srv.srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER);
+                     /* #MemoryIntegrity. */
+                     VkDeviceSize const srv_buffer_remaining_size =
+                        srv.srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] |
+                        ((VkDeviceSize)(srv.srv.srv[7] & 0xFF) << 32);
+                     if (unlikely(dynamic_offset >= srv_buffer_remaining_size)) {
+                        srv.bo = NULL;
+                     } else {
+                        /* Enforcing SRV size and base alignment to make sure out-of-bounds access
+                         * and invalid alignment behavior is consistent with kcache or UAV access,
+                         * the same way as in `terakan_descriptor_set_write_uniform_buffer` or
+                         * `terakan_descriptor_set_write_storage_buffer`.
+                         * See the `terakan_descriptor_set_srv` description.
+                         */
+                        uint32_t const srv_alignment_mask =
+                           srv.srv.srv[TERAKAN_SRV_BUFFER_PRIORITY_WORD] ==
+                                 TERAKAN_BO_PRIORITY_UNIFORM_BUFFER
+                              ? TERAKAN_KCACHE_HW_LINE_BYTES - 1u
+                              : sizeof(uint32_t) - 1u;
+                        uint64_t const srv_va =
+                           ((srv.srv.srv[0] |
+                             ((uint64_t)G_030008_BASE_ADDRESS_HI(srv.srv.srv[2]) << 32)) +
+                            dynamic_offset) &
+                           ~(uint64_t)srv_alignment_mask;
+                        srv.srv.srv[0] = (uint32_t)srv_va;
+                        srv.srv.srv[2] = (srv.srv.srv[2] & C_030008_BASE_ADDRESS_HI) |
+                                         S_030008_BASE_ADDRESS_HI(srv_va >> 32);
+                        /* #MemoryIntegrity. Rounding the size up, like when writing a descriptor
+                         * without a dynamic offset.
+                         */
+                        srv.srv.srv[1] = (uint32_t)MIN2(srv.srv.srv[1], srv_buffer_remaining_size -
+                                                                           dynamic_offset - 1u) |
+                                         srv_alignment_mask;
+                        srv.srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] =
+                           0;
+                        srv.srv.srv[7] &= ~(uint32_t)0xFF;
+                     }
                   }
                   sqk_set_functions->srv(&command_writer->hw_config_sqk,
-                                         range_shader_base + srv_index, set_srv->bo, &srv);
+                                         range_shader_base + srv_index, srv.bo, &srv.srv);
                }
             } else {
                for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
@@ -200,56 +226,80 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
             struct terakan_descriptor_set_uav const * const range_set_uavs =
                set_uavs + range->first_set_descriptor;
             uint8_t const range_shader_base = shader_uav_set_base + range->first_shader_descriptor;
-            for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
-               uint8_t const shader_uav_index = range_shader_base + uav_index;
-               assert(shader_uav_index < (is_compute ? TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL
-                                                     : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL));
-               struct terakan_descriptor_set_uav const * const set_uav = &range_set_uavs[uav_index];
-               /* Because descriptors for bindings not statically referenced by the pipeline can be
-                * undefined, the BO pointer must not be dereferenced here as it may be outdated.
-                */
-               if (set_uav->bo != NULL) {
-                  struct terakan_color_descriptor const * new_uav_color = &set_uav->color;
-                  struct terakan_color_descriptor new_uav_color_with_dynamic_offset;
-                  if (range->first_dynamic_offset != UINT16_MAX) {
-                     assert(G_028C70_RESOURCE_TYPE(set_uav->color.info) == V_028C70_BUFFER);
-                     uint64_t const new_uav_va =
-                        ((uint64_t)set_uav->color.base << 8) + set_uav->color.view +
-                        set_dynamic_offsets[range->first_dynamic_offset + uav_index];
-                     unsigned const tile_pipe_interleave_bytes_log2 =
-                        terakan_gfx_command_writer_physical_device(command_writer)
-                           ->tiling_info.pipe_interleave_bytes_log2;
-                     uint64_t const new_uav_va_aligned =
-                        new_uav_va >> tile_pipe_interleave_bytes_log2
-                                         << tile_pipe_interleave_bytes_log2;
-                     /* TODO(Triang3l): #MemoryIntegrity size clamping. */
-                     new_uav_color_with_dynamic_offset = set_uav->color;
-                     new_uav_color_with_dynamic_offset.base = (uint32_t)(new_uav_va_aligned >> 8);
-                     new_uav_color_with_dynamic_offset.view =
-                        (uint32_t)(new_uav_va - new_uav_va_aligned);
-                     new_uav_color_with_dynamic_offset.pitch = 0;
-                     new_uav_color_with_dynamic_offset.slice = 0;
-                     new_uav_color = &new_uav_color_with_dynamic_offset;
+            if (range->first_dynamic_offset != UINT16_MAX) {
+               uint32_t const * const range_dynamic_offsets =
+                  set_dynamic_offsets + range->first_dynamic_offset;
+               struct terakan_physical_device const * const physical_device =
+                  terakan_gfx_command_writer_physical_device(command_writer);
+               for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
+                  uint8_t const shader_uav_index = range_shader_base + uav_index;
+                  assert(shader_uav_index < (is_compute
+                                                ? TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL
+                                                : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL));
+                  struct terakan_descriptor_set_uav uav = range_set_uavs[uav_index];
+                  /* Because descriptors for bindings not statically referenced by the pipeline can
+                   * be undefined, the BO pointer must not be dereferenced here, as it may point to
+                   * an already destroyed BO.
+                   */
+                  if (likely(uav.bo != NULL)) {
+                     uint32_t const dynamic_offset = range_dynamic_offsets[uav_index];
+                     assert(G_028C70_RESOURCE_TYPE(uav.color.info) == V_028C70_BUFFER);
+                     VkDeviceSize const uav_buffer_remaining_size =
+                        uav.color.pitch | ((VkDeviceSize)uav.color.slice << 32);
+                     if (unlikely(dynamic_offset >= uav_buffer_remaining_size)) {
+                        uav.bo = NULL;
+                     } else {
+                        /* Aligning the size and the base consistently with the SRV binding, the
+                         * same way as in `terakan_descriptor_set_write_storage_buffer`.
+                         * See the `terakan_descriptor_set_uav` description.
+                         */
+                        uint64_t const uav_va =
+                           (((uint64_t)uav.color.base << 8) + uav.color.view + dynamic_offset) &
+                           ~(uint64_t)(sizeof(uint32_t) - 1u);
+                        uint64_t const uav_va_aligned =
+                           uav_va >> physical_device->tiling_info.pipe_interleave_bytes_log2
+                                        << physical_device->tiling_info.pipe_interleave_bytes_log2;
+                        uav.color.base = (uint32_t)(uav_va_aligned >> 8);
+                        uav.color.view = (uint32_t)(uav_va - uav_va_aligned);
+                        uav.color.pitch = 0;
+                        uav.color.slice = 0;
+                        /* #MemoryIntegrity. Rounding the size up by truncating the inclusive last
+                         * byte address to the inclusive last dword address.
+                         */
+                        uav.color.dim = (uint32_t)MIN2(
+                           uav.color.dim,
+                           (uav_buffer_remaining_size - dynamic_offset - 1u) / sizeof(uint32_t));
+                     }
                   }
                   if (is_compute) {
                      terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
-                                                             shader_uav_index, set_uav->bo,
-                                                             new_uav_color);
+                                                             shader_uav_index, uav.bo, &uav.color);
                   } else {
                      terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
-                                                              shader_uav_index, set_uav->bo,
-                                                              new_uav_color);
-                  }
-               } else {
-                  if (is_compute) {
-                     terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
-                                                             shader_uav_index, NULL, NULL);
-                  } else {
-                     terakan_app_config_draw_set_cb_color_uav(&command_writer->app_config_draw,
-                                                              shader_uav_index, NULL, NULL);
+                                                              shader_uav_index, uav.bo, &uav.color);
                   }
                }
-               /* TODO(Triang3l): Apply UAV bindings to the compute stage. */
+            } else {
+               if (is_compute) {
+                  for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
+                     uint8_t const shader_uav_index = range_shader_base + uav_index;
+                     assert(shader_uav_index < TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
+                     struct terakan_descriptor_set_uav const * const uav =
+                        &range_set_uavs[uav_index];
+                     terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
+                                                             shader_uav_index, uav->bo,
+                                                             &uav->color);
+                  }
+               } else {
+                  for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
+                     uint8_t const shader_uav_index = range_shader_base + uav_index;
+                     assert(shader_uav_index < TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL);
+                     struct terakan_descriptor_set_uav const * const uav =
+                        &range_set_uavs[uav_index];
+                     terakan_app_config_draw_set_cb_color_uav(
+                        &command_writer->app_config_draw, shader_uav_index, uav->bo, &uav->color);
+                  }
+               }
             }
          }
       }

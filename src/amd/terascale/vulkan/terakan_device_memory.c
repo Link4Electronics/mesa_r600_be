@@ -187,7 +187,7 @@ terakan_vk_AllocateMemory(VkDevice const deviceHandle,
    /* Storage and uniform buffers in Vulkan require only the offset to be aligned, not the range,
     * but the entire range must be visible to the shader anyway. For the purpose of bounds checking,
     * the ranges are rounded up to their respective access size alignments in
-    * VkPhysicalDeviceRobustness2PropertiesEXT, so make sure the BO is never smaller than the size
+    * `VkPhysicalDeviceRobustness2PropertiesEXT`, so make sure the BO is never smaller than the size
     * rounded up, and the validation in the kernel driver doesn't consider the binding out of
     * bounds.
     */

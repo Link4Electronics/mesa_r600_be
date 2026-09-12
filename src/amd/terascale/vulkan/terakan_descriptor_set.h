@@ -42,15 +42,27 @@
 extern "C" {
 #endif
 
-#define TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD                                 \
+#define TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD                              \
    (5 + (TERAKAN_SRV_BUFFER_PRIORITY_WORD == 5))
 
 struct terakan_descriptor_set_srv {
    /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
-   /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
-    * since the base in:
-    * [31: 0] - srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD]
+
+   /* For consistency of out-of-bounds access behavior with kcache and UAV access, for uniform and
+    * storage buffers, the addressable size (but not the size for `OpArrayLength`) stored in the
+    * descriptor is rounded up to `robustUniform/StorageBufferAccessSizeAlignment`.
+    * It's safe to round the size up from the submission validation perspective, because BO size is
+    * rounded up when allocating device memory to take this into account.
+    * The base address is aligned to `minUniform/StorageBufferOffsetAlignment`:
+    * - Without dynamic offset: when writing;
+    * - With dynamic offset: when binding (stored with byte granularity in the descriptor set).
+    *
+    * For #MemoryIntegrity clamping (without dereferencing the buffer object, which might have
+    * already been destroyed, if it's not known that the descriptor will be statically used, when
+    * binding the set), bindings with dynamic offset have the remaining `VkBuffer` size since the
+    * base in bytes in:
+    * [31: 0] - srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD]
     * [39:32] - srv[7][7:0]
     */
    struct terakan_srv_descriptor srv;
@@ -77,8 +89,20 @@ terakan_descriptor_set_sampler_init(struct terakan_descriptor_set_sampler * cons
 struct terakan_descriptor_set_uav {
    /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
-   /* For #MemoryIntegrity clamping, bindings with dynamic offset have the remaining buffer size
-    * since the base in:
+
+   /* For storage buffers, the size stored in the descriptor is rounded up to
+    * `robustStorageBufferAccessSizeAlignment`, as it's specified in 32-bit elements.
+    * It's safe to round the size up from the submission validation perspective, because BO size is
+    * rounded up when allocating device memory to take this into account.
+    * The base address is aligned to `minStorageBufferOffsetAlignment`:
+    * - Without dynamic offset: when writing;
+    * - With dynamic offset: when binding (stored with byte granularity in `base` and `view` in the
+    *   descriptor set).
+    *
+    * For #MemoryIntegrity clamping (without dereferencing the buffer object, which might have
+    * already been destroyed, if it's not known that the descriptor will be statically used, when
+    * binding the set), bindings with dynamic offset have the remaining `VkBuffer` size since the
+    * base in bytes in:
     * [31: 0] - pitch
     * [39:32] - slice
     */

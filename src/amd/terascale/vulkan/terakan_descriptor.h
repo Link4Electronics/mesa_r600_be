@@ -494,16 +494,6 @@ terakan_descriptor_type_has_uav(VkDescriptorType const descriptor_type)
    return true;
 }
 
-bool terakan_descriptor_create_for_uniform_buffer(struct terakan_bo const * bo, uint64_t va,
-                                                  VkDeviceSize range,
-                                                  struct terakan_srv_descriptor * srv_out);
-
-bool terakan_descriptor_create_for_storage_buffer(struct terakan_bo const * bo, uint64_t va,
-                                                  VkDeviceSize range,
-                                                  unsigned pipe_interleave_bytes_log2,
-                                                  struct terakan_srv_descriptor * srv_out,
-                                                  struct terakan_color_descriptor * color_out);
-
 #ifdef __cplusplus
 }
 #endif

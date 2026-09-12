@@ -73,15 +73,6 @@ terakan_buffer_clamp_range(struct terakan_buffer const * const buffer,
    return MIN2(size_elements, (buffer->vk.size - offset_bytes) / element_bytes);
 }
 
-struct terakan_bo const *
-terakan_buffer_create_uniform_buffer_descriptor(VkDescriptorBufferInfo const * buffer_info,
-                                                struct terakan_srv_descriptor * srv_out);
-
-struct terakan_bo const *
-terakan_buffer_create_storage_buffer_descriptor(VkDescriptorBufferInfo const * buffer_info,
-                                                struct terakan_srv_descriptor * srv_out,
-                                                struct terakan_color_descriptor * color_out);
-
 struct terakan_vk_buffer_view {
    struct vk_buffer_view vk;
 

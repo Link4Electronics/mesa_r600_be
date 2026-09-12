@@ -31,9 +31,11 @@
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_sampler.h"
 
+#include "amd/terascale/common/terascale_format.h"
 #include "gallium/drivers/r600/evergreend.h"
 #include "util/compiler.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 
@@ -43,8 +45,104 @@
 #include <stdint.h>
 #include <string.h>
 
+/* Returns the BO of the buffer if the descriptor data for a valid non-empty range was written.
+ * If NULL is returned, no descriptor data is written.
+ */
+static struct terakan_bo const *
+terakan_descriptor_set_write_uniform_buffer(VkDescriptorBufferInfo const * const buffer_info,
+                                            struct terakan_srv_descriptor * const srv_out)
+{
+   /* If the behavior is changed, make sure writing and binding of descriptors with a dynamic offset
+    * is done consistently with the changes to descriptor creation without a dynamic offset.
+    */
+
+   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
+   VkDeviceSize const buffer_range =
+      terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+   if (buffer_range == 0) {
+      return NULL;
+   }
+
+   /* Enforcing SRV size and base alignment to make sure out-of-bounds access and invalid alignment
+    * behavior is consistent with kcache access.
+    * See the `terakan_descriptor_set_srv` description.
+    */
+   uint32_t const va_kcache_lines =
+      (uint32_t)((buffer->va + buffer_info->offset) >> TERAKAN_KCACHE_HW_LINE_BYTES_LOG2);
+
+   *srv_out = (struct terakan_srv_descriptor){
+      .srv = {
+         [0] = va_kcache_lines << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
+         [1] = (uint32_t)MIN2(buffer_range - 1u, UINT32_MAX) | (TERAKAN_KCACHE_HW_LINE_BYTES - 1u),
+         [2] =
+            S_030008_BASE_ADDRESS_HI(va_kcache_lines >> (32 - TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)) |
+            S_030008_STRIDE(1),
+         [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+         [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
+      }};
+
+   return buffer->bo;
+}
+
+/* Returns the BO of the buffer if the descriptor data for a valid non-empty range was written.
+ * If NULL is returned, no descriptor data is written.
+ */
+static struct terakan_bo const *
+terakan_descriptor_set_write_storage_buffer(VkDescriptorBufferInfo const * const buffer_info,
+                                            struct terakan_srv_descriptor * const srv_out,
+                                            struct terakan_color_descriptor * const uav_out)
+{
+   /* If the behavior is changed, make sure writing and binding of descriptors with a dynamic offset
+    * is done consistently with the changes to descriptor creation without a dynamic offset.
+    */
+
+   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
+   VkDeviceSize const buffer_range =
+      terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+   if (buffer_range == 0) {
+      return NULL;
+   }
+
+   /* Enforcing SRV size and base alignment, and clamping the range to `maxStorageBufferRange` with
+    * the UAV pipe interleave alignment offset taken into account, to make sure out-of-bounds access
+    * and alignment behavior is consistent with UAV access.
+    * See the `terakan_descriptor_set_srv` and `terakan_descriptor_set_uav` descriptions.
+    */
+   uint64_t const va = (buffer->va + buffer_info->offset) & ~(uint64_t)(sizeof(uint32_t) - 1u);
+   struct terakan_physical_device const * const physical_device =
+      container_of(buffer->vk.base.device->physical, struct terakan_physical_device const, vk);
+   uint32_t const buffer_bytes_clamped =
+      (uint32_t)MIN2(buffer_range, physical_device->vk.properties.maxStorageBufferRange);
+
+   *srv_out = (struct terakan_srv_descriptor){
+      .srv = {
+         [0] = (uint32_t)va,
+         [1] = (buffer_bytes_clamped - 1u) | (uint32_t)(sizeof(uint32_t) - 1u),
+         [2] = S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(1),
+         [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+         [4] = buffer_bytes_clamped,
+         [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
+      }};
+
+   *uav_out = (struct terakan_color_descriptor){
+      .info = S_028C70_ENDIAN(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32
+                                                   : TERASCALE_ENDIAN_SWAP_NONE) |
+              S_028C70_FORMAT(TERASCALE_FORMAT_INDEX_32) |
+              S_028C70_NUMBER_TYPE(TERASCALE_FORMAT_NUMBER_TYPE_UINT) |
+              TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_INFO_CONST_FIELDS,
+      .attrib = TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB,
+   };
+   terakan_color_descriptor_calculate_buffer_base_view_dim(
+      uav_out, va, (buffer_bytes_clamped - 1u) / sizeof(uint32_t) + 1u, sizeof(uint32_t),
+      physical_device->tiling_info.pipe_interleave_bytes_log2, false);
+
+   return buffer->bo;
+}
+
 VKAPI_ATTR void VKAPI_CALL
-terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const descriptorWriteCount,
+terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptorWriteCount,
                                 VkWriteDescriptorSet const * const pDescriptorWrites,
                                 uint32_t const descriptorCopyCount,
                                 VkCopyDescriptorSet const * const pDescriptorCopies)
@@ -168,7 +266,7 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
-            dst_srv->bo = terakan_buffer_create_uniform_buffer_descriptor(
+            dst_srv->bo = terakan_descriptor_set_write_uniform_buffer(
                &descriptor_write->pBufferInfo[descriptor_index], &dst_srv->srv);
          }
       } break;
@@ -179,20 +277,36 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
             VkDescriptorBufferInfo const * const buffer_info =
                &descriptor_write->pBufferInfo[descriptor_index];
-            dst_srv->bo =
-               terakan_buffer_create_uniform_buffer_descriptor(buffer_info, &dst_srv->srv);
-            if (dst_srv->bo != NULL) {
-               /* #MemoryIntegrity: Store the buffer size since the base for clamping. */
-               struct terakan_buffer const * const buffer =
-                  terakan_buffer_from_handle(buffer_info->buffer);
-               uint64_t const buffer_remaining_size =
-                  buffer->va + buffer->vk.size -
-                  (dst_srv->srv.srv[0] |
-                   ((uint64_t)G_030008_BASE_ADDRESS_HI(dst_srv->srv.srv[2]) << 32));
-               dst_srv->srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] =
-                  (uint32_t)buffer_remaining_size;
-               dst_srv->srv.srv[7] =
-                  (dst_srv->srv.srv[7] & ~(uint32_t)0xFF) | (uint32_t)(buffer_remaining_size >> 32);
+            struct terakan_buffer const * const buffer =
+               terakan_buffer_from_handle(buffer_info->buffer);
+            VkDeviceSize const buffer_range =
+               terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+            if (buffer_range != 0) {
+               /* Aligning the SRV size to make sure out-of-bounds access behavior is consistent
+                * with kcache access.
+                * Base alignment will be enforced when the dynamic offset is applied.
+                * Also storing the remaining amount of data in the buffer for #MemoryIntegrity
+                * enforcement when applying the dynamic offset.
+                * See the `terakan_descriptor_set_srv` description.
+                */
+               uint64_t const va = buffer->va + buffer_info->offset;
+               VkDeviceSize const buffer_remaining_size = buffer->vk.size - buffer_info->offset;
+               dst_srv->bo = buffer->bo;
+               dst_srv->srv = (struct terakan_srv_descriptor){
+                  .srv = {
+                     [0] = (uint32_t)va,
+                     [1] = (uint32_t)MIN2(buffer_range - 1u, UINT32_MAX) |
+                           (TERAKAN_KCACHE_HW_LINE_BYTES - 1u),
+                     [2] = S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(1),
+                     [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+                     [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER) |
+                           ((buffer_remaining_size >> 32) & 0xFFu),
+                     [TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] =
+                        (uint32_t)buffer_remaining_size,
+                     [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
+                  }};
+            } else {
+               dst_srv->bo = NULL;
             }
          }
       } break;
@@ -202,7 +316,7 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
               ++descriptor_index) {
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
             struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
-            struct terakan_bo const * const bo = terakan_buffer_create_storage_buffer_descriptor(
+            struct terakan_bo const * const bo = terakan_descriptor_set_write_storage_buffer(
                &descriptor_write->pBufferInfo[descriptor_index], &dst_srv->srv, &dst_uav->color);
             dst_srv->bo = bo;
             dst_uav->bo = bo;
@@ -216,24 +330,62 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
             struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
             VkDescriptorBufferInfo const * const buffer_info =
                &descriptor_write->pBufferInfo[descriptor_index];
-            struct terakan_bo const * const bo = terakan_buffer_create_storage_buffer_descriptor(
-               buffer_info, &dst_srv->srv, &dst_uav->color);
-            dst_srv->bo = bo;
-            dst_uav->bo = bo;
-            if (bo != NULL) {
-               /* #MemoryIntegrity: Store the buffer size since the base for clamping. */
-               struct terakan_buffer const * const buffer =
-                  terakan_buffer_from_handle(buffer_info->buffer);
-               uint64_t const buffer_remaining_size =
-                  buffer->va + buffer->vk.size -
-                  (dst_srv->srv.srv[0] |
-                   ((uint64_t)G_030008_BASE_ADDRESS_HI(dst_srv->srv.srv[2]) << 32));
-               dst_srv->srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_WORD] =
-                  (uint32_t)buffer_remaining_size;
-               dst_srv->srv.srv[7] =
-                  (dst_srv->srv.srv[7] & ~(uint32_t)0xFF) | (uint32_t)(buffer_remaining_size >> 32);
-               dst_uav->color.pitch = (uint32_t)buffer_remaining_size;
-               dst_uav->color.slice = (uint32_t)(buffer_remaining_size >> 32);
+            struct terakan_buffer const * const buffer =
+               terakan_buffer_from_handle(buffer_info->buffer);
+            VkDeviceSize const buffer_range =
+               terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+            if (buffer_range != 0) {
+               /* Aligning the SRV size, and clamping the range to `maxStorageBufferRange` with the
+                * UAV pipe interleave alignment offset taken into account, to make sure
+                * out-of-bounds access behavior is consistent with UAV access.
+                * Base alignment will be performed when the dynamic offset is applied.
+                * Also storing the remaining amount of data in the buffer for #MemoryIntegrity
+                * enforcement when applying the dynamic offset.
+                * See the `terakan_descriptor_set_srv` and `terakan_descriptor_set_uav`
+                * descriptions.
+                */
+               uint64_t const va = buffer->va + buffer_info->offset;
+               struct terakan_physical_device const * const physical_device =
+                  terakan_device_physical_device(terakan_device_from_handle(device));
+               uint32_t const buffer_bytes_clamped = (uint32_t)MIN2(
+                  buffer_range, physical_device->vk.properties.maxStorageBufferRange);
+               VkDeviceSize const buffer_remaining_size = buffer->vk.size - buffer_info->offset;
+
+               dst_srv->bo = buffer->bo;
+               dst_srv->srv = (struct terakan_srv_descriptor){
+                  .srv = {
+                     [0] = (uint32_t)va,
+                     [1] = (buffer_bytes_clamped - 1u) | (uint32_t)(sizeof(uint32_t) - 1u),
+                     [2] = S_030008_BASE_ADDRESS_HI(va >> 32) | S_030008_STRIDE(1),
+                     [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+                     [4] = buffer_bytes_clamped,
+                     [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER) |
+                           ((buffer_remaining_size >> 32) & 0xFFu),
+                     [TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] =
+                        (uint32_t)buffer_remaining_size,
+                     [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER,
+                  }};
+
+               dst_uav->bo = buffer->bo;
+               dst_uav->color = (struct terakan_color_descriptor){
+                  .base = (uint32_t)(va >> 8),
+                  .pitch = (uint32_t)buffer_remaining_size,
+                  .slice = (uint32_t)(buffer_remaining_size >> 32),
+                  .view = va & 0xFFu,
+                  .info = S_028C70_ENDIAN(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32
+                                                               : TERASCALE_ENDIAN_SWAP_NONE) |
+                          S_028C70_FORMAT(TERASCALE_FORMAT_INDEX_32) |
+                          S_028C70_NUMBER_TYPE(TERASCALE_FORMAT_NUMBER_TYPE_UINT) |
+                          TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_INFO_CONST_FIELDS,
+                  .attrib = TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB,
+                  /* Rounding the size up by truncating the inclusive last byte address to the
+                   * inclusive last dword address.
+                   */
+                  .dim = (buffer_bytes_clamped - 1u) / sizeof(uint32_t),
+               };
+            } else {
+               dst_srv->bo = NULL;
+               dst_uav->bo = NULL;
             }
          }
       } break;

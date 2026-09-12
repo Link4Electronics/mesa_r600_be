@@ -43,42 +43,6 @@
 #include <stdint.h>
 #include <string.h>
 
-struct terakan_bo const *
-terakan_buffer_create_uniform_buffer_descriptor(VkDescriptorBufferInfo const * const buffer_info,
-                                                struct terakan_srv_descriptor * const srv_out)
-{
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
-   if (buffer == NULL) {
-      return NULL;
-   }
-   if (!terakan_descriptor_create_for_uniform_buffer(
-          buffer->bo, buffer->va + buffer_info->offset,
-          vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range), srv_out)) {
-      return NULL;
-   }
-   return buffer->bo;
-}
-
-struct terakan_bo const *
-terakan_buffer_create_storage_buffer_descriptor(VkDescriptorBufferInfo const * const buffer_info,
-                                                struct terakan_srv_descriptor * const srv_out,
-                                                struct terakan_color_descriptor * const color_out)
-{
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
-   if (buffer == NULL) {
-      return NULL;
-   }
-   if (!terakan_descriptor_create_for_storage_buffer(
-          buffer->bo, buffer->va + buffer_info->offset,
-          vk_buffer_range(&buffer->vk, buffer_info->offset, buffer_info->range),
-          container_of(buffer->vk.base.device->physical, struct terakan_physical_device const, vk)
-             ->tiling_info.pipe_interleave_bytes_log2,
-          srv_out, color_out)) {
-      return NULL;
-   }
-   return buffer->bo;
-}
-
 VKAPI_ATTR void VKAPI_CALL
 terakan_vk_GetPhysicalDeviceExternalBufferProperties(
    UNUSED VkPhysicalDevice const physicalDevice,
