@@ -186,9 +186,20 @@ terakan_vk_BindBufferMemory2(VkDevice const device, uint32_t const bindInfoCount
          terakan_device_memory_from_handle(bind_info->memory);
       /* Currently `vkGetDeviceBufferMemoryRequirements` never pads the size, so checking the size
        * of the buffer itself, not the size in the memory requirements, is sufficient.
-       * Note that alignment doesn't need to be validated, because generally it's the sum of the
-       * buffer device memory binding offset and the offset provided to the specific command that
-       * needs to be aligned to a certain boundary.
+       *
+       * Note that alignment isn't validated, because in some cases it's the sum of the buffer
+       * device memory binding offset and the offset provided to the specific command that needs to
+       * be aligned to a certain boundary.
+       * VUID-vkCmdBindIndexBuffer2-offset-08783:
+       *     "The sum of `offset` and the base address of the range of `VkDeviceMemory` object that
+       *     is backing `buffer`, must be a multiple of the size of the type indicated by
+       *     `indexType`"
+       * Although that's not always the case in Vulkan valid usage wordings.
+       * VUID-VkWriteDescriptorSet-descriptorType-00327:
+       *     "If `descriptorType` is `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER` or
+       *     `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC`, the `offset` member of each element of
+       *     `pBufferInfo` must be a multiple of
+       *     `VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment`"
        */
       if (unlikely(bind_info->memoryOffset > memory->vk.size ||
                    memory->vk.size - bind_info->memoryOffset < buffer->vk.size)) {
