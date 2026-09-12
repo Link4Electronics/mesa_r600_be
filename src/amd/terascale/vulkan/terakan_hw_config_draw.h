@@ -49,6 +49,9 @@ extern "C" {
 /* Bottom-level emission of packets setting graphics context registers.
  *
  * Also contains helpers for building the graphics context register values.
+ *
+ * For all configuration referencing BOs, it is expected that #MemoryIntegrity has been ensured
+ * before calling the setter.
  */
 
 struct terakan_hw_config_draw_vgt_dma_index_buffer {
@@ -665,7 +668,6 @@ terakan_hw_config_draw_set_vgt_multi_prim_ib_reset_en(struct terakan_hw_config_d
 
 /* The passed `vgt_dma_index_type` may be ignored if the implementation determines that indices
  * aren't going to be read from this buffer.
- * #MemoryIntegrity is handled internally.
  */
 void terakan_hw_config_draw_set_vgt_dma_index_buffer(
    struct terakan_hw_config_draw * config,
@@ -673,7 +675,8 @@ void terakan_hw_config_draw_set_vgt_dma_index_buffer(
 
 /* Must be used only for `DRAW_INDEX_IMMED`, with `terakan_hw_config_draw_set_vgt_dma_index_buffer`
  * called afterwards before drawing with a DMA index buffer next time, to make sure it's not
- * possible to switch from 16-bit to 32-bit indices without the #MemoryIntegrity checks.
+ * possible to switch from 16-bit to 32-bit indices, invalidating #MemoryIntegrity checks done for
+ * the buffer.
  */
 static inline void
 terakan_hw_config_draw_set_vgt_dma_index_type_for_immediate(
@@ -1055,8 +1058,6 @@ terakan_hw_config_draw_set_db_render_override2(struct terakan_hw_config_draw * c
  *
  * `NUM_SAMPLES` must be provided regardless of the architecture generation for the BO priority.
  * It will be zeroed during emission if the hardware doesn't need it.
- *
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_hw_config_draw_set_db_depth_stencil_buffer(
    struct terakan_hw_config_draw * config, struct terakan_bo const * bo,
@@ -1218,8 +1219,6 @@ terakan_hw_config_draw_set_cb_color_unbound(struct terakan_hw_config_draw * cons
  * doesn't use it, along with `NUM_FRAGMENTS`.
  *
  * If the meta descriptor pointer is NULL, the meta surfaces will be disabled for this target.
- *
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_hw_config_draw_set_cb_color(struct terakan_hw_config_draw * config,
                                          unsigned color_index, struct terakan_bo const * bo,

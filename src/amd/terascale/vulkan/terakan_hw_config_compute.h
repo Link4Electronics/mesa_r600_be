@@ -34,7 +34,11 @@
 extern "C" {
 #endif
 
-/* Bottom-level emission of packets setting compute context registers. */
+/* Bottom-level emission of packets setting compute context registers.
+ *
+ * For all configuration referencing BOs, it is expected that #MemoryIntegrity has been ensured
+ * before calling the setter.
+ */
 
 struct terakan_hw_config_compute {
    struct {
@@ -102,8 +106,6 @@ terakan_hw_config_compute_set_cb_immed(struct terakan_hw_config_compute * const 
 }
 
 /* If `terakan_color_descriptor_is_bound` for the provided arguments is false, the UAV is unbound.
- *
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_hw_config_compute_set_cb_color(struct terakan_hw_config_compute * config,
                                             unsigned color_index, struct terakan_bo const * bo,

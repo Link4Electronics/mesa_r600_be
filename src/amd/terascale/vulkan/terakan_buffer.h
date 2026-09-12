@@ -27,6 +27,7 @@
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
 
+#include "util/macros.h"
 #include "vk_buffer.h"
 #include "vk_buffer_view.h"
 
@@ -46,6 +47,18 @@ struct terakan_buffer {
 };
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_buffer, vk.base, VkBuffer, VK_OBJECT_TYPE_BUFFER)
+
+/* For #MemoryIntegrity, and also handling `VK_WHOLE_SIZE`. */
+static inline VkDeviceSize
+terakan_buffer_clamp_range(struct terakan_buffer const * const buffer,
+                           VkDeviceSize const offset_bytes, VkDeviceSize const size_bytes)
+{
+   /* Also safely treat buffers not bound to device memory as null buffers. */
+   if (buffer == NULL || unlikely(buffer->bo == NULL || offset_bytes > buffer->vk.size)) {
+      return 0;
+   }
+   return MIN2(size_bytes, buffer->vk.size - offset_bytes);
+}
 
 struct terakan_bo const *
 terakan_buffer_create_uniform_buffer_descriptor(VkDescriptorBufferInfo const * buffer_info,

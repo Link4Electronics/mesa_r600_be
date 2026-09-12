@@ -49,12 +49,23 @@ terakan_vk_CmdBindIndexBuffer2(VkCommandBuffer const commandBuffer, VkBuffer con
 
    struct terakan_hw_config_draw_vgt_dma_index_buffer index_buffer = {};
    struct terakan_buffer const * const buffer = terakan_buffer_from_handle(bufferHandle);
-   /* #MemoryIntegrity is mostly handled deeper, just set up the setter's arguments safely. */
-   if (buffer != NULL && offset <= buffer->vk.size) {
+   unsigned const index_bytes_log2 = index_type_32_bit ? 2 : 1;
+   VkDeviceSize const size_indices_u64 =
+      terakan_buffer_clamp_range(buffer, offset, size) >> index_bytes_log2;
+   /* One of the possible reasons for `terakan_buffer_clamp_range` returning 0 is explicitly binding
+    * a `VK_NULL_HANDLE` buffer.
+    */
+   if (size_indices_u64 != 0) {
       index_buffer.bo = buffer->bo;
-      index_buffer.va = buffer->va + offset;
-      uint64_t const size_indices_u64 =
-         vk_buffer_range(&buffer->vk, offset, size) >> (index_type_32_bit ? 2 : 1);
+      /* Aligning the base address for #MemoryIntegrity, in part because `INDEX_BASE` is
+       * word-aligned according to Radeon Evergreen / Northern Islands Acceleration.
+       *
+       * VUID-vkCmdBindIndexBuffer2-offset-08783:
+       *     "The sum of `offset` and the base address of the range of `VkDeviceMemory` object that
+       *     is backing `buffer`, must be a multiple of the size of the type indicated by
+       *     `indexType`"
+       */
+      index_buffer.va = (buffer->va + offset) >> index_bytes_log2 << index_bytes_log2;
       index_buffer.size_indices = (uint32_t)MIN2(size_indices_u64, UINT32_MAX);
    }
 

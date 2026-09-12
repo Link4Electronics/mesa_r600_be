@@ -58,6 +58,9 @@ extern "C" {
  * `terakan_hw_config`.
  *
  * It also can modify `terakan_push_constants_state`.
+ *
+ * For all configuration referencing BOs, it is expected that #MemoryIntegrity has been ensured
+ * before calling the setter.
  */
 
 struct terakan_app_config_draw_pa_vport {
@@ -620,9 +623,8 @@ terakan_app_config_draw_set_vgt_dma_index_buffer(
    struct terakan_app_config_draw * const config,
    struct terakan_hw_config_draw_vgt_dma_index_buffer const index_buffer, uint32_t const index_type)
 {
-   /* Applying isn't entirely trivial due to #MemoryIntegrity checks, however, this is not a part of
-    * a pipeline object in Vulkan, and it's likely that a different index buffer needs to be bound
-    * when the application sets one, so not checking if modified.
+   /* Not checking if modified because this is not a part of a pipeline object in Vulkan, and it's
+    * likely that a different index buffer needs to be bound when the application sets one.
     */
    config->vgt_dma_index_buffer_.index_buffer = index_buffer;
    config->vgt_dma_index_buffer_.index_type = index_type;
@@ -783,9 +785,7 @@ terakan_app_config_draw_set_sq_pgm_fetch_static_fs(
    terakan_app_config_draw_set_pending(config, TERAKAN_APP_CONFIG_DRAW_ENTRY_SQ_PGM_FETCH);
 }
 
-/* If `bo` is NULL, `va` and `size_minus_1` are ignored, and the buffer is unbound.
- * #MemoryIntegrity is expected to be ensured before calling.
- */
+/* If `bo` is NULL, `va` and `size_minus_1` are ignored, and the buffer is unbound. */
 static inline void
 terakan_app_config_draw_set_sq_resource_fetch_base_size(
    struct terakan_app_config_draw * const config, unsigned const binding,
@@ -1123,8 +1123,6 @@ terakan_app_config_draw_pop_db_count_control_zpass_query_active(
  *
  * `S_028040_NUM_SAMPLES` must be provided regardless of the architecture generation for making sure
  * that framebuffer attachments with incompatible sample counts aren't bound.
- *
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 static inline void
 terakan_app_config_draw_set_db_depth_stencil_buffer(
@@ -1301,7 +1299,6 @@ terakan_app_config_draw_set_cb_color_rtv_write_component_mask_all(
 /* If `terakan_color_descriptor_is_bound` for the provided arguments is false, the RTV is unbound.
  * `NUM_SAMPLES` must be provided regardless of the architecture generation.
  * If the meta descriptor pointer is NULL, the meta surfaces will be disabled for this target.
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_app_config_draw_set_cb_color_rtv(struct terakan_app_config_draw * config,
                                               unsigned color_index, struct terakan_bo const * bo,
@@ -1317,7 +1314,6 @@ terakan_app_config_draw_get_cb_color_rtv(struct terakan_app_config_draw const * 
 }
 
 /* If `terakan_color_descriptor_is_bound` for the provided arguments is false, the UAV is unbound.
- * #MemoryIntegrity is expected to be ensured before calling.
  */
 void terakan_app_config_draw_set_cb_color_uav(struct terakan_app_config_draw * config,
                                               unsigned mutable_srv_index,

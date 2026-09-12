@@ -112,30 +112,7 @@ terakan_hw_config_draw_set_vgt_dma_index_buffer(
    struct terakan_hw_config_draw * const config,
    struct terakan_hw_config_draw_vgt_dma_index_buffer index_buffer, uint32_t const index_type)
 {
-   if (index_buffer.bo == NULL) {
-      index_buffer.size_indices = 0;
-   } else {
-      /* Ensure #MemoryIntegrity while gracefully recovering from misalignment and an out of bounds
-       * binding.
-       * VUID-vkCmdBindIndexBuffer-offset-08783:
-       *     "The sum of offset and the base address of the range of VkDeviceMemory object that is
-       *     backing buffer, must be a multiple of the size of the type indicated by indexType"
-       * `INDEX_BASE` is word-aligned according to Radeon Evergreen / Northern Islands Acceleration.
-       */
-      unsigned const index_size_bytes_log2 = index_type & 0b1 ? 2 : 1;
-      index_buffer.va = index_buffer.va >> index_size_bytes_log2 << index_size_bytes_log2;
-      if (unlikely(index_buffer.va < index_buffer.bo->va ||
-                   index_buffer.va - index_buffer.bo->va > index_buffer.bo->size)) {
-         index_buffer.size_indices = 0;
-      } else {
-         index_buffer.size_indices =
-            MIN2((index_buffer.bo->size - (index_buffer.va - index_buffer.bo->va)) >>
-                    index_size_bytes_log2,
-                 index_buffer.size_indices);
-      }
-   }
-
-   if (index_buffer.size_indices == 0) {
+   if (index_buffer.bo == NULL || index_buffer.size_indices == 0) {
       /* Unbind. */
       if (terakan_hw_config_draw_vgt_dma_index_buffer_is_bound(config->vgt_dma_index_buffer_)) {
          config->vgt_dma_index_buffer_.size_indices = 0;
