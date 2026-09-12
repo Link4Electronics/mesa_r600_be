@@ -133,8 +133,9 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
-            struct terakan_buffer_view const * const buffer_view = terakan_buffer_view_from_handle(
-               descriptor_write->pTexelBufferView[descriptor_index]);
+            struct terakan_vk_buffer_view const * const buffer_view =
+               terakan_vk_buffer_view_from_handle(
+                  descriptor_write->pTexelBufferView[descriptor_index]);
             if (buffer_view != NULL &&
                 G_028C70_FORMAT(buffer_view->color.info) != TERASCALE_FORMAT_INDEX_INVALID) {
                dst_uav->bo = buffer_view->bo;
@@ -150,8 +151,9 @@ terakan_vk_UpdateDescriptorSets(UNUSED VkDevice const device, uint32_t const des
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
-            struct terakan_buffer_view const * const buffer_view = terakan_buffer_view_from_handle(
-               descriptor_write->pTexelBufferView[descriptor_index]);
+            struct terakan_vk_buffer_view const * const buffer_view =
+               terakan_vk_buffer_view_from_handle(
+                  descriptor_write->pTexelBufferView[descriptor_index]);
             if (buffer_view != NULL &&
                 G_03001C_TYPE(buffer_view->srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER) {
                dst_srv->bo = buffer_view->bo;

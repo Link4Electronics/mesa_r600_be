@@ -82,7 +82,7 @@ terakan_buffer_create_storage_buffer_descriptor(VkDescriptorBufferInfo const * b
                                                 struct terakan_srv_descriptor * srv_out,
                                                 struct terakan_color_descriptor * color_out);
 
-struct terakan_buffer_view {
+struct terakan_vk_buffer_view {
    struct vk_buffer_view vk;
 
    struct terakan_bo const * bo;
@@ -92,7 +92,7 @@ struct terakan_buffer_view {
    struct terakan_color_descriptor color;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_buffer_view, vk.base, VkBufferView,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_buffer_view, vk.base, VkBufferView,
                                VK_OBJECT_TYPE_BUFFER_VIEW)
 
 #ifdef __cplusplus

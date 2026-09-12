@@ -253,7 +253,8 @@ VKAPI_ATTR void VKAPI_CALL
 terakan_vk_DestroyBufferView(VkDevice const deviceHandle, VkBufferView const bufferView,
                              VkAllocationCallbacks const * const pAllocator)
 {
-   struct terakan_buffer_view * const buffer_view = terakan_buffer_view_from_handle(bufferView);
+   struct terakan_vk_buffer_view * const buffer_view =
+      terakan_vk_buffer_view_from_handle(bufferView);
 
    if (buffer_view == NULL) {
       return;
@@ -274,9 +275,9 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
-   struct terakan_buffer_view * const buffer_view =
-      vk_alloc2(&device->vk.alloc, pAllocator, sizeof(struct terakan_buffer_view),
-                alignof(struct terakan_buffer_view), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   struct terakan_vk_buffer_view * const buffer_view =
+      vk_alloc2(&device->vk.alloc, pAllocator, sizeof(struct terakan_vk_buffer_view),
+                alignof(struct terakan_vk_buffer_view), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (buffer_view == NULL) {
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
@@ -350,6 +351,6 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
       }
    }
 
-   *pView = terakan_buffer_view_to_handle(buffer_view);
+   *pView = terakan_vk_buffer_view_to_handle(buffer_view);
    return VK_SUCCESS;
 }
