@@ -37,6 +37,7 @@
 #include "vk_log.h"
 #include "vk_util.h"
 
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -173,9 +174,31 @@ terakan_vk_GetDeviceBufferMemoryRequirements(VkDevice const deviceHandle,
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
-terakan_vk_BindBufferMemory2(UNUSED VkDevice const device, uint32_t const bindInfoCount,
+terakan_vk_BindBufferMemory2(VkDevice const device, uint32_t const bindInfoCount,
                              VkBindBufferMemoryInfo const * const pBindInfos)
 {
+   /* #MemoryIntegrity. */
+   for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
+      VkBindBufferMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
+      struct terakan_buffer const * const buffer = terakan_buffer_from_handle(bind_info->buffer);
+      struct terakan_device_memory const * const memory =
+         terakan_device_memory_from_handle(bind_info->memory);
+      /* Currently `vkGetDeviceBufferMemoryRequirements` never pads the size, so checking the size
+       * of the buffer itself, not the size in the memory requirements, is sufficient.
+       * Note that alignment doesn't need to be validated, because generally it's the sum of the
+       * buffer device memory binding offset and the offset provided to the specific command that
+       * needs to be aligned to a certain boundary.
+       */
+      if (unlikely(bind_info->memoryOffset > memory->vk.size ||
+                   memory->vk.size - bind_info->memoryOffset < buffer->vk.size)) {
+         return vk_errorf(
+            terakan_device_from_handle(device), VK_ERROR_VALIDATION_FAILED_EXT,
+            "Device memory allocation with a size of %" PRIu64 " bytes is too small to bind a "
+            "buffer with a size of %" PRIu64 " bytes at an offset of %" PRIu64 " bytes to it",
+            memory->vk.size, buffer->vk.size, bind_info->memoryOffset);
+      }
+   }
+
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindBufferMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
       struct terakan_buffer * const buffer = terakan_buffer_from_handle(bind_info->buffer);
