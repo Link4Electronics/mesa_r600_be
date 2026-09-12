@@ -508,7 +508,7 @@ terakan_physical_device_get_capabilities(
     * to this maximum range as unsigned so that adding any alignment offset after the clamping won't
     * cause wraparound.
     */
-   properties_out->maxStorageBufferRange = ~(((uint32_t)1 << tile_pipe_interleave_bytes_log2) - 1);
+   properties_out->maxStorageBufferRange = ~(((uint32_t)1 << tile_pipe_interleave_bytes_log2) - 1u);
 
    properties_out->maxPushConstantsSize = TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES;
 

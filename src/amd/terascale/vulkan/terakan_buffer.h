@@ -31,6 +31,7 @@
 #include "vk_buffer.h"
 #include "vk_buffer_view.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -48,16 +49,28 @@ struct terakan_buffer {
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_buffer, vk.base, VkBuffer, VK_OBJECT_TYPE_BUFFER)
 
-/* For #MemoryIntegrity, and also handling `VK_WHOLE_SIZE`. */
+/* For #MemoryIntegrity, and also handling `VK_WHOLE_SIZE`.
+ *
+ * Returns the element count in the range. Alignment is not handled by this function.
+ *
+ * For Vulkan commands accepting the size in bytes, pass 1 as `element_bytes`. If the range in bytes
+ * further needs to be converted to elements, divide the result by the element size externally.
+ *
+ * For Vulkan commands accepting the size in elements (such as buffer view creation), this function,
+ * to avoid potential overflow when converting from elements to bytes via multiplication, allows the
+ * actual size of an element to be provided as `element_bytes`.
+ */
 static inline VkDeviceSize
 terakan_buffer_clamp_range(struct terakan_buffer const * const buffer,
-                           VkDeviceSize const offset_bytes, VkDeviceSize const size_bytes)
+                           VkDeviceSize const offset_bytes, VkDeviceSize const size_elements,
+                           VkDeviceSize const element_bytes)
 {
+   assert(element_bytes != 0);
    /* Also safely treat buffers not bound to device memory as null buffers. */
    if (buffer == NULL || unlikely(buffer->bo == NULL || offset_bytes > buffer->vk.size)) {
       return 0;
    }
-   return MIN2(size_bytes, buffer->vk.size - offset_bytes);
+   return MIN2(size_elements, (buffer->vk.size - offset_bytes) / element_bytes);
 }
 
 struct terakan_bo const *

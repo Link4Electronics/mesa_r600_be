@@ -37,6 +37,7 @@
 #include "vk_log.h"
 #include "vk_util.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -289,23 +290,32 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
    buffer_view->srv = (struct terakan_srv_descriptor){};
    buffer_view->color = (struct terakan_color_descriptor){};
 
-   /* As of Vulkan 1.3.262, the requirement that `range` must be greater than 0 applies only to
-    * non-VK_WHOLE_SIZE `range` (VUID-VkBufferViewCreateInfo-range-00928).
-    */
-   if (buffer_view->vk.elements != 0) {
-      struct terascale_format_info const format_info =
-         terascale_format_info_r8xx[vk_format_to_pipe_format(pCreateInfo->format)];
-      if (format_info.supports_sq_vertex_fetch) {
+   struct terascale_format_info const format_info =
+      terascale_format_info_r8xx[vk_format_to_pipe_format(pCreateInfo->format)];
+   if (format_info.supports_sq_vertex_fetch) {
+      unsigned const bytes_per_element = terascale_format_bytes_per_block[format_info.format];
+      VkDeviceSize elements = terakan_buffer_clamp_range(
+         buffer, pCreateInfo->offset, buffer_view->vk.elements, bytes_per_element);
+      /* Limit the size to:
+       * - `2^32 bytes, as buffer SRV descriptors contain the size minus 1 in bytes.
+       * - `2^31 - 1` elements, as `texelFetch` and `textureSize` use signed 32-bit integers.
+       * - `2^32 - pipe interleave` for 1 byte per element, as the 32-bit buffer UAV size minus 1 in
+       *   elements is padded to include the alignment offset. This, however, is already covered by
+       *   clamping to `2^31 - 1` elements.
+       */
+      elements = MIN3(elements, ((VkDeviceSize)1 << 32) / bytes_per_element, (uint32_t)INT32_MAX);
+      if (likely(elements != 0)) {
          uint64_t const va = buffer->va + pCreateInfo->offset;
-
-         unsigned const bytes_per_element = terascale_format_bytes_per_block[format_info.format];
 
          enum terascale_endian_swap const endian_swap =
             UTIL_ARCH_BIG_ENDIAN ? terascale_format_big_endian_swap[format_info.format]
                                  : TERASCALE_ENDIAN_SWAP_NONE;
 
          buffer_view->srv.srv[0] = (uint32_t)va;
-         buffer_view->srv.srv[1] = (uint32_t)(bytes_per_element * buffer_view->vk.elements - 1);
+         assert(
+            elements <= UINT32_MAX &&
+            "The buffer view element count clamping total upper bound may never exceed 32 bits");
+         buffer_view->srv.srv[1] = bytes_per_element * (uint32_t)elements - 1u;
          buffer_view->srv.srv[2] = S_030008_BASE_ADDRESS_HI(va >> 32) |
                                    S_030008_STRIDE(bytes_per_element) |
                                    S_030008_DATA_FORMAT(format_info.format) |
@@ -316,7 +326,7 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
          buffer_view->srv.srv[3] =
             S_03000C_DST_SEL_X(format_info.swizzle_r) | S_03000C_DST_SEL_Y(format_info.swizzle_g) |
             S_03000C_DST_SEL_Z(format_info.swizzle_b) | S_03000C_DST_SEL_W(format_info.swizzle_a);
-         buffer_view->srv.srv[4] = (uint32_t)buffer_view->vk.elements;
+         buffer_view->srv.srv[4] = (uint32_t)elements;
          buffer_view->srv.srv[7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER);
          buffer_view->srv.srv[TERAKAN_SRV_BUFFER_PRIORITY_WORD] =
             TERAKAN_BO_PRIORITY_SHADER_READ_BUFFER;
@@ -325,9 +335,9 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
           * inside the vertex format supported conditional too.
           */
 
-         if (format_info.supports_cb_color && pCreateInfo->offset % bytes_per_element == 0) {
+         if (format_info.supports_cb_color && va % bytes_per_element == 0) {
             terakan_color_descriptor_calculate_buffer_base_view_dim(
-               &buffer_view->color, va, buffer_view->vk.elements, bytes_per_element,
+               &buffer_view->color, va, elements, bytes_per_element,
                terakan_device_physical_device(device)->tiling_info.pipe_interleave_bytes_log2,
                true);
             buffer_view->color.info = S_028C70_ENDIAN(endian_swap) |

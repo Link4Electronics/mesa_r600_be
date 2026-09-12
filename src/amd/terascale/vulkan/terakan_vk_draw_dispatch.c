@@ -51,7 +51,7 @@ terakan_vk_CmdBindIndexBuffer2(VkCommandBuffer const commandBuffer, VkBuffer con
    struct terakan_buffer const * const buffer = terakan_buffer_from_handle(bufferHandle);
    unsigned const index_bytes_log2 = index_type_32_bit ? 2 : 1;
    VkDeviceSize const size_indices_u64 =
-      terakan_buffer_clamp_range(buffer, offset, size) >> index_bytes_log2;
+      terakan_buffer_clamp_range(buffer, offset, size, 1) >> index_bytes_log2;
    /* One of the possible reasons for `terakan_buffer_clamp_range` returning 0 is explicitly binding
     * a `VK_NULL_HANDLE` buffer.
     */
