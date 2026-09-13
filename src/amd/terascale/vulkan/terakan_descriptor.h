@@ -319,6 +319,10 @@ terakan_depth_stencil_descriptor_is_bound(
  * Shader Resource View (SRV, in Direct3D terms) descriptors.
  */
 
+#define TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY                                                  \
+   (S_03000C_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_03000C_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |            \
+    S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W))
+
 /* `SQ_VTX_CONSTANT` doesn't have words 5 and 6, so using word 5 for the BO priority. */
 #define TERAKAN_SRV_BUFFER_PRIORITY_WORD 5
 

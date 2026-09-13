@@ -560,8 +560,7 @@ terakan_app_config_draw_apply_sq_resources_fetch(
 
    struct terakan_srv_descriptor descriptor = {
       .srv = {
-         [3] = S_03000C_DST_SEL_X(TERASCALE_SWIZZLE_X) | S_03000C_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
-               S_03000C_DST_SEL_Z(TERASCALE_SWIZZLE_Z) | S_03000C_DST_SEL_W(TERASCALE_SWIZZLE_W),
+         [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
          [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_VERTEX_BUFFER,
       }};
