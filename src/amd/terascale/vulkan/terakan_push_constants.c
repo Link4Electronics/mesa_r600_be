@@ -127,12 +127,19 @@ terakan_push_constants_apply(struct terakan_gfx_command_writer * const command_w
       (is_compute ? VK_SHADER_STAGE_COMPUTE_BIT : state->graphics_stages_using_push_constants) &
       ~state->up_to_date_push_constants_bound_to_stages;
    if (bind_to_stages) {
-      struct terakan_srv_descriptor srv;
-      ASSERTED bool const srv_created = terakan_descriptor_create_for_uniform_buffer(
-         state->allocation.bo,
-         TERAKAN_KCACHE_HW_LINE_BYTES * (VkDeviceSize)state->allocation.va_kcache_lines,
-         TERAKAN_KCACHE_HW_LINE_BYTES * state->allocation.size_kcache_lines, &srv);
-      assert(srv_created);
+      struct terakan_srv_descriptor const srv = {
+         .srv = {
+            [0] = state->allocation.va_kcache_lines << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
+            [1] = ((uint32_t)state->allocation.size_kcache_lines
+                   << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2) -
+                  1u,
+            [2] = S_030008_BASE_ADDRESS_HI(state->allocation.va_kcache_lines >>
+                                           (32 - TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)) |
+                  S_030008_STRIDE(1),
+            [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+            [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
+            [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
+         }};
       unsigned remaining_stages = (unsigned)bind_to_stages;
       while (remaining_stages) {
          struct terakan_hw_config_sqk_set_functions const * const sqk_set_functions =
