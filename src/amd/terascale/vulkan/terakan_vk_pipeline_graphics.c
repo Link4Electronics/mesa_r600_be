@@ -29,6 +29,7 @@
 #include "terakan_pipeline_layout.h"
 #include "terakan_shader.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_shader.h"
 #include "terakan_vk_state.h"
 
 #include "amd/terascale/common/terascale_format.h"
@@ -965,9 +966,10 @@ terakan_vk_pipeline_graphics_destroy(struct vk_device * const device_base,
    struct terakan_vk_pipeline_graphics * const pipeline =
       container_of(pipeline_base, struct terakan_vk_pipeline_graphics, vk);
 
-   u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      terakan_shader_impl_finish(&pipeline->shaders[vk_to_mesa_shader_stage(
-         (VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index))]);
+   for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
+        shader_stages_remaining;) {
+      mesa_shader_stage const shader_stage = terakan_vk_shader_stage_scan(&shader_stages_remaining);
+      terakan_shader_impl_finish(&pipeline->shaders[shader_stage]);
    }
 
    if (pipeline->shader_bo != NULL) {
@@ -1105,9 +1107,9 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
    struct terakan_pipeline_layout const * const pipeline_layout =
       terakan_pipeline_layout_from_handle(create_info->layout);
 
-   u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      mesa_shader_stage const shader_stage =
-         vk_to_mesa_shader_stage((VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index));
+   for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
+        shader_stages_remaining;) {
+      mesa_shader_stage const shader_stage = terakan_vk_shader_stage_scan(&shader_stages_remaining);
       struct shader_create_data const * const shader_data = &shaders_create_data[shader_stage];
 
       nir_shader * const nir = terakan_nir_from_spirv_pre_link(
@@ -1209,9 +1211,10 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
             terakan_vertex_input_fs_code_qwords(&fetch_shader_code), (uint32_t)1 << (8 - 3));
       }
    }
-   u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      struct terakan_shader_impl * const shader = &pipeline->shaders[vk_to_mesa_shader_stage(
-         (VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index))];
+   for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
+        shader_stages_remaining;) {
+      mesa_shader_stage const shader_stage = terakan_vk_shader_stage_scan(&shader_stages_remaining);
+      struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
       shader->static_state.program_va_shr8 = shader_bo_bytes_shr8;
       shader_bo_bytes_shr8 += DIV_ROUND_UP(shader->shader.bc.ndw, (uint32_t)1 << (8 - 2));
    }
@@ -1244,9 +1247,11 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
          pipeline->vertex_input.sq_pgm_fetch.bo = pipeline->shader_bo;
          pipeline->vertex_input.sq_pgm_fetch.va_shr8 += shader_bo_va_shr8;
       }
-      u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-         struct terakan_shader_impl * const shader = &pipeline->shaders[vk_to_mesa_shader_stage(
-            (VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index))];
+      for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
+           shader_stages_remaining;) {
+         mesa_shader_stage const shader_stage =
+            terakan_vk_shader_stage_scan(&shader_stages_remaining);
+         struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
          util_memcpy_cpu_to_le32(
             shader_bo_mapping + (shader->static_state.program_va_shr8 << (8 - 2)),
             shader->shader.bc.bytecode, (uint32_t)sizeof(uint32_t) * shader->shader.bc.ndw);
@@ -1264,9 +1269,9 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
 fail_shader_bo:
    terakan_bo_free(pipeline->shader_bo, allocator);
 fail_shaders:
-   u_foreach_bit (shader_stage_vk_bit_index, pipeline->shader_stages) {
-      mesa_shader_stage const shader_stage =
-         vk_to_mesa_shader_stage((VkShaderStageFlagBits)BITFIELD_BIT(shader_stage_vk_bit_index));
+   for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
+        shader_stages_remaining;) {
+      mesa_shader_stage const shader_stage = terakan_vk_shader_stage_scan(&shader_stages_remaining);
       struct terakan_shader_impl * const shader = &pipeline->shaders[shader_stage];
       r600_bytecode_clear(&shader->shader.bc);
       free(shader->shader.arrays);

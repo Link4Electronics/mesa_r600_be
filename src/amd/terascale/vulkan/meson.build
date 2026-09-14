@@ -114,6 +114,7 @@ libterakan_files = files(
   'terakan_vk_render_pass.c',
   'terakan_vk_sampler.c',
   'terakan_vk_sampler.h',
+  'terakan_vk_shader.h',
   'terakan_vk_state.c',
   'terakan_vk_state.h',
   'terakan_vk_wsi.c',

@@ -26,8 +26,8 @@
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_shader.h"
 
-#include "util/bitscan.h"
 #include "util/macros.h"
 
 #include <assert.h>
@@ -140,11 +140,10 @@ terakan_push_constants_apply(struct terakan_gfx_command_writer * const command_w
             [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
             [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
          }};
-      unsigned remaining_stages = (unsigned)bind_to_stages;
-      while (remaining_stages) {
+      for (VkShaderStageFlags stages_remaining = bind_to_stages; stages_remaining;) {
+         mesa_shader_stage const stage = terakan_vk_shader_stage_scan(&stages_remaining);
          struct terakan_hw_config_sqk_set_functions const * const sqk_set_functions =
-            &terakan_hw_config_sqk_stage_set_functions[vk_to_mesa_shader_stage(
-               (VkShaderStageFlagBits)((VkShaderStageFlags)1 << u_bit_scan(&remaining_stages)))];
+            &terakan_hw_config_sqk_stage_set_functions[stage];
          sqk_set_functions->kcache(&command_writer->hw_config_sqk,
                                    TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS,
                                    state->allocation.size_kcache_lines, state->allocation.bo,

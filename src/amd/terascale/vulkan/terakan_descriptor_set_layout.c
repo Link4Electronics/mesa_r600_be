@@ -28,6 +28,7 @@
 #include "terakan_device.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_sampler.h"
+#include "terakan_vk_shader.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -326,10 +327,9 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    uint16_t next_shader_range_index = 0;
 
    /* SRV ranges. */
-   /* TODO(Triang3l): Cleanup `mesa_shader_stage` and `VkShaderStageFlags` usage. */
-   unsigned remaining_stages = (unsigned)stages_with_srvs;
-   while (remaining_stages) {
-      int const stage_index = u_bit_scan(&remaining_stages);
+   for (VkShaderStageFlags stages_remaining = stages_with_srvs; stages_remaining;) {
+      mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
+      VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
       struct terakan_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
@@ -337,8 +337,6 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
 
       uint8_t stage_srv_count = 0;
       uint8_t stage_uniform_buffer_count = 0;
-
-      uint8_t const stage_flag = (uint8_t)1 << stage_index;
 
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;
@@ -351,7 +349,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             continue;
          }
 
-         if (terakan_srv_range_mutable_max_count((mesa_shader_stage)stage_index) - stage_srv_count <
+         if (terakan_srv_range_mutable_max_count(stage_index) - stage_srv_count <
              binding->descriptor_count) {
             goto too_many_descriptors_destroy;
          }
@@ -390,17 +388,15 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    }
 
    /* Sampler ranges. */
-   remaining_stages = (unsigned)stages_with_samplers;
-   while (remaining_stages) {
-      int const stage_index = u_bit_scan(&remaining_stages);
+   for (VkShaderStageFlags stages_remaining = stages_with_samplers; stages_remaining;) {
+      mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
+      VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
       struct terakan_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
       layout_shader->first_sampler_range = next_shader_range_index;
 
       uint8_t stage_sampler_count = 0;
-
-      uint8_t const stage_flag = (uint8_t)1 << stage_index;
 
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;
@@ -452,15 +448,13 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    /* UAV ranges, after setting up SRV ranges because they take shader indices from the SRVs
     * corresponding to them.
     */
-   remaining_stages = (unsigned)stages_with_uavs;
-   while (remaining_stages) {
-      int const stage_index = u_bit_scan(&remaining_stages);
+   for (VkShaderStageFlags stages_remaining = stages_with_uavs; stages_remaining;) {
+      mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
+      VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
       struct terakan_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
       layout_shader->first_uav_range = next_shader_range_index;
-
-      uint8_t const stage_flag = (uint8_t)1 << stage_index;
 
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;

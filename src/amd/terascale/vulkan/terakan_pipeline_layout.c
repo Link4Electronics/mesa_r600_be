@@ -29,11 +29,11 @@
 #include "terakan_descriptor_set_layout.h"
 #include "terakan_device.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_shader.h"
 
 #include "amd/terascale/common/terascale_format.h"
 #include "compiler/shader_enums.h"
 #include "gallium/drivers/r600/evergreend.h"
-#include "util/bitscan.h"
 #include "util/bitset.h"
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -496,10 +496,8 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
          container_of(set_layout_base, struct terakan_descriptor_set_layout const, vk);
       struct terakan_pipeline_layout_set * const set = &layout->sets[set_index];
 
-      unsigned remaining_stages = (unsigned)stage_mask;
-      while (remaining_stages) {
-         mesa_shader_stage const stage_index = vk_to_mesa_shader_stage(
-            (VkShaderStageFlagBits)BITFIELD_BIT(u_bit_scan(&remaining_stages)));
+      for (VkShaderStageFlags stages_remaining = stage_mask; stages_remaining;) {
+         mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
          struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[stage_index];
 
@@ -537,10 +535,11 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
          &create_info->pPushConstantRanges[push_constant_range_index];
       uint32_t const push_constant_range_extent =
          push_constant_range->offset + push_constant_range->size;
-      unsigned remaining_stages = (unsigned)(push_constant_range->stageFlags & stage_mask);
-      while (remaining_stages) {
+      for (VkShaderStageFlags stages_remaining = push_constant_range->stageFlags & stage_mask;
+           stages_remaining;) {
+         mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
          uint32_t * const shader_app_push_constants_extent =
-            &layout->shader_app_push_constants_extents_bytes[u_bit_scan(&remaining_stages)];
+            &layout->shader_app_push_constants_extents_bytes[stage_index];
          *shader_app_push_constants_extent =
             MAX2(push_constant_range_extent, *shader_app_push_constants_extent);
       }
