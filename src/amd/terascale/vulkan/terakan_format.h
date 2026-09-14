@@ -145,17 +145,6 @@ struct terakan_format_info {
  */
 bool terakan_format_info_get(VkFormat format, struct terakan_format_info * info_out);
 
-/* May increase as `bytes_per_surfel` grows. */
-static inline uint32_t
-terakan_format_pitch_alignment_linear_surfels(unsigned const bytes_per_surfel,
-                                              unsigned const tile_pipe_interleave_bytes_log2)
-{
-   /* From AddrLib's `R800Lib::HwlGetPitchAlignmentLinear`. */
-   uint32_t const tile_pipe_interleave_bytes = (uint32_t)1 << tile_pipe_interleave_bytes_log2;
-   uint32_t const surfels_per_pipe_interleave = tile_pipe_interleave_bytes / bytes_per_surfel;
-   return MAX2(surfels_per_pipe_interleave, 64);
-}
-
 #ifdef __cplusplus
 }
 #endif

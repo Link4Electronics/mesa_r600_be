@@ -209,10 +209,11 @@ terakan_image_alignments_linear(unsigned const pipe_interleave_bytes_log2,
     * Must not be smaller than what DRM Radeon `evergreen_surface_check_linear_aligned` computes for
     * command submission validation.
     */
+   uint32_t const surfels_per_pipe_interleave =
+      ((uint32_t)terakan_format_surfels_per_block(bytes_per_block) << pipe_interleave_bytes_log2) /
+      bytes_per_block;
    return (struct terakan_image_alignments){
-      .pitch_surfels = terakan_format_pitch_alignment_linear_surfels(
-         bytes_per_block / terakan_format_surfels_per_block(bytes_per_block),
-         pipe_interleave_bytes_log2),
+      .pitch_surfels = MAX2(surfels_per_pipe_interleave, 64u),
       .height_blocks = 1,
       .base_bytes = (uint32_t)1 << pipe_interleave_bytes_log2,
    };
