@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_buffer.h"
 #include "terakan_command_buffer.h"
+#include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_state.h"
 
@@ -48,12 +48,12 @@ terakan_vk_CmdBindIndexBuffer2(VkCommandBuffer const commandBuffer, VkBuffer con
                                   : TERAKAN_HW_CONFIG_DRAW_VGT_DMA_INDEX_TYPE_16_HOST_ENDIAN;
 
    struct terakan_hw_config_draw_vgt_dma_index_buffer index_buffer = {};
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(bufferHandle);
+   struct terakan_vk_buffer const * const buffer = terakan_vk_buffer_from_handle(bufferHandle);
    unsigned const index_bytes_log2 = index_type_32_bit ? 2 : 1;
    VkDeviceSize const size_indices_u64 =
-      terakan_buffer_clamp_range(buffer, offset, size, 1) >> index_bytes_log2;
-   /* One of the possible reasons for `terakan_buffer_clamp_range` returning 0 is explicitly binding
-    * a `VK_NULL_HANDLE` buffer.
+      terakan_vk_buffer_clamp_range(buffer, offset, size, 1) >> index_bytes_log2;
+   /* One of the possible reasons for `terakan_vk_buffer_clamp_range` returning 0 is explicitly
+    * binding a `VK_NULL_HANDLE` buffer.
     */
    if (size_indices_u64 != 0) {
       index_buffer.bo = buffer->bo;

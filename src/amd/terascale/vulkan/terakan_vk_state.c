@@ -24,10 +24,10 @@
 #include "terakan_vk_state.h"
 
 #include "terakan_app_config_draw.h"
-#include "terakan_buffer.h"
 #include "terakan_command_buffer.h"
 #include "terakan_image.h"
 #include "terakan_vertex_input.h"
+#include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
 
 #include "amd/terascale/common/terascale_format.h"
@@ -1013,8 +1013,8 @@ terakan_vk_CmdBindVertexBuffers2(VkCommandBuffer const commandBuffer, uint32_t c
       uint32_t const binding = firstBinding + binding_array_index;
       VkDeviceSize size = pSizes != NULL ? pSizes[binding_array_index] : VK_WHOLE_SIZE;
       if (size != 0) {
-         struct terakan_buffer const * const buffer =
-            terakan_buffer_from_handle(pBuffers[binding_array_index]);
+         struct terakan_vk_buffer const * const buffer =
+            terakan_vk_buffer_from_handle(pBuffers[binding_array_index]);
          if (buffer != NULL && buffer->bo != NULL) {
             /* #MemoryIntegrity. */
             uint64_t const offset = pOffsets[binding_array_index];

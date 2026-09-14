@@ -23,11 +23,11 @@
 
 #include "terakan_descriptor_set.h"
 
-#include "terakan_buffer.h"
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
 #include "terakan_format.h"
 #include "terakan_image.h"
+#include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_sampler.h"
 
@@ -56,9 +56,10 @@ terakan_descriptor_set_write_uniform_buffer(VkDescriptorBufferInfo const * const
     * is done consistently with the changes to descriptor creation without a dynamic offset.
     */
 
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(buffer_info->buffer);
    VkDeviceSize const buffer_range =
-      terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+      terakan_vk_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
    if (buffer_range == 0) {
       return NULL;
    }
@@ -97,9 +98,10 @@ terakan_descriptor_set_write_storage_buffer(VkDescriptorBufferInfo const * const
     * is done consistently with the changes to descriptor creation without a dynamic offset.
     */
 
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(buffer_info->buffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(buffer_info->buffer);
    VkDeviceSize const buffer_range =
-      terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+      terakan_vk_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
    if (buffer_range == 0) {
       return NULL;
    }
@@ -277,10 +279,10 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
             struct terakan_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
             VkDescriptorBufferInfo const * const buffer_info =
                &descriptor_write->pBufferInfo[descriptor_index];
-            struct terakan_buffer const * const buffer =
-               terakan_buffer_from_handle(buffer_info->buffer);
+            struct terakan_vk_buffer const * const buffer =
+               terakan_vk_buffer_from_handle(buffer_info->buffer);
             VkDeviceSize const buffer_range =
-               terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+               terakan_vk_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
             if (buffer_range != 0) {
                /* Aligning the SRV size to make sure out-of-bounds access behavior is consistent
                 * with kcache access.
@@ -330,10 +332,10 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
             struct terakan_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
             VkDescriptorBufferInfo const * const buffer_info =
                &descriptor_write->pBufferInfo[descriptor_index];
-            struct terakan_buffer const * const buffer =
-               terakan_buffer_from_handle(buffer_info->buffer);
+            struct terakan_vk_buffer const * const buffer =
+               terakan_vk_buffer_from_handle(buffer_info->buffer);
             VkDeviceSize const buffer_range =
-               terakan_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
+               terakan_vk_buffer_clamp_range(buffer, buffer_info->offset, buffer_info->range, 1);
             if (buffer_range != 0) {
                /* Aligning the SRV size, and clamping the range to `maxStorageBufferRange` with the
                 * UAV pipe interleave alignment offset taken into account, to make sure

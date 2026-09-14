@@ -23,9 +23,9 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_buffer.h"
 #include "terakan_image.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
 
 #include "util/macros.h"
@@ -607,8 +607,8 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
       return;
    }
 
-   struct terakan_buffer const * const buffer =
-      terakan_buffer_from_handle(pCopyBufferToImageInfo->srcBuffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(pCopyBufferToImageInfo->srcBuffer);
    struct terakan_srv_descriptor buffer_descriptor = {
       .srv = {
          [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
@@ -747,8 +747,8 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
       return;
    }
 
-   struct terakan_buffer const * const buffer =
-      terakan_buffer_from_handle(pCopyImageToBufferInfo->dstBuffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(pCopyImageToBufferInfo->dstBuffer);
    struct terakan_color_descriptor buffer_descriptor = {
       .attrib = TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB,
    };

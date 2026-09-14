@@ -21,13 +21,13 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_buffer.h"
+#include "terakan_vk_buffer.h"
 
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
-#include "terakan_device_memory.h"
 #include "terakan_format.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_device_memory.h"
 #include "terakan_vk_entrypoints.h"
 
 #include "util/macros.h"
@@ -145,9 +145,10 @@ terakan_vk_BindBufferMemory2(VkDevice const device, uint32_t const bindInfoCount
    /* #MemoryIntegrity. */
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindBufferMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
-      struct terakan_buffer const * const buffer = terakan_buffer_from_handle(bind_info->buffer);
-      struct terakan_device_memory const * const memory =
-         terakan_device_memory_from_handle(bind_info->memory);
+      struct terakan_vk_buffer const * const buffer =
+         terakan_vk_buffer_from_handle(bind_info->buffer);
+      struct terakan_vk_device_memory const * const memory =
+         terakan_vk_device_memory_from_handle(bind_info->memory);
       /* Currently `vkGetDeviceBufferMemoryRequirements` never pads the size, so checking the size
        * of the buffer itself, not the size in the memory requirements, is sufficient.
        *
@@ -177,8 +178,8 @@ terakan_vk_BindBufferMemory2(VkDevice const device, uint32_t const bindInfoCount
 
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindBufferMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
-      struct terakan_buffer * const buffer = terakan_buffer_from_handle(bind_info->buffer);
-      buffer->bo = terakan_device_memory_from_handle(bind_info->memory)->bo;
+      struct terakan_vk_buffer * const buffer = terakan_vk_buffer_from_handle(bind_info->buffer);
+      buffer->bo = terakan_vk_device_memory_from_handle(bind_info->memory)->bo;
       buffer->va = buffer->bo->va + bind_info->memoryOffset;
    }
 
@@ -189,7 +190,7 @@ VKAPI_ATTR void VKAPI_CALL
 terakan_vk_DestroyBuffer(VkDevice const deviceHandle, VkBuffer const bufferHandle,
                          VkAllocationCallbacks const * const pAllocator)
 {
-   struct terakan_buffer * const buffer = terakan_buffer_from_handle(bufferHandle);
+   struct terakan_vk_buffer * const buffer = terakan_vk_buffer_from_handle(bufferHandle);
 
    if (buffer == NULL) {
       return;
@@ -208,9 +209,9 @@ terakan_vk_CreateBuffer(VkDevice const deviceHandle, VkBufferCreateInfo const * 
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
-   struct terakan_buffer * const buffer =
-      vk_alloc2(&device->vk.alloc, pAllocator, sizeof(struct terakan_buffer),
-                alignof(struct terakan_buffer), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   struct terakan_vk_buffer * const buffer =
+      vk_alloc2(&device->vk.alloc, pAllocator, sizeof(struct terakan_vk_buffer),
+                alignof(struct terakan_vk_buffer), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (buffer == NULL) {
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
@@ -220,7 +221,7 @@ terakan_vk_CreateBuffer(VkDevice const deviceHandle, VkBufferCreateInfo const * 
    buffer->bo = NULL;
    buffer->va = 0;
 
-   *pBuffer = terakan_buffer_to_handle(buffer);
+   *pBuffer = terakan_vk_buffer_to_handle(buffer);
    return VK_SUCCESS;
 }
 
@@ -259,7 +260,8 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
 
    vk_buffer_view_init(&device->vk, &buffer_view->vk, pCreateInfo);
 
-   struct terakan_buffer const * const buffer = terakan_buffer_from_handle(pCreateInfo->buffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(pCreateInfo->buffer);
 
    buffer_view->bo = buffer->bo;
 
@@ -270,7 +272,7 @@ terakan_vk_CreateBufferView(VkDevice const deviceHandle,
       terascale_format_info_r8xx[vk_format_to_pipe_format(pCreateInfo->format)];
    if (format_info.supports_sq_vertex_fetch) {
       unsigned const bytes_per_element = terascale_format_bytes_per_block[format_info.format];
-      VkDeviceSize elements = terakan_buffer_clamp_range(
+      VkDeviceSize elements = terakan_vk_buffer_clamp_range(
          buffer, pCreateInfo->offset, buffer_view->vk.elements, bytes_per_element);
       /* Limit the size to:
        * - `2^32 bytes, as buffer SRV descriptors contain the size minus 1 in bytes.

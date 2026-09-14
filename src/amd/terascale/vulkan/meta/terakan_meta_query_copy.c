@@ -24,9 +24,9 @@
 #include "terakan_meta_impl.h"
 
 #include "terakan_barrier.h"
-#include "terakan_buffer.h"
 #include "terakan_physical_device.h"
 #include "terakan_query.h"
+#include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
 
 #include "util/bitscan.h"
@@ -2008,7 +2008,7 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
       (query_pool->copy_dst_result_size_counters + (unsigned)with_availability)
       << (unsigned)is_64_bit;
 
-   struct terakan_buffer const * const dst_buffer = terakan_buffer_from_handle(dstBuffer);
+   struct terakan_vk_buffer const * const dst_buffer = terakan_vk_buffer_from_handle(dstBuffer);
 
    /* Prevent inconsistencies, such as mixing aligned and misaligned values or division by zero, in
     * calculations related to maintaining #MemoryIntegrity in case of invalid usage.

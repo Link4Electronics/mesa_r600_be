@@ -32,9 +32,9 @@
 #include "terakan_image.h"
 
 #include "terakan_device.h"
-#include "terakan_device_memory.h"
 #include "terakan_format.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_device_memory.h"
 #include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
@@ -1000,7 +1000,7 @@ terakan_vk_BindImageMemory2(UNUSED VkDevice const device, uint32_t const bindInf
    for (uint32_t bind_info_index = 0; bind_info_index < bindInfoCount; ++bind_info_index) {
       VkBindImageMemoryInfo const * const bind_info = &pBindInfos[bind_info_index];
       struct terakan_image * const image = terakan_image_from_handle(bind_info->image);
-      image->bo = terakan_device_memory_from_handle(bind_info->memory)->bo;
+      image->bo = terakan_vk_device_memory_from_handle(bind_info->memory)->bo;
       image->va = image->bo->va + bind_info->memoryOffset;
    }
 

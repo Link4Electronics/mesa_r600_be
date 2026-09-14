@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_BUFFER_H
-#define TERAKAN_BUFFER_H
+#ifndef TERAKAN_VK_BUFFER_H
+#define TERAKAN_VK_BUFFER_H
 
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
@@ -40,14 +40,14 @@
 extern "C" {
 #endif
 
-struct terakan_buffer {
+struct terakan_vk_buffer {
    struct vk_buffer vk;
 
    struct terakan_bo const * bo;
    uint64_t va;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_buffer, vk.base, VkBuffer, VK_OBJECT_TYPE_BUFFER)
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_buffer, vk.base, VkBuffer, VK_OBJECT_TYPE_BUFFER)
 
 /* For #MemoryIntegrity, and also handling `VK_WHOLE_SIZE`.
  *
@@ -61,9 +61,9 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_buffer, vk.base, VkBuffer, VK_OBJECT_TYPE
  * actual size of an element to be provided as `element_bytes`.
  */
 static inline VkDeviceSize
-terakan_buffer_clamp_range(struct terakan_buffer const * const buffer,
-                           VkDeviceSize const offset_bytes, VkDeviceSize const size_elements,
-                           VkDeviceSize const element_bytes)
+terakan_vk_buffer_clamp_range(struct terakan_vk_buffer const * const buffer,
+                              VkDeviceSize const offset_bytes, VkDeviceSize const size_elements,
+                              VkDeviceSize const element_bytes)
 {
    assert(element_bytes != 0);
    /* Also safely treat buffers not bound to device memory as null buffers. */
@@ -90,4 +90,4 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_buffer_view, vk.base, VkBufferView,
 }
 #endif
 
-#endif /* TERAKAN_BUFFER_H */
+#endif /* TERAKAN_VK_BUFFER_H */

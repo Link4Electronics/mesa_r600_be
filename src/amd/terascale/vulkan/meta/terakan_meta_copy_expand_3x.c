@@ -23,9 +23,9 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_buffer.h"
 #include "terakan_image.h"
 #include "terakan_physical_device.h"
+#include "terakan_vk_buffer.h"
 
 #include "util/macros.h"
 
@@ -388,8 +388,8 @@ terakan_meta_copy_expand_3x_buffer_to_image(
 
    struct terakan_image const * const image =
       terakan_image_from_handle(copy_buffer_to_image_info->dstImage);
-   struct terakan_buffer const * const buffer =
-      terakan_buffer_from_handle(copy_buffer_to_image_info->srcBuffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(copy_buffer_to_image_info->srcBuffer);
 
    unsigned const bytes_per_block = image->surface.aspects[0].bytes_per_block;
    unsigned const bytes_per_surfel = bytes_per_block / 3u;
@@ -498,8 +498,8 @@ terakan_meta_copy_expand_3x_image_to_buffer(
       terakan_gfx_command_writer_physical_device(command_writer)
          ->tiling_info.pipe_interleave_bytes_log2;
 
-   struct terakan_buffer const * const buffer =
-      terakan_buffer_from_handle(copy_image_to_buffer_info->dstBuffer);
+   struct terakan_vk_buffer const * const buffer =
+      terakan_vk_buffer_from_handle(copy_image_to_buffer_info->dstBuffer);
    struct terakan_image const * const image =
       terakan_image_from_handle(copy_image_to_buffer_info->srcImage);
 

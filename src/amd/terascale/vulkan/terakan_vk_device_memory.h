@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_DEVICE_MEMORY_H
-#define TERAKAN_DEVICE_MEMORY_H
+#ifndef TERAKAN_VK_DEVICE_MEMORY_H
+#define TERAKAN_VK_DEVICE_MEMORY_H
 
 #include "terakan_bo.h"
 
@@ -32,17 +32,17 @@
 extern "C" {
 #endif
 
-struct terakan_device_memory {
+struct terakan_vk_device_memory {
    struct vk_device_memory vk;
 
    struct terakan_bo * bo;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_device_memory, vk.base, VkDeviceMemory,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_device_memory, vk.base, VkDeviceMemory,
                                VK_OBJECT_TYPE_DEVICE_MEMORY)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_DEVICE_MEMORY_H */
+#endif /* TERAKAN_VK_DEVICE_MEMORY_H */

@@ -21,7 +21,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_device_memory.h"
+#include "terakan_vk_device_memory.h"
 
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
@@ -92,7 +92,7 @@ terakan_vk_GetMemoryFdKHR(VkDevice const deviceHandle,
 {
    struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
 
-   struct terakan_bo * const bo = terakan_device_memory_from_handle(pGetFdInfo->memory)->bo;
+   struct terakan_bo * const bo = terakan_vk_device_memory_from_handle(pGetFdInfo->memory)->bo;
 
    int const fd = device->platform_fn->bo->export_fd(
       bo, pGetFdInfo->handleType == VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT);
@@ -126,8 +126,8 @@ VKAPI_ATTR VkResult VKAPI_CALL
 terakan_vk_UnmapMemory2KHR(UNUSED VkDevice const device,
                            VkMemoryUnmapInfoKHR const * const pMemoryUnmapInfo)
 {
-   struct terakan_device_memory * const device_memory =
-      terakan_device_memory_from_handle(pMemoryUnmapInfo->memory);
+   struct terakan_vk_device_memory * const device_memory =
+      terakan_vk_device_memory_from_handle(pMemoryUnmapInfo->memory);
 
    terakan_bo_unmap(device_memory->bo);
 
@@ -138,8 +138,8 @@ VKAPI_ATTR VkResult VKAPI_CALL
 terakan_vk_MapMemory2KHR(VkDevice const deviceHandle,
                          VkMemoryMapInfoKHR const * const pMemoryMapInfo, void ** const ppData)
 {
-   struct terakan_device_memory * const device_memory =
-      terakan_device_memory_from_handle(pMemoryMapInfo->memory);
+   struct terakan_vk_device_memory * const device_memory =
+      terakan_vk_device_memory_from_handle(pMemoryMapInfo->memory);
 
    void * const mapping = terakan_bo_map(device_memory->bo);
    if (mapping == NULL) {
@@ -154,8 +154,8 @@ VKAPI_ATTR void VKAPI_CALL
 terakan_vk_FreeMemory(VkDevice const deviceHandle, VkDeviceMemory const deviceMemory,
                       VkAllocationCallbacks const * const pAllocator)
 {
-   struct terakan_device_memory * const device_memory =
-      terakan_device_memory_from_handle(deviceMemory);
+   struct terakan_vk_device_memory * const device_memory =
+      terakan_vk_device_memory_from_handle(deviceMemory);
 
    if (device_memory == NULL) {
       return;
@@ -175,8 +175,8 @@ terakan_vk_AllocateMemory(VkDevice const deviceHandle,
 
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
-   struct terakan_device_memory * const device_memory = vk_device_memory_create(
-      &device->vk, pAllocateInfo, pAllocator, sizeof(struct terakan_device_memory));
+   struct terakan_vk_device_memory * const device_memory = vk_device_memory_create(
+      &device->vk, pAllocateInfo, pAllocator, sizeof(struct terakan_vk_device_memory));
    if (device_memory == NULL) {
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
    }
@@ -281,7 +281,7 @@ terakan_vk_AllocateMemory(VkDevice const deviceHandle,
       }
    }
 
-   *pMemory = terakan_device_memory_to_handle(device_memory);
+   *pMemory = terakan_vk_device_memory_to_handle(device_memory);
    return VK_SUCCESS;
 
 fail_bo:
