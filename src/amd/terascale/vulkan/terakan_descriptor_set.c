@@ -443,8 +443,8 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
       struct terakan_descriptor_set_layout_binding const * const dst_binding =
          &dst_set->layout->bindings[dst_binding_index];
 
-      if (terakan_descriptor_type_has_srv(descriptor_type)) {
-         assert(terakan_descriptor_type_has_srv(dst_binding->descriptor_type));
+      if (terakan_vk_descriptor_type_has_srv(descriptor_type)) {
+         assert(terakan_vk_descriptor_type_has_srv(dst_binding->descriptor_type));
          memcpy(dst_set->descriptors +
                    sizeof(struct terakan_descriptor_set_srv) *
                       (dst_binding->first_set_srv + descriptor_copy->dstArrayElement),
@@ -453,8 +453,8 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
                       (src_binding->first_set_srv + descriptor_copy->srcArrayElement),
                 sizeof(struct terakan_descriptor_set_srv) * descriptor_copy->descriptorCount);
 
-         if (terakan_descriptor_type_has_uav(descriptor_type)) {
-            assert(terakan_descriptor_type_has_uav(dst_binding->descriptor_type));
+         if (terakan_vk_descriptor_type_has_uav(descriptor_type)) {
+            assert(terakan_vk_descriptor_type_has_uav(dst_binding->descriptor_type));
             memcpy(dst_set->descriptors + dst_set->layout->pool_first_uav_offset_bytes +
                       sizeof(struct terakan_descriptor_set_uav) *
                          (dst_binding->first_set_uav + descriptor_copy->dstArrayElement),
@@ -465,8 +465,8 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
          }
       }
 
-      if (terakan_descriptor_type_has_sampler(descriptor_type)) {
-         assert(terakan_descriptor_type_has_sampler(dst_binding->descriptor_type));
+      if (terakan_vk_descriptor_type_has_sampler(descriptor_type)) {
+         assert(terakan_vk_descriptor_type_has_sampler(dst_binding->descriptor_type));
          memcpy(dst_set->descriptors + dst_set->layout->pool_first_sampler_offset_bytes +
                    sizeof(struct terakan_descriptor_set_sampler) *
                       (dst_binding->first_set_sampler + descriptor_copy->dstArrayElement),
@@ -706,13 +706,13 @@ terakan_vk_CreateDescriptorPool(VkDevice const deviceHandle,
    for (uint32_t pool_size_index = 0; pool_size_index < pCreateInfo->poolSizeCount;
         ++pool_size_index) {
       VkDescriptorPoolSize const pool_size = pCreateInfo->pPoolSizes[pool_size_index];
-      if (terakan_descriptor_type_has_srv(pool_size.type)) {
+      if (terakan_vk_descriptor_type_has_srv(pool_size.type)) {
          srv_count += pool_size.descriptorCount;
-         if (terakan_descriptor_type_has_uav(pool_size.type)) {
+         if (terakan_vk_descriptor_type_has_uav(pool_size.type)) {
             uav_count += pool_size.descriptorCount;
          }
       }
-      if (terakan_descriptor_type_has_sampler(pool_size.type)) {
+      if (terakan_vk_descriptor_type_has_sampler(pool_size.type)) {
          sampler_count += pool_size.descriptorCount;
       }
    }

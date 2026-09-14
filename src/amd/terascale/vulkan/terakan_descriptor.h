@@ -408,6 +408,11 @@ terakan_srv_range_mutable_max_count(mesa_shader_stage const stage)
                                         : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL;
 }
 
+/* The BO is `device->uav_immediate_bo`. */
+struct terakan_srv_descriptor
+terakan_color_descriptor_info_to_uav_immediate_srv(struct terakan_device const * device,
+                                                   uint32_t color_info);
+
 /*
  * Sampler descriptors.
  */
@@ -451,48 +456,6 @@ terakan_sampler_max_aniso_ratio_from_float(float max_aniso_ratio)
 }
 
 #define TERAKAN_SAMPLER_HW_COUNT_PER_STAGE 18
-
-/*
- * Utility functionality for multiple descriptor types.
- */
-
-/* The BO is `device->uav_immediate_bo`. */
-struct terakan_srv_descriptor
-terakan_color_descriptor_info_to_uav_immediate_srv(struct terakan_device const * device,
-                                                   uint32_t color_info);
-
-/* TODO(Triang3l): Move all of this to `descriptor_type_has_*` to Vulkan-specific code, and rework
- * `terakan_descriptor_create_for_*_buffer`.
- */
-
-static inline bool
-terakan_descriptor_type_has_srv(VkDescriptorType const descriptor_type)
-{
-   return descriptor_type != VK_DESCRIPTOR_TYPE_SAMPLER;
-}
-
-static inline bool
-terakan_descriptor_type_has_sampler(VkDescriptorType const descriptor_type)
-{
-   return descriptor_type == VK_DESCRIPTOR_TYPE_SAMPLER ||
-          descriptor_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-}
-
-static inline bool
-terakan_descriptor_type_has_uav(VkDescriptorType const descriptor_type)
-{
-   if (descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE &&
-       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER &&
-       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
-       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
-      return false;
-   }
-   /* For read-only bindings of the given types, and for size queries, UAVs always have a
-    * corresponding SRV.
-    */
-   assert(terakan_descriptor_type_has_srv(descriptor_type));
-   return true;
-}
 
 #ifdef __cplusplus
 }

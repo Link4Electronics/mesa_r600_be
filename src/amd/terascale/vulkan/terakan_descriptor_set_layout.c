@@ -167,16 +167,16 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       uint8_t binding_shader_range_count = 0;
       VkDescriptorType const binding_type = binding->descriptorType;
       VkShaderStageFlagBits const binding_stages = binding->stageFlags & stage_mask;
-      if (terakan_descriptor_type_has_srv(binding_type)) {
+      if (terakan_vk_descriptor_type_has_srv(binding_type)) {
          ++binding_shader_range_count;
          stages_with_srvs |= binding_stages;
          VkShaderStageFlags const binding_uav_stages = binding_stages & uav_supported_stage_mask;
-         if (binding_uav_stages && terakan_descriptor_type_has_uav(binding_type)) {
+         if (binding_uav_stages && terakan_vk_descriptor_type_has_uav(binding_type)) {
             ++binding_shader_range_count;
             stages_with_uavs |= binding_uav_stages;
          }
       }
-      if (terakan_descriptor_type_has_sampler(binding_type)) {
+      if (terakan_vk_descriptor_type_has_sampler(binding_type)) {
          if (binding->pImmutableSamplers != NULL) {
             if (TERAKAN_SAMPLER_HW_COUNT_PER_STAGE * MESA_SHADER_STAGES - immutable_sampler_count <
                 binding->descriptorCount) {
@@ -253,13 +253,13 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       layout_binding->first_set_sampler = set_sampler_count;
 
       /* Add to the counts, validating against the numeric limits. */
-      if (terakan_descriptor_type_has_srv(binding_type)) {
+      if (terakan_vk_descriptor_type_has_srv(binding_type)) {
          if (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_srv_count <
              binding_descriptor_count) {
             goto too_many_descriptors_destroy;
          }
          set_srv_count += binding_descriptor_count;
-         if (terakan_descriptor_type_has_uav(binding_type)) {
+         if (terakan_vk_descriptor_type_has_uav(binding_type)) {
             if (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE - set_uav_count <
                 binding_descriptor_count) {
                goto too_many_descriptors_destroy;
@@ -267,7 +267,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             set_uav_count += binding_descriptor_count;
          }
       }
-      bool const binding_has_samplers = terakan_descriptor_type_has_sampler(binding_type);
+      bool const binding_has_samplers = terakan_vk_descriptor_type_has_sampler(binding_type);
       if (binding_has_samplers) {
          if (TERAKAN_SAMPLER_HW_COUNT_PER_STAGE * MESA_SHADER_STAGES - set_sampler_count <
              binding_descriptor_count) {
@@ -345,7 +345,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
-             !terakan_descriptor_type_has_srv(binding->descriptor_type)) {
+             !terakan_vk_descriptor_type_has_srv(binding->descriptor_type)) {
             continue;
          }
 
@@ -405,7 +405,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
-             !terakan_descriptor_type_has_sampler(binding->descriptor_type)) {
+             !terakan_vk_descriptor_type_has_sampler(binding->descriptor_type)) {
             continue;
          }
 
@@ -463,10 +463,10 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
-             !terakan_descriptor_type_has_uav(binding->descriptor_type)) {
+             !terakan_vk_descriptor_type_has_uav(binding->descriptor_type)) {
             continue;
          }
-         assert(terakan_descriptor_type_has_srv(binding->descriptor_type));
+         assert(terakan_vk_descriptor_type_has_srv(binding->descriptor_type));
 
          assert(next_shader_range_index < shader_range_count);
          struct terakan_descriptor_set_layout_shader_range * const shader_range =

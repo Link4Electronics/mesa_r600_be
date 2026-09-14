@@ -28,12 +28,43 @@
 #include "vk_descriptor_set_layout.h"
 #include "vk_sampler.h"
 
+#include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+static inline bool
+terakan_vk_descriptor_type_has_srv(VkDescriptorType const descriptor_type)
+{
+   return descriptor_type != VK_DESCRIPTOR_TYPE_SAMPLER;
+}
+
+static inline bool
+terakan_vk_descriptor_type_has_sampler(VkDescriptorType const descriptor_type)
+{
+   return descriptor_type == VK_DESCRIPTOR_TYPE_SAMPLER ||
+          descriptor_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+}
+
+static inline bool
+terakan_vk_descriptor_type_has_uav(VkDescriptorType const descriptor_type)
+{
+   if (descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE &&
+       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER &&
+       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
+       descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC) {
+      return false;
+   }
+   /* For read-only bindings of the given types, and for size queries, UAVs always have a
+    * corresponding SRV.
+    */
+   assert(terakan_vk_descriptor_type_has_srv(descriptor_type));
+   return true;
+}
 
 struct terakan_descriptor_set_layout_binding {
    VkDescriptorType descriptor_type;

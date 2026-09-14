@@ -361,12 +361,12 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
    struct terakan_pipeline_layout_set * const hw_descriptor_set_layout =
       &pipeline_layout->sets[binding->desc_set];
    /* TODO(Triang3l): Kcache when allocation is set up. */
-   if (terakan_descriptor_type_has_sampler(descriptor_set_binding->descriptor_type)) {
+   if (terakan_vk_descriptor_type_has_sampler(descriptor_set_binding->descriptor_type)) {
       pipeline_layout_binding.sampler_base =
          hw_descriptor_set_layout->first_shader_samplers[stage] +
          descriptor_set_binding->first_shader_samplers[stage];
    }
-   if (terakan_descriptor_type_has_srv(descriptor_set_binding->descriptor_type)) {
+   if (terakan_vk_descriptor_type_has_srv(descriptor_set_binding->descriptor_type)) {
       pipeline_layout_binding.srv_base = hw_descriptor_set_layout->first_shader_srvs[stage] +
                                          descriptor_set_binding->first_shader_srvs[stage];
    }
