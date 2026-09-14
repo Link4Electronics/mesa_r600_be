@@ -38,7 +38,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <vulkan/vulkan_core.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -109,16 +108,19 @@ struct terakan_color_descriptor {
     S_028C70_RESOURCE_TYPE(V_028C70_BUFFER))
 #define TERAKAN_COLOR_DESCRIPTOR_BUFFER_UAV_ATTRIB (S_028C74_NON_DISP_TILING_ORDER(true))
 
+/* The element count is wider than 32 bits to allow for 2^32 elements if the buffer is already
+ * aligned.
+ */
 void terakan_color_descriptor_calculate_buffer_base_dim_offset(
-   struct terakan_color_descriptor * descriptor, uint64_t va, VkDeviceSize elements,
+   struct terakan_color_descriptor * descriptor, uint64_t va, uint64_t elements,
    unsigned bytes_per_element, unsigned pipe_interleave_bytes_log2,
    uint32_t * alignment_offset_bytes_out);
 
 static inline void
 terakan_color_descriptor_calculate_buffer_base_view_dim(
-   struct terakan_color_descriptor * const descriptor, uint64_t const va,
-   VkDeviceSize const elements, unsigned const bytes_per_element,
-   unsigned const pipe_interleave_bytes_log2, bool const alignment_offset_in_elements)
+   struct terakan_color_descriptor * const descriptor, uint64_t const va, uint64_t const elements,
+   unsigned const bytes_per_element, unsigned const pipe_interleave_bytes_log2,
+   bool const alignment_offset_in_elements)
 {
    uint32_t alignment_offset;
    terakan_color_descriptor_calculate_buffer_base_dim_offset(

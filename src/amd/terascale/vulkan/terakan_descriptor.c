@@ -39,9 +39,9 @@
 
 void
 terakan_color_descriptor_calculate_buffer_base_dim_offset(
-   struct terakan_color_descriptor * const descriptor, uint64_t const va,
-   VkDeviceSize const elements, unsigned const bytes_per_element,
-   unsigned const pipe_interleave_bytes_log2, uint32_t * const alignment_offset_bytes_out)
+   struct terakan_color_descriptor * const descriptor, uint64_t const va, uint64_t const elements,
+   unsigned const bytes_per_element, unsigned const pipe_interleave_bytes_log2,
+   uint32_t * const alignment_offset_bytes_out)
 {
    uint64_t const va_aligned = va >> pipe_interleave_bytes_log2 << pipe_interleave_bytes_log2;
    descriptor->base = (uint32_t)(va_aligned >> 8);
