@@ -26,9 +26,9 @@
 #include "terakan_command_buffer.h"
 #include "terakan_device.h"
 #include "terakan_image.h"
-#include "terakan_pipeline_layout.h"
 #include "terakan_shader.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_pipeline_layout.h"
 #include "terakan_vk_shader.h"
 #include "terakan_vk_state.h"
 
@@ -1104,8 +1104,8 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
 
    struct terakan_physical_device const * const physical_device =
       terakan_device_physical_device(device);
-   struct terakan_pipeline_layout const * const pipeline_layout =
-      terakan_pipeline_layout_from_handle(create_info->layout);
+   struct terakan_vk_pipeline_layout const * const pipeline_layout =
+      terakan_vk_pipeline_layout_from_handle(create_info->layout);
 
    for (VkShaderStageFlags shader_stages_remaining = pipeline->shader_stages;
         shader_stages_remaining;) {
@@ -1121,7 +1121,7 @@ terakan_vk_pipeline_graphics_create(struct terakan_device * const device,
       }
 
       struct terakan_nir_lower_and_optimize_post_link_options post_link_lowering_options = {
-         .get_binding_functions = &terakan_pipeline_layout_get_binding_functions,
+         .get_binding_functions = &terakan_vk_pipeline_layout_get_binding_functions,
          .get_binding_functions_data = pipeline_layout,
 
          /* TODO(Triang3l): `VK_EXT_pipeline_robustness`. */

@@ -21,11 +21,11 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_descriptor_set_layout.h"
+#include "terakan_vk_descriptor_set_layout.h"
 
 #include "terakan_descriptor.h"
-#include "terakan_descriptor_set.h"
 #include "terakan_device.h"
+#include "terakan_vk_descriptor_set.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_sampler.h"
 #include "terakan_vk_shader.h"
@@ -45,8 +45,8 @@
 #include <string.h>
 
 static int
-terakan_descriptor_set_layout_compare_binding_create_infos(void const * const a,
-                                                           void const * const b)
+terakan_vk_descriptor_set_layout_compare_binding_create_infos(void const * const a,
+                                                              void const * const b)
 {
    VkDescriptorSetLayoutBinding const * const a_binding = (VkDescriptorSetLayoutBinding const *)a;
    VkDescriptorSetLayoutBinding const * const b_binding = (VkDescriptorSetLayoutBinding const *)b;
@@ -68,9 +68,9 @@ terakan_descriptor_set_layout_compare_binding_create_infos(void const * const a,
 
 /* Try to combine the previous range and the new one to make binding slightly faster. */
 static bool
-terakan_descriptor_set_layout_shader_range_try_extend(
-   struct terakan_descriptor_set_layout_shader_range * const range,
-   struct terakan_descriptor_set_layout_shader_range const * const extension)
+terakan_vk_descriptor_set_layout_shader_range_try_extend(
+   struct terakan_vk_descriptor_set_layout_shader_range * const range,
+   struct terakan_vk_descriptor_set_layout_shader_range const * const extension)
 {
    if (range->first_set_descriptor + range->descriptor_count != extension->first_set_descriptor ||
        range->first_shader_descriptor + range->descriptor_count !=
@@ -109,7 +109,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       memcpy(sorted_create_info_bindings, pCreateInfo->pBindings, sorted_create_info_bindings_size);
       qsort(sorted_create_info_bindings, pCreateInfo->bindingCount,
             sizeof(VkDescriptorSetLayoutBinding),
-            terakan_descriptor_set_layout_compare_binding_create_infos);
+            terakan_vk_descriptor_set_layout_compare_binding_create_infos);
    }
 
    /* Skip empty bindings. */
@@ -196,10 +196,10 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
     * - Immutable samplers - primarily for allocating.
     */
    VK_MULTIALLOC(multialloc);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_descriptor_set_layout, layout, 1);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_descriptor_set_layout_shader_range, shader_ranges,
-                      shader_range_count);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_descriptor_set_layout_binding, bindings,
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_descriptor_set_layout, layout, 1);
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_descriptor_set_layout_shader_range,
+                      shader_ranges, shader_range_count);
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_descriptor_set_layout_binding, bindings,
                       binding_count);
    VK_MULTIALLOC_DECL(&multialloc, uint8_t, immutable_sampler_indices_in_set,
                       immutable_sampler_count);
@@ -232,7 +232,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
         ++create_info_binding_index) {
       VkDescriptorSetLayoutBinding const * const create_info_binding =
          &sorted_create_info_bindings[create_info_binding_index];
-      struct terakan_descriptor_set_layout_binding * const layout_binding =
+      struct terakan_vk_descriptor_set_layout_binding * const layout_binding =
          &layout->bindings[create_info_binding->binding];
 
       VkDescriptorType const binding_type = create_info_binding->descriptorType;
@@ -312,12 +312,12 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
    assert(next_immutable_sampler_index == immutable_sampler_count);
 
    layout->pool_first_sampler_offset_bytes =
-      sizeof(struct terakan_descriptor_set_srv) * set_srv_count;
+      sizeof(struct terakan_vk_descriptor_set_srv) * set_srv_count;
    layout->pool_first_uav_offset_bytes =
       layout->pool_first_sampler_offset_bytes +
-      sizeof(struct terakan_descriptor_set_sampler) * set_sampler_count;
+      sizeof(struct terakan_vk_descriptor_set_sampler) * set_sampler_count;
    layout->pool_size_bytes = layout->pool_first_uav_offset_bytes +
-                             sizeof(struct terakan_descriptor_set_uav) * set_uav_count;
+                             sizeof(struct terakan_vk_descriptor_set_uav) * set_uav_count;
 
    layout->dynamic_offset_count = dynamic_offset_count;
    layout->immutable_sampler_count = immutable_sampler_count;
@@ -331,7 +331,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
       VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
-      struct terakan_descriptor_set_layout_shader * const layout_shader =
+      struct terakan_vk_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
       layout_shader->first_srv_range = next_shader_range_index;
 
@@ -341,7 +341,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;
            ++create_info_binding_index) {
-         struct terakan_descriptor_set_layout_binding * const binding =
+         struct terakan_vk_descriptor_set_layout_binding * const binding =
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
@@ -357,7 +357,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          binding->first_shader_srvs[stage_index] = stage_srv_count;
 
          assert(next_shader_range_index < shader_range_count);
-         struct terakan_descriptor_set_layout_shader_range * const shader_range =
+         struct terakan_vk_descriptor_set_layout_shader_range * const shader_range =
             &layout->shader_ranges[next_shader_range_index];
          shader_range->first_set_descriptor = binding->first_set_srv;
          shader_range->first_dynamic_offset =
@@ -367,7 +367,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          shader_range->first_shader_descriptor = stage_srv_count;
          shader_range->descriptor_count = binding->descriptor_count;
          if (next_shader_range_index == layout_shader->first_srv_range ||
-             !terakan_descriptor_set_layout_shader_range_try_extend(
+             !terakan_vk_descriptor_set_layout_shader_range_try_extend(
                 &layout->shader_ranges[next_shader_range_index - 1], shader_range)) {
             ++next_shader_range_index;
          }
@@ -392,7 +392,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
       VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
-      struct terakan_descriptor_set_layout_shader * const layout_shader =
+      struct terakan_vk_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
       layout_shader->first_sampler_range = next_shader_range_index;
 
@@ -401,7 +401,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;
            ++create_info_binding_index) {
-         struct terakan_descriptor_set_layout_binding * const binding =
+         struct terakan_vk_descriptor_set_layout_binding * const binding =
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
@@ -416,14 +416,14 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          binding->first_shader_samplers[stage_index] = stage_sampler_count;
 
          assert(next_shader_range_index < shader_range_count);
-         struct terakan_descriptor_set_layout_shader_range * const shader_range =
+         struct terakan_vk_descriptor_set_layout_shader_range * const shader_range =
             &layout->shader_ranges[next_shader_range_index];
          shader_range->first_set_descriptor = binding->first_set_sampler;
          shader_range->first_dynamic_offset = UINT16_MAX;
          shader_range->first_shader_descriptor = stage_sampler_count;
          shader_range->descriptor_count = binding->descriptor_count;
          if (next_shader_range_index == layout_shader->first_sampler_range ||
-             !terakan_descriptor_set_layout_shader_range_try_extend(
+             !terakan_vk_descriptor_set_layout_shader_range_try_extend(
                 &layout->shader_ranges[next_shader_range_index - 1], shader_range)) {
             ++next_shader_range_index;
          }
@@ -452,14 +452,14 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
       mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
       VkShaderStageFlagBits const stage_flag = mesa_to_vk_shader_stage(stage_index);
 
-      struct terakan_descriptor_set_layout_shader * const layout_shader =
+      struct terakan_vk_descriptor_set_layout_shader * const layout_shader =
          &layout->shaders[stage_index];
       layout_shader->first_uav_range = next_shader_range_index;
 
       for (uint32_t create_info_binding_index = 0;
            create_info_binding_index < non_empty_create_info_binding_count;
            ++create_info_binding_index) {
-         struct terakan_descriptor_set_layout_binding * const binding =
+         struct terakan_vk_descriptor_set_layout_binding * const binding =
             &layout->bindings[sorted_create_info_bindings[create_info_binding_index].binding];
 
          if (!(binding->stage_flags & stage_flag) ||
@@ -469,7 +469,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          assert(terakan_vk_descriptor_type_has_srv(binding->descriptor_type));
 
          assert(next_shader_range_index < shader_range_count);
-         struct terakan_descriptor_set_layout_shader_range * const shader_range =
+         struct terakan_vk_descriptor_set_layout_shader_range * const shader_range =
             &layout->shader_ranges[next_shader_range_index];
          shader_range->first_set_descriptor = binding->first_set_uav;
          shader_range->first_dynamic_offset =
@@ -479,7 +479,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
          shader_range->first_shader_descriptor = binding->first_shader_srvs[stage_index];
          shader_range->descriptor_count = binding->descriptor_count;
          if (next_shader_range_index == layout_shader->first_uav_range ||
-             !terakan_descriptor_set_layout_shader_range_try_extend(
+             !terakan_vk_descriptor_set_layout_shader_range_try_extend(
                 &layout->shader_ranges[next_shader_range_index - 1], shader_range)) {
             ++next_shader_range_index;
          }
@@ -493,7 +493,7 @@ terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
 
    vk_free2(&device->vk.alloc, pAllocator, sorted_create_info_bindings);
 
-   *pSetLayout = terakan_descriptor_set_layout_to_handle(layout);
+   *pSetLayout = terakan_vk_descriptor_set_layout_to_handle(layout);
    return VK_SUCCESS;
 
    /* While Vulkan implementations generally shouldn't perform validation, TeraScale has very low

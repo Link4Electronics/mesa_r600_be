@@ -23,9 +23,9 @@
 
 #include "terakan_bo.h"
 #include "terakan_command_buffer.h"
-#include "terakan_pipeline_layout.h"
 #include "terakan_shader.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_pipeline_layout.h"
 
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -131,13 +131,13 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
       }
    }
 
-   struct terakan_pipeline_layout const * const pipeline_layout =
-      terakan_pipeline_layout_from_handle(create_info->layout);
+   struct terakan_vk_pipeline_layout const * const pipeline_layout =
+      terakan_vk_pipeline_layout_from_handle(create_info->layout);
 
    struct terakan_nir_lower_and_optimize_post_link_options post_link_lowering_options = {
       .next_stage = MESA_SHADER_NONE,
 
-      .get_binding_functions = &terakan_pipeline_layout_get_binding_functions,
+      .get_binding_functions = &terakan_vk_pipeline_layout_get_binding_functions,
       .get_binding_functions_data = pipeline_layout,
 
       /* TODO(Triang3l): `VK_EXT_pipeline_robustness`. */

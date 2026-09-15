@@ -21,13 +21,13 @@
  * IN THE SOFTWARE.
  */
 
-#include "terakan_pipeline_layout.h"
+#include "terakan_vk_pipeline_layout.h"
 
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
-#include "terakan_descriptor_set.h"
-#include "terakan_descriptor_set_layout.h"
 #include "terakan_device.h"
+#include "terakan_vk_descriptor_set.h"
+#include "terakan_vk_descriptor_set_layout.h"
 #include "terakan_vk_entrypoints.h"
 #include "terakan_vk_shader.h"
 
@@ -64,8 +64,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
 
-   struct terakan_pipeline_layout const * const layout =
-      terakan_pipeline_layout_from_handle(layoutHandle);
+   struct terakan_vk_pipeline_layout const * const layout =
+      terakan_vk_pipeline_layout_from_handle(layoutHandle);
 
    bool const is_compute = pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE;
    mesa_shader_stage const shader_stage_first =
@@ -80,26 +80,26 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
 
    for (uint32_t set_relative_index = 0; set_relative_index < descriptorSetCount;
         ++set_relative_index) {
-      struct terakan_pipeline_layout_set const * const layout_set =
+      struct terakan_vk_pipeline_layout_set const * const layout_set =
          &layout->sets[firstSet + set_relative_index];
 
-      struct terakan_descriptor_set const * const set =
-         terakan_descriptor_set_from_handle(pDescriptorSets[set_relative_index]);
+      struct terakan_vk_descriptor_set const * const set =
+         terakan_vk_descriptor_set_from_handle(pDescriptorSets[set_relative_index]);
       if (set == NULL) {
          continue;
       }
-      struct terakan_descriptor_set_layout const * const set_layout = set->layout;
+      struct terakan_vk_descriptor_set_layout const * const set_layout = set->layout;
 
-      struct terakan_descriptor_set_srv const * const set_srvs =
-         (struct terakan_descriptor_set_srv const *)set->descriptors;
-      struct terakan_descriptor_set_sampler const * const set_samplers =
-         (struct terakan_descriptor_set_sampler const *)(set->descriptors +
-                                                         set_layout
-                                                            ->pool_first_sampler_offset_bytes);
+      struct terakan_vk_descriptor_set_srv const * const set_srvs =
+         (struct terakan_vk_descriptor_set_srv const *)set->descriptors;
+      struct terakan_vk_descriptor_set_sampler const * const set_samplers =
+         (struct terakan_vk_descriptor_set_sampler const *)(set->descriptors +
+                                                            set_layout
+                                                               ->pool_first_sampler_offset_bytes);
 
       for (mesa_shader_stage shader_stage = shader_stage_first; shader_stage <= shader_stage_last;
            ++shader_stage) {
-         struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
+         struct terakan_vk_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[shader_stage];
          struct terakan_hw_config_sqk_set_functions const * const sqk_set_functions =
             &terakan_hw_config_sqk_stage_set_functions[shader_stage];
@@ -107,20 +107,20 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
          /* SRVs. */
 
          uint8_t const shader_srv_set_base = layout_set->first_shader_srvs[shader_stage];
-         struct terakan_descriptor_set_layout_shader_range const * const srv_ranges =
+         struct terakan_vk_descriptor_set_layout_shader_range const * const srv_ranges =
             set_layout->shader_ranges + set_layout_shader->first_srv_range;
          for (uint8_t range_index = 0; range_index < set_layout_shader->srv_range_count;
               ++range_index) {
-            struct terakan_descriptor_set_layout_shader_range const * const range =
+            struct terakan_vk_descriptor_set_layout_shader_range const * const range =
                &srv_ranges[range_index];
-            struct terakan_descriptor_set_srv const * const range_set_srvs =
+            struct terakan_vk_descriptor_set_srv const * const range_set_srvs =
                set_srvs + range->first_set_descriptor;
             uint8_t const range_shader_base = shader_srv_set_base + range->first_shader_descriptor;
             if (range->first_dynamic_offset != UINT16_MAX) {
                uint32_t const * const range_dynamic_offsets =
                   set_dynamic_offsets + range->first_dynamic_offset;
                for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
-                  struct terakan_descriptor_set_srv srv = range_set_srvs[srv_index];
+                  struct terakan_vk_descriptor_set_srv srv = range_set_srvs[srv_index];
                   /* Because descriptors for bindings not statically referenced by the pipeline can
                    * be undefined, the BO pointer must not be dereferenced here, as it may point to
                    * an already destroyed BO.
@@ -130,16 +130,17 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                      assert(G_03001C_TYPE(srv.srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_BUFFER);
                      /* #MemoryIntegrity. */
                      VkDeviceSize const srv_buffer_remaining_size =
-                        srv.srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] |
+                        srv.srv
+                           .srv[TERAKAN_VK_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] |
                         ((VkDeviceSize)(srv.srv.srv[7] & 0xFF) << 32);
                      if (unlikely(dynamic_offset >= srv_buffer_remaining_size)) {
                         srv.bo = NULL;
                      } else {
                         /* Enforcing SRV size and base alignment to make sure out-of-bounds access
                          * and invalid alignment behavior is consistent with kcache or UAV access,
-                         * the same way as in `terakan_descriptor_set_write_uniform_buffer` or
-                         * `terakan_descriptor_set_write_storage_buffer`.
-                         * See the `terakan_descriptor_set_srv` description.
+                         * the same way as in `terakan_vk_descriptor_set_write_uniform_buffer` or
+                         * `terakan_vk_descriptor_set_write_storage_buffer`.
+                         * See the `terakan_vk_descriptor_set_srv` description.
                          */
                         uint32_t const srv_alignment_mask =
                            srv.srv.srv[TERAKAN_SRV_BUFFER_PRIORITY_WORD] ==
@@ -160,7 +161,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                         srv.srv.srv[1] = (uint32_t)MIN2(srv.srv.srv[1], srv_buffer_remaining_size -
                                                                            dynamic_offset - 1u) |
                                          srv_alignment_mask;
-                        srv.srv.srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] =
+                        srv.srv
+                           .srv[TERAKAN_VK_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD] =
                            0;
                         srv.srv.srv[7] &= ~(uint32_t)0xFF;
                      }
@@ -170,7 +172,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                }
             } else {
                for (uint8_t srv_index = 0; srv_index < range->descriptor_count; ++srv_index) {
-                  struct terakan_descriptor_set_srv const * const srv = &range_set_srvs[srv_index];
+                  struct terakan_vk_descriptor_set_srv const * const srv =
+                     &range_set_srvs[srv_index];
                   sqk_set_functions->srv(&command_writer->hw_config_sqk,
                                          range_shader_base + srv_index, srv->bo, &srv->srv);
                }
@@ -180,19 +183,19 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
          /* Samplers. */
 
          uint8_t const shader_sampler_set_base = layout_set->first_shader_samplers[shader_stage];
-         struct terakan_descriptor_set_layout_shader_range const * const sampler_ranges =
+         struct terakan_vk_descriptor_set_layout_shader_range const * const sampler_ranges =
             set_layout->shader_ranges + set_layout_shader->first_sampler_range;
          for (uint8_t range_index = 0; range_index < set_layout_shader->sampler_range_count;
               ++range_index) {
-            struct terakan_descriptor_set_layout_shader_range const * const range =
+            struct terakan_vk_descriptor_set_layout_shader_range const * const range =
                &sampler_ranges[range_index];
-            struct terakan_descriptor_set_sampler const * const range_set_samplers =
+            struct terakan_vk_descriptor_set_sampler const * const range_set_samplers =
                set_samplers + range->first_set_descriptor;
             uint8_t const range_shader_base =
                shader_sampler_set_base + range->first_shader_descriptor;
             for (uint8_t sampler_index = 0; sampler_index < range->descriptor_count;
                  ++sampler_index) {
-               struct terakan_descriptor_set_sampler const * const sampler =
+               struct terakan_vk_descriptor_set_sampler const * const sampler =
                   &range_set_samplers[sampler_index];
                /* Skip uninitialized (zeroed in descriptor set allocation) samplers, as descriptors
                 * may be left uninitialized if they're not statically referenced by the pipeline.
@@ -208,22 +211,22 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
 
       /* Unordered access views. */
 
-      struct terakan_descriptor_set_layout_shader const * const set_layout_uav_shader =
+      struct terakan_vk_descriptor_set_layout_shader const * const set_layout_uav_shader =
          &set_layout->shaders[uav_shader_stage];
       if (set_layout_uav_shader->uav_range_count != 0) {
-         struct terakan_descriptor_set_uav const * const set_uavs =
-            (struct terakan_descriptor_set_uav const *)(set->descriptors +
-                                                        set_layout->pool_first_uav_offset_bytes);
+         struct terakan_vk_descriptor_set_uav const * const set_uavs =
+            (struct terakan_vk_descriptor_set_uav const *)(set->descriptors +
+                                                           set_layout->pool_first_uav_offset_bytes);
          assert(layout_set->first_shader_srvs[uav_shader_stage] >= TERAKAN_SRV_RANGE_MUTABLE_BASE);
          uint8_t const shader_uav_set_base =
             layout_set->first_shader_srvs[uav_shader_stage] - TERAKAN_SRV_RANGE_MUTABLE_BASE;
-         struct terakan_descriptor_set_layout_shader_range const * const uav_ranges =
+         struct terakan_vk_descriptor_set_layout_shader_range const * const uav_ranges =
             set_layout->shader_ranges + set_layout_uav_shader->first_uav_range;
          for (uint8_t range_index = 0; range_index < set_layout_uav_shader->uav_range_count;
               ++range_index) {
-            struct terakan_descriptor_set_layout_shader_range const * const range =
+            struct terakan_vk_descriptor_set_layout_shader_range const * const range =
                &uav_ranges[range_index];
-            struct terakan_descriptor_set_uav const * const range_set_uavs =
+            struct terakan_vk_descriptor_set_uav const * const range_set_uavs =
                set_uavs + range->first_set_descriptor;
             uint8_t const range_shader_base = shader_uav_set_base + range->first_shader_descriptor;
             if (range->first_dynamic_offset != UINT16_MAX) {
@@ -236,7 +239,7 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                   assert(shader_uav_index < (is_compute
                                                 ? TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL
                                                 : TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL));
-                  struct terakan_descriptor_set_uav uav = range_set_uavs[uav_index];
+                  struct terakan_vk_descriptor_set_uav uav = range_set_uavs[uav_index];
                   /* Because descriptors for bindings not statically referenced by the pipeline can
                    * be undefined, the BO pointer must not be dereferenced here, as it may point to
                    * an already destroyed BO.
@@ -250,8 +253,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                         uav.bo = NULL;
                      } else {
                         /* Aligning the size and the base consistently with the SRV binding, the
-                         * same way as in `terakan_descriptor_set_write_storage_buffer`.
-                         * See the `terakan_descriptor_set_uav` description.
+                         * same way as in `terakan_vk_descriptor_set_write_storage_buffer`.
+                         * See the `terakan_vk_descriptor_set_uav` description.
                          */
                         uint64_t const uav_va =
                            (((uint64_t)uav.color.base << 8) + uav.color.view + dynamic_offset) &
@@ -284,7 +287,7 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                   for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
                      uint8_t const shader_uav_index = range_shader_base + uav_index;
                      assert(shader_uav_index < TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL);
-                     struct terakan_descriptor_set_uav const * const uav =
+                     struct terakan_vk_descriptor_set_uav const * const uav =
                         &range_set_uavs[uav_index];
                      terakan_app_config_compute_set_cb_color(&command_writer->app_config_compute,
                                                              shader_uav_index, uav->bo,
@@ -294,7 +297,7 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
                   for (uint8_t uav_index = 0; uav_index < range->descriptor_count; ++uav_index) {
                      uint8_t const shader_uav_index = range_shader_base + uav_index;
                      assert(shader_uav_index < TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL);
-                     struct terakan_descriptor_set_uav const * const uav =
+                     struct terakan_vk_descriptor_set_uav const * const uav =
                         &range_set_uavs[uav_index];
                      terakan_app_config_draw_set_cb_color_uav(
                         &command_writer->app_config_draw, shader_uav_index, uav->bo, &uav->color);
@@ -312,10 +315,10 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
  * must most unambiguously describe the expected descriptor type since it's used for logging.
  */
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_binding(nir_binding const * const binding,
-                                    mesa_shader_stage const stage,
-                                    struct terakan_pipeline_layout const * const pipeline_layout,
-                                    VkDescriptorType const * const compatible_types)
+terakan_vk_pipeline_layout_get_binding(
+   nir_binding const * const binding, mesa_shader_stage const stage,
+   struct terakan_vk_pipeline_layout const * const pipeline_layout,
+   VkDescriptorType const * const compatible_types)
 {
    if (unlikely(binding->desc_set >= pipeline_layout->vk.set_count)) {
       vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
@@ -324,9 +327,9 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
               binding->desc_set, pipeline_layout->vk.set_count);
       return terakan_nir_pipeline_layout_binding_empty;
    }
-   struct terakan_descriptor_set_layout const * const descriptor_set_layout =
+   struct terakan_vk_descriptor_set_layout const * const descriptor_set_layout =
       container_of(pipeline_layout->vk.set_layouts[binding->desc_set],
-                   struct terakan_descriptor_set_layout const, vk);
+                   struct terakan_vk_descriptor_set_layout const, vk);
 
    if (unlikely(binding->binding >= descriptor_set_layout->binding_count)) {
       vk_loge(VK_LOG_OBJS(pipeline_layout->vk.base.device),
@@ -335,10 +338,10 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
               binding->desc_set, binding->binding, descriptor_set_layout->binding_count);
       return terakan_nir_pipeline_layout_binding_empty;
    }
-   struct terakan_descriptor_set_layout_binding const * const descriptor_set_binding =
+   struct terakan_vk_descriptor_set_layout_binding const * const descriptor_set_binding =
       &descriptor_set_layout->bindings[binding->binding];
 
-   /* If a `terakan_descriptor_set_layout_binding` has 0 descriptors, its fields may be
+   /* If a `terakan_vk_descriptor_set_layout_binding` has 0 descriptors, its fields may be
     * uninitialized. The inclusive array index range would also be impossible to calculate.
     */
    if (unlikely(descriptor_set_binding->descriptor_count == 0)) {
@@ -358,7 +361,7 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
    struct terakan_nir_pipeline_layout_binding pipeline_layout_binding =
       terakan_nir_pipeline_layout_binding_empty;
    pipeline_layout_binding.array_size = descriptor_set_binding->descriptor_count;
-   struct terakan_pipeline_layout_set * const hw_descriptor_set_layout =
+   struct terakan_vk_pipeline_layout_set * const hw_descriptor_set_layout =
       &pipeline_layout->sets[binding->desc_set];
    /* TODO(Triang3l): Kcache when allocation is set up. */
    if (terakan_vk_descriptor_type_has_sampler(descriptor_set_binding->descriptor_type)) {
@@ -389,90 +392,90 @@ terakan_pipeline_layout_get_binding(nir_binding const * const binding,
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_sampler_binding(nir_binding const * const binding,
-                                            mesa_shader_stage const stage,
-                                            void const * const callback_data)
+terakan_vk_pipeline_layout_get_sampler_binding(nir_binding const * const binding,
+                                               mesa_shader_stage const stage,
+                                               void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_SAMPLER,
                                                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                                                        VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_sampled_image_binding(nir_binding const * const binding,
-                                                  mesa_shader_stage const stage,
-                                                  void const * const callback_data)
+terakan_vk_pipeline_layout_get_sampled_image_binding(nir_binding const * const binding,
+                                                     mesa_shader_stage const stage,
+                                                     void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {
       VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
       VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_storage_image_binding(nir_binding const * const binding,
-                                                  mesa_shader_stage const stage,
-                                                  void const * const callback_data)
+terakan_vk_pipeline_layout_get_storage_image_binding(nir_binding const * const binding,
+                                                     mesa_shader_stage const stage,
+                                                     void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                                        VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_storage_texel_buffer_binding(nir_binding const * const binding,
-                                                         mesa_shader_stage const stage,
-                                                         void const * const callback_data)
+terakan_vk_pipeline_layout_get_storage_texel_buffer_binding(nir_binding const * const binding,
+                                                            mesa_shader_stage const stage,
+                                                            void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                                                        VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_uniform_buffer_binding(nir_binding const * const binding,
-                                                   mesa_shader_stage const stage,
-                                                   void const * const callback_data)
+terakan_vk_pipeline_layout_get_uniform_buffer_binding(nir_binding const * const binding,
+                                                      mesa_shader_stage const stage,
+                                                      void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                                                        VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 static struct terakan_nir_pipeline_layout_binding
-terakan_pipeline_layout_get_storage_buffer_binding(nir_binding const * const binding,
-                                                   mesa_shader_stage const stage,
-                                                   void const * const callback_data)
+terakan_vk_pipeline_layout_get_storage_buffer_binding(nir_binding const * const binding,
+                                                      mesa_shader_stage const stage,
+                                                      void const * const callback_data)
 {
    static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
                                                        VK_DESCRIPTOR_TYPE_MAX_ENUM};
-   return terakan_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
 }
 
 struct terakan_nir_get_pipeline_layout_binding_functions const
-   terakan_pipeline_layout_get_binding_functions = {
-      .sampler = terakan_pipeline_layout_get_sampler_binding,
-      .sampled_image = terakan_pipeline_layout_get_sampled_image_binding,
-      .storage_image = terakan_pipeline_layout_get_storage_image_binding,
-      .storage_texel_buffer = terakan_pipeline_layout_get_storage_texel_buffer_binding,
-      .uniform_buffer = terakan_pipeline_layout_get_uniform_buffer_binding,
-      .storage_buffer = terakan_pipeline_layout_get_storage_buffer_binding,
+   terakan_vk_pipeline_layout_get_binding_functions = {
+      .sampler = terakan_vk_pipeline_layout_get_sampler_binding,
+      .sampled_image = terakan_vk_pipeline_layout_get_sampled_image_binding,
+      .storage_image = terakan_vk_pipeline_layout_get_storage_image_binding,
+      .storage_texel_buffer = terakan_vk_pipeline_layout_get_storage_texel_buffer_binding,
+      .uniform_buffer = terakan_vk_pipeline_layout_get_uniform_buffer_binding,
+      .storage_buffer = terakan_vk_pipeline_layout_get_storage_buffer_binding,
 };
 
 VkResult
-terakan_pipeline_layout_create(struct terakan_device * const device,
-                               VkPipelineLayoutCreateInfo const * const create_info,
-                               VkShaderStageFlags const stage_mask,
-                               struct terakan_pipeline_layout ** const pipeline_layout_out)
+terakan_vk_pipeline_layout_create(struct terakan_device * const device,
+                                  VkPipelineLayoutCreateInfo const * const create_info,
+                                  VkShaderStageFlags const stage_mask,
+                                  struct terakan_vk_pipeline_layout ** const pipeline_layout_out)
 {
    assert(!(stage_mask & ~(VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT)));
 
    VK_MULTIALLOC(multialloc);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_pipeline_layout, layout, 1);
-   VK_MULTIALLOC_DECL(&multialloc, struct terakan_pipeline_layout_set, sets,
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_pipeline_layout, layout, 1);
+   VK_MULTIALLOC_DECL(&multialloc, struct terakan_vk_pipeline_layout_set, sets,
                       create_info->setLayoutCount);
    /* Mesa pipeline layout has a different lifetime than the corresponding VkPipelineLayout since
     * other objects hold additional references to them, allocation must be done in the device scope.
@@ -492,13 +495,13 @@ terakan_pipeline_layout_create(struct terakan_device * const device,
       if (set_layout_base == NULL) {
          continue;
       }
-      struct terakan_descriptor_set_layout const * const set_layout =
-         container_of(set_layout_base, struct terakan_descriptor_set_layout const, vk);
-      struct terakan_pipeline_layout_set * const set = &layout->sets[set_index];
+      struct terakan_vk_descriptor_set_layout const * const set_layout =
+         container_of(set_layout_base, struct terakan_vk_descriptor_set_layout const, vk);
+      struct terakan_vk_pipeline_layout_set * const set = &layout->sets[set_index];
 
       for (VkShaderStageFlags stages_remaining = stage_mask; stages_remaining;) {
          mesa_shader_stage const stage_index = terakan_vk_shader_stage_scan(&stages_remaining);
-         struct terakan_descriptor_set_layout_shader const * const set_layout_shader =
+         struct terakan_vk_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[stage_index];
 
          uint8_t const first_mutable_shader_srv = next_first_mutable_shader_srvs[stage_index];
@@ -569,13 +572,13 @@ terakan_vk_CreatePipelineLayout(VkDevice const deviceHandle,
                                 UNUSED VkAllocationCallbacks const * const pAllocator,
                                 VkPipelineLayout * const pPipelineLayout)
 {
-   struct terakan_pipeline_layout * layout;
-   VkResult const result = terakan_pipeline_layout_create(
+   struct terakan_vk_pipeline_layout * layout;
+   VkResult const result = terakan_vk_pipeline_layout_create(
       terakan_device_from_handle(deviceHandle), pCreateInfo,
       VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT, &layout);
    if (result != VK_SUCCESS) {
       return result;
    }
-   *pPipelineLayout = terakan_pipeline_layout_to_handle(layout);
+   *pPipelineLayout = terakan_vk_pipeline_layout_to_handle(layout);
    return VK_SUCCESS;
 }

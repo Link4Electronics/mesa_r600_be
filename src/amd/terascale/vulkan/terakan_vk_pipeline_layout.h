@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_PIPELINE_LAYOUT_H
-#define TERAKAN_PIPELINE_LAYOUT_H
+#ifndef TERAKAN_VK_PIPELINE_LAYOUT_H
+#define TERAKAN_VK_PIPELINE_LAYOUT_H
 
 #include "nir/terakan_nir.h"
 
@@ -35,16 +35,16 @@
 extern "C" {
 #endif
 
-struct terakan_pipeline_layout_set {
+struct terakan_vk_pipeline_layout_set {
    uint8_t first_shader_srvs[MESA_SHADER_STAGES];
    uint8_t first_shader_uniform_buffers[MESA_SHADER_STAGES];
    uint8_t first_shader_samplers[MESA_SHADER_STAGES];
 };
 
-struct terakan_pipeline_layout {
+struct terakan_vk_pipeline_layout {
    struct vk_pipeline_layout vk;
 
-   struct terakan_pipeline_layout_set * sets;
+   struct terakan_vk_pipeline_layout_set * sets;
 
    uint32_t shader_non_immutable_samplers[MESA_SHADER_STAGES];
    uint32_t shader_immutable_samplers_unnormalized_coordinates[MESA_SHADER_STAGES];
@@ -52,22 +52,21 @@ struct terakan_pipeline_layout {
    uint32_t shader_app_push_constants_extents_bytes[MESA_SHADER_STAGES];
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_pipeline_layout, vk.base, VkPipelineLayout,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_pipeline_layout, vk.base, VkPipelineLayout,
                                VK_OBJECT_TYPE_PIPELINE_LAYOUT)
 
-/* The callback data is the `terakan_pipeline_layout` pointer. */
+/* The callback data is the `terakan_vk_pipeline_layout` pointer. */
 extern struct terakan_nir_get_pipeline_layout_binding_functions const
-   terakan_pipeline_layout_get_binding_functions;
+   terakan_vk_pipeline_layout_get_binding_functions;
 
 struct terakan_device;
 
-VkResult terakan_pipeline_layout_create(struct terakan_device * device,
-                                        VkPipelineLayoutCreateInfo const * create_info,
-                                        VkShaderStageFlags stage_mask,
-                                        struct terakan_pipeline_layout ** pipeline_layout_out);
+VkResult terakan_vk_pipeline_layout_create(
+   struct terakan_device * device, VkPipelineLayoutCreateInfo const * create_info,
+   VkShaderStageFlags stage_mask, struct terakan_vk_pipeline_layout ** pipeline_layout_out);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_PIPELINE_LAYOUT_H */
+#endif /* TERAKAN_VK_PIPELINE_LAYOUT_H */

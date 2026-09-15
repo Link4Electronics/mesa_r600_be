@@ -21,12 +21,12 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_DESCRIPTOR_SET_H
-#define TERAKAN_DESCRIPTOR_SET_H
+#ifndef TERAKAN_VK_DESCRIPTOR_SET_H
+#define TERAKAN_VK_DESCRIPTOR_SET_H
 
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
-#include "terakan_descriptor_set_layout.h"
+#include "terakan_vk_descriptor_set_layout.h"
 #include "terakan_vk_sampler.h"
 
 #include "util/macros.h"
@@ -42,10 +42,10 @@
 extern "C" {
 #endif
 
-#define TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD                              \
+#define TERAKAN_VK_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD                           \
    (5 + (TERAKAN_SRV_BUFFER_PRIORITY_WORD == 5))
 
-struct terakan_descriptor_set_srv {
+struct terakan_vk_descriptor_set_srv {
    /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
 
@@ -62,13 +62,13 @@ struct terakan_descriptor_set_srv {
     * already been destroyed, if it's not known that the descriptor will be statically used, when
     * binding the set), bindings with dynamic offset have the remaining `VkBuffer` size since the
     * base in bytes in:
-    * [31: 0] - srv[TERAKAN_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD]
+    * [31: 0] - srv[TERAKAN_VK_DESCRIPTOR_SET_SRV_DYNAMIC_OFFSET_BUFFER_SIZE_LO_WORD]
     * [39:32] - srv[7][7:0]
     */
    struct terakan_srv_descriptor srv;
 };
 
-struct terakan_descriptor_set_sampler {
+struct terakan_vk_descriptor_set_sampler {
    /* The sampler constant itself, not a pointer to the sampler object, is stored, because
     * descriptors in bindings not statically used by the pipeline can be undefined according to the
     * "Allocation of Descriptor Sets" section of the Vulkan specification, and thus descriptors of
@@ -79,14 +79,15 @@ struct terakan_descriptor_set_sampler {
 };
 
 static inline void
-terakan_descriptor_set_sampler_init(struct terakan_descriptor_set_sampler * const sampler_descriptor,
-                                    struct terakan_vk_sampler const * const sampler)
+terakan_vk_descriptor_set_sampler_init(
+   struct terakan_vk_descriptor_set_sampler * const sampler_descriptor,
+   struct terakan_vk_sampler const * const sampler)
 {
    sampler_descriptor->sampler = sampler->sampler;
    sampler_descriptor->unnormalized_coordinates = sampler->unnormalized_coordinates;
 }
 
-struct terakan_descriptor_set_uav {
+struct terakan_vk_descriptor_set_uav {
    /* If the BO is NULL, the descriptor contents should be ignored. */
    struct terakan_bo const * bo;
 
@@ -109,35 +110,36 @@ struct terakan_descriptor_set_uav {
    struct terakan_color_descriptor color;
 };
 
-#define TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT                                                \
-   MAX3(alignof(struct terakan_descriptor_set_srv),                                                \
-        alignof(struct terakan_descriptor_set_sampler),                                            \
-        alignof(struct terakan_descriptor_set_uav))
+#define TERAKAN_VK_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT                                             \
+   MAX3(alignof(struct terakan_vk_descriptor_set_srv),                                             \
+        alignof(struct terakan_vk_descriptor_set_sampler),                                         \
+        alignof(struct terakan_vk_descriptor_set_uav))
 
 static_assert(
-   (sizeof(struct terakan_descriptor_set_srv) % TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
-      (sizeof(struct terakan_descriptor_set_sampler) %
-       TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
-      (sizeof(struct terakan_descriptor_set_uav) % TERAKAN_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) ==
-         0,
+   (sizeof(struct terakan_vk_descriptor_set_srv) %
+    TERAKAN_VK_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
+      (sizeof(struct terakan_vk_descriptor_set_sampler) %
+       TERAKAN_VK_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0 &&
+      (sizeof(struct terakan_vk_descriptor_set_uav) %
+       TERAKAN_VK_DESCRIPTOR_SET_DESCRIPTOR_ALIGNMENT) == 0,
    "Assuming that descriptors of different types can be tightly packed in descriptor sets "
    "arbitrarily, and placing descriptors of any different types next to each other won't cause "
    "them to become misaligned. If this expectation stops being true, add padding to the "
    "underaligned structures using `alignas`, or wrap all descriptor structures in "
    "`#pragma pack(push, 4)`.");
 
-struct terakan_descriptor_set {
+struct terakan_vk_descriptor_set {
    struct vk_object_base base;
 
    /* The part readable by writing and binding. */
 
-   struct terakan_descriptor_set_layout * layout;
+   struct terakan_vk_descriptor_set_layout * layout;
 
    /* Note that descriptor memory is zeroed on allocation in the driver, so undefined descriptors,
     * as long as Vulkan valid usage rules are respected, should still be valid
-    * `terakan_descriptor_set_*` structures of the hardware descriptor types expected at the given
-    * locations in the descriptor set memory, representing either null descriptors (including ones
-    * produced by zero initialization) or non-null descriptors.
+    * `terakan_vk_descriptor_set_*` structures of the hardware descriptor types expected at the
+    * given locations in the descriptor set memory, representing either null descriptors (including
+    * ones produced by zero initialization) or non-null descriptors.
     *
     * This means that assumptions (such as in assertions, though preferably not those that can
     * potentially result in bypassing #MemoryIntegrity sanitization) about the consistency of the
@@ -159,10 +161,10 @@ struct terakan_descriptor_set {
    uint32_t pool_allocated_or_freed_next;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_descriptor_set, base, VkDescriptorSet,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_descriptor_set, base, VkDescriptorSet,
                                VK_OBJECT_TYPE_DESCRIPTOR_SET)
 
-struct terakan_descriptor_pool {
+struct terakan_vk_descriptor_pool {
    struct vk_object_base base;
 
    size_t descriptor_memory_size;
@@ -170,7 +172,7 @@ struct terakan_descriptor_pool {
    struct util_vma_heap descriptor_memory_heap;
    size_t descriptor_memory_unallocated;
 
-   struct terakan_descriptor_set * sets;
+   struct terakan_vk_descriptor_set * sets;
    uint32_t max_sets;
 
    /* Lists are terminated with UINT32_MAX. */
@@ -182,11 +184,11 @@ struct terakan_descriptor_pool {
    uint32_t freed_sets_head;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_descriptor_pool, base, VkDescriptorPool,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_descriptor_pool, base, VkDescriptorPool,
                                VK_OBJECT_TYPE_DESCRIPTOR_POOL)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_DESCRIPTOR_SET_H */
+#endif /* TERAKAN_VK_DESCRIPTOR_SET_H */

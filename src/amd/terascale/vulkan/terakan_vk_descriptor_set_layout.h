@@ -21,8 +21,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef TERAKAN_DESCRIPTOR_SET_LAYOUT_H
-#define TERAKAN_DESCRIPTOR_SET_LAYOUT_H
+#ifndef TERAKAN_VK_DESCRIPTOR_SET_LAYOUT_H
+#define TERAKAN_VK_DESCRIPTOR_SET_LAYOUT_H
 
 #include "compiler/shader_enums.h"
 #include "vk_descriptor_set_layout.h"
@@ -66,7 +66,7 @@ terakan_vk_descriptor_type_has_uav(VkDescriptorType const descriptor_type)
    return true;
 }
 
-struct terakan_descriptor_set_layout_binding {
+struct terakan_vk_descriptor_set_layout_binding {
    VkDescriptorType descriptor_type;
 
    /* If descriptor_count is 0, all other fields are invalid.
@@ -99,7 +99,7 @@ struct terakan_descriptor_set_layout_binding {
    uint8_t first_shader_samplers[MESA_SHADER_STAGES];
 };
 
-struct terakan_descriptor_set_layout_shader_range {
+struct terakan_vk_descriptor_set_layout_shader_range {
    /* Of the range's type. */
    uint16_t first_set_descriptor;
    /* UINT16_MAX if not using a dynamic offset. */
@@ -109,7 +109,7 @@ struct terakan_descriptor_set_layout_shader_range {
    uint8_t descriptor_count;
 };
 
-struct terakan_descriptor_set_layout_shader {
+struct terakan_vk_descriptor_set_layout_shader {
    uint32_t non_immutable_samplers;
    uint32_t immutable_samplers_unnormalized_coordinates;
 
@@ -125,7 +125,7 @@ struct terakan_descriptor_set_layout_shader {
    uint8_t sampler_count;
 };
 
-struct terakan_descriptor_set_layout {
+struct terakan_vk_descriptor_set_layout {
    struct vk_descriptor_set_layout vk;
 
    /* SRVs are the in the beginning of the set's descriptor memory. */
@@ -149,18 +149,18 @@ struct terakan_descriptor_set_layout {
    struct terakan_vk_sampler const ** immutable_samplers;
 
    /* Primarily for binding. */
-   struct terakan_descriptor_set_layout_shader_range * shader_ranges;
-   struct terakan_descriptor_set_layout_shader shaders[MESA_SHADER_STAGES];
+   struct terakan_vk_descriptor_set_layout_shader_range * shader_ranges;
+   struct terakan_vk_descriptor_set_layout_shader shaders[MESA_SHADER_STAGES];
 
    size_t binding_count;
-   struct terakan_descriptor_set_layout_binding * bindings;
+   struct terakan_vk_descriptor_set_layout_binding * bindings;
 };
 
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_descriptor_set_layout, vk.base, VkDescriptorSetLayout,
+VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_vk_descriptor_set_layout, vk.base, VkDescriptorSetLayout,
                                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TERAKAN_DESCRIPTOR_SET_LAYOUT_H */
+#endif /* TERAKAN_VK_DESCRIPTOR_SET_LAYOUT_H */
