@@ -632,7 +632,9 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
                                           TERAKAN_META_SHADER_COPY_BUFFER_TO_IMAGE_PS);
 
    uint32_t constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    for (uint32_t region_index = 0; region_index < pCopyBufferToImageInfo->regionCount;
         ++region_index) {
@@ -661,29 +663,16 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
             1u;
       uint64_t buffer_offset = region->bufferOffset;
 
-      if (constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] !=
-             region_image.rect_blocks.bounds[0][0] ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] !=
-             region_image.rect_blocks.bounds[0][1] ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] !=
-             region_image.buffer_y_pitch_blocks ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] !=
-             (uint32_t)region_image.buffer_z_pitch_blocks) {
-         constants_set = false;
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
-            region_image.rect_blocks.bounds[0][0];
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
-            region_image.rect_blocks.bounds[0][1];
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
-            region_image.buffer_y_pitch_blocks;
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
-            (uint32_t)region_image.buffer_z_pitch_blocks;
-      }
-      if (!constants_set) {
-         terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
+         region_image.rect_blocks.bounds[0][0];
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
+         region_image.rect_blocks.bounds[0][1];
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
+         region_image.buffer_y_pitch_blocks;
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
+         (uint32_t)region_image.buffer_z_pitch_blocks;
+      terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
-         constants_set = true;
-      }
 
       do {
          if (unlikely(buffer_offset >= buffer->vk.size)) {
@@ -768,7 +757,9 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
                                           TERAKAN_META_SHADER_COPY_IMAGE_TO_BUFFER_PS);
 
    uint32_t constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    uint8_t const pipe_interleave_bytes_log2 =
       terakan_gfx_command_writer_physical_device(command_writer)->tiling_info
@@ -839,32 +830,17 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
                                        TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META, image->bo,
                                        &image_descriptor);
 
-      int32_t const image_offset_x_minus_buffer_offset =
-         (int32_t)region_image.rect_blocks.bounds[0][0] -
-         (int32_t)buffer_uav_alignment_offset_blocks;
-      if (constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] !=
-             (uint32_t)image_offset_x_minus_buffer_offset ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] !=
-             (uint32_t)region_image.rect_blocks.bounds[0][1] ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] !=
-             region_image.buffer_y_pitch_blocks ||
-          constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] !=
-             (uint32_t)region_image.buffer_z_pitch_blocks) {
-         constants_set = false;
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
-            (uint32_t)image_offset_x_minus_buffer_offset;
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
-            (uint32_t)region_image.rect_blocks.bounds[0][1];
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
-            region_image.buffer_y_pitch_blocks;
-         constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
-            (uint32_t)region_image.buffer_z_pitch_blocks;
-      }
-      if (!constants_set) {
-         terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
+         (uint32_t)((int32_t)region_image.rect_blocks.bounds[0][0] -
+                    (int32_t)buffer_uav_alignment_offset_blocks);
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
+         (uint32_t)region_image.rect_blocks.bounds[0][1];
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
+         region_image.buffer_y_pitch_blocks;
+      constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
+         (uint32_t)region_image.buffer_z_pitch_blocks;
+      terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
-         constants_set = true;
-      }
 
       terakan_meta_draw_rect(
          command_writer, region_image.rect_blocks,

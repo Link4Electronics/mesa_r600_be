@@ -165,32 +165,65 @@ terakan_meta_config_draw_set_kcache_push_constant_buffer_ps(
                                        va_lines);
 }
 
-/* Helper function. */
-static inline bool
-terakan_meta_config_draw_set_kcache_push_constants(
-   struct terakan_gfx_command_writer * const command_writer, uint32_t const constants_size_bytes,
-   void const * const constants, bool const set_for_vs, bool const set_for_ps)
+struct terakan_meta_config_push_constants_state {
+   /* Storage of the last written values, for only writing again if the constants have been changed.
+    * Stored separately by the owner of this structure for comparing, because the BO mapping may
+    * likely point to uncached memory.
+    */
+   void * old_values;
+   struct terakan_bo const * bo;
+   uint32_t va_lines;
+   uint32_t size_bytes;
+};
+
+static inline struct terakan_meta_config_push_constants_state
+terakan_meta_config_push_constants_state_init(uint32_t const size_bytes, void * const old_values)
 {
-   struct terakan_bo const * constants_bo = NULL;
-   uint32_t constants_va_lines;
-   void * const constants_mapping =
-      terakan_push_buffer_allocate_kcache(command_writer->base.command_buffer, constants_size_bytes,
-                                          &constants_bo, &constants_va_lines);
-   if (unlikely(constants_mapping == NULL)) {
-      return false;
+   return (struct terakan_meta_config_push_constants_state){
+      .size_bytes = size_bytes,
+      .old_values = old_values,
+   };
+}
+
+/* Helper function. */
+static inline void
+terakan_meta_config_update_push_constants(
+   struct terakan_gfx_command_writer * const command_writer,
+   struct terakan_meta_config_push_constants_state * const state, void const * const new_values)
+{
+   /* Must not use the same storage, otherwise there would be nothing to compare the new values to.
+    */
+   assert(new_values != state->old_values);
+   if (state->bo != NULL && memcmp(state->old_values, new_values, state->size_bytes) != 0) {
+      state->bo = NULL;
    }
-   memcpy(constants_mapping, constants, constants_size_bytes);
-   uint32_t const constants_size_lines =
-      DIV_ROUND_UP(constants_size_bytes, TERAKAN_KCACHE_HW_LINE_BYTES);
+   if (state->bo == NULL) {
+      void * const mapping = terakan_push_buffer_allocate_kcache(
+         command_writer->base.command_buffer, state->size_bytes, &state->bo, &state->va_lines);
+      if (likely(mapping != NULL)) {
+         memcpy(mapping, new_values, state->size_bytes);
+         memcpy(state->old_values, new_values, state->size_bytes);
+      }
+   }
+}
+
+/* Helper function. */
+static inline void
+terakan_meta_config_draw_update_kcache_push_constants(
+   struct terakan_gfx_command_writer * const command_writer,
+   struct terakan_meta_config_push_constants_state * const state, void const * const new_values,
+   bool const set_for_vs, bool const set_for_ps)
+{
+   terakan_meta_config_update_push_constants(command_writer, state, new_values);
+   uint32_t const size_lines = DIV_ROUND_UP(state->size_bytes, TERAKAN_KCACHE_HW_LINE_BYTES);
    if (set_for_vs) {
-      terakan_meta_config_draw_set_kcache_push_constant_buffer_vs(
-         command_writer, constants_size_lines, constants_bo, constants_va_lines);
+      terakan_meta_config_draw_set_kcache_push_constant_buffer_vs(command_writer, size_lines,
+                                                                  state->bo, state->va_lines);
    }
    if (set_for_ps) {
-      terakan_meta_config_draw_set_kcache_push_constant_buffer_ps(
-         command_writer, constants_size_lines, constants_bo, constants_va_lines);
+      terakan_meta_config_draw_set_kcache_push_constant_buffer_ps(command_writer, size_lines,
+                                                                  state->bo, state->va_lines);
    }
-   return true;
 }
 
 static inline void

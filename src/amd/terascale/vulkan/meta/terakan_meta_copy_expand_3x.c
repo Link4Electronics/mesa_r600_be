@@ -401,7 +401,9 @@ terakan_meta_copy_expand_3x_buffer_to_image(
       terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    for (uint32_t region_index = 0; region_index < copy_buffer_to_image_info->regionCount;
         ++region_index) {
@@ -423,9 +425,6 @@ terakan_meta_copy_expand_3x_buffer_to_image(
       image_descriptor.dim = ((uint32_t)surface_level->aligned_extent_surfels[0] *
                               surface_level->aligned_extent_surfels[1]) -
                              1u;
-      uint32_t const image_texel_offset_surfels =
-         3u * region_image.rect_blocks.bounds[0][0] +
-         surface_level->aligned_extent_surfels[0] * (uint32_t)region_image.rect_blocks.bounds[0][1];
 
       uint64_t const buffer_slice_extent_bytes_minus_1 =
          bytes_per_block *
@@ -436,22 +435,14 @@ terakan_meta_copy_expand_3x_buffer_to_image(
       uint64_t const buffer_z_pitch_bytes = bytes_per_block * region_image.buffer_z_pitch_blocks;
       uint64_t buffer_offset = region->bufferOffset;
 
-      if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] !=
-             (uint32_t)buffer_y_pitch_surfels ||
-          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] !=
-             surface_level->aligned_extent_surfels[0] ||
-          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] != image_texel_offset_surfels) {
-         constants_set = false;
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] = (uint32_t)buffer_y_pitch_surfels;
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
-            surface_level->aligned_extent_surfels[0];
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] = image_texel_offset_surfels;
-      }
-      if (!constants_set) {
-         terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] = (uint32_t)buffer_y_pitch_surfels;
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
+         surface_level->aligned_extent_surfels[0];
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
+         3u * region_image.rect_blocks.bounds[0][0] +
+         surface_level->aligned_extent_surfels[0] * (uint32_t)region_image.rect_blocks.bounds[0][1];
+      terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
-         constants_set = true;
-      }
 
       struct terakan_screen_rect const region_extent_rect = {
          .bounds = {
@@ -513,7 +504,9 @@ terakan_meta_copy_expand_3x_image_to_buffer(
       terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    for (uint32_t region_index = 0; region_index < copy_image_to_buffer_info->regionCount;
         ++region_index) {
@@ -556,15 +549,9 @@ terakan_meta_copy_expand_3x_image_to_buffer(
       image_descriptor.srv[1] = bytes_per_block * (uint32_t)region_extent_rect.bounds[1][0] - 1u +
                                 image_y_pitch_bytes * (region_extent_rect.bounds[1][1] - 1u);
 
-      if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] !=
-             surface_level->aligned_extent_surfels[0] ||
-          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] !=
-             (uint32_t)buffer_y_pitch_surfels) {
-         constants_set = false;
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
-            surface_level->aligned_extent_surfels[0];
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] = (uint32_t)buffer_y_pitch_surfels;
-      }
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
+         surface_level->aligned_extent_surfels[0];
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] = (uint32_t)buffer_y_pitch_surfels;
 
       for (uint32_t subresource_range_slice = 0;
            subresource_range_slice <
@@ -606,17 +593,10 @@ terakan_meta_copy_expand_3x_image_to_buffer(
                                           TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
                                           image->bo, &image_descriptor);
 
-         if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] !=
-             buffer_uav_alignment_offset_surfels) {
-            constants_set = false;
-            constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
-               buffer_uav_alignment_offset_surfels;
-         }
-         if (!constants_set) {
-            terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
+            buffer_uav_alignment_offset_surfels;
+         terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                                constants, false, true);
-            constants_set = true;
-         }
 
          terakan_meta_draw_rect(command_writer, region_extent_rect, 1);
 
@@ -659,7 +639,9 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
       terakan_meta_transfer_expand_3x_uav(dst_surface_aspect->bytes_per_block / 3u);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    for (uint32_t region_index = 0; region_index < copy_image_info->regionCount; ++region_index) {
       VkImageCopy2 const * const region = &copy_image_info->pRegions[region_index];
@@ -756,26 +738,15 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
                             dst_surface_level->aligned_extent_surfels[1]) -
                            1u;
 
-      uint32_t const dst_texel_offset_surfels =
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
+         src_surface_level->aligned_extent_surfels[0];
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
+         dst_surface_level->aligned_extent_surfels[0];
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
          3u * (uint32_t)region->dstOffset.x +
          dst_surface_level->aligned_extent_surfels[0] * (uint32_t)region->dstOffset.y;
-      if (constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] !=
-             src_surface_level->aligned_extent_surfels[0] ||
-          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] !=
-             dst_surface_level->aligned_extent_surfels[0] ||
-          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] != dst_texel_offset_surfels) {
-         constants_set = false;
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
-            src_surface_level->aligned_extent_surfels[0];
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
-            dst_surface_level->aligned_extent_surfels[0];
-         constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] = dst_texel_offset_surfels;
-      }
-      if (!constants_set) {
-         terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+      terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
-         constants_set = true;
-      }
 
       uint32_t const region_slice_count = MIN2(src_subresource_range.max_depth_or_layer_count,
                                                dst_subresource_range.max_depth_or_layer_count);

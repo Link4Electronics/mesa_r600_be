@@ -235,7 +235,9 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
    terakan_meta_config_draw_set_sq_pgm_ps(command_writer, TERAKAN_META_SHADER_COPY_IMAGE_PS);
 
    int32_t constants[TERAKAN_META_COPY_IMAGE_CONSTS_COUNT] = {};
-   bool constants_set = false;
+   char old_constants[sizeof(constants)];
+   struct terakan_meta_config_push_constants_state constants_state =
+      terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
    for (uint32_t region_index = 0; region_index < pCopyImageInfo->regionCount; ++region_index) {
       VkImageCopy2 const * const region = &pCopyImageInfo->pRegions[region_index];
@@ -259,21 +261,12 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
          .offset = {.x = dst_offset_blocks.x, .y = dst_offset_blocks.y},
          .extent = {.width = extent_blocks.width, .height = extent_blocks.height}};
 
-      int32_t const src_minus_dst_offset_x = src_offset_blocks.x - dst_region_rect.offset.x;
-      int32_t const src_minus_dst_offset_y = src_offset_blocks.y - dst_region_rect.offset.y;
-      if (constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_X] !=
-             src_minus_dst_offset_x ||
-          constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_Y] !=
-             src_minus_dst_offset_y) {
-         constants_set = NULL;
-         constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_X] = src_minus_dst_offset_x;
-         constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_Y] = src_minus_dst_offset_y;
-      }
-      if (!constants_set) {
-         terakan_meta_config_draw_set_kcache_push_constants(command_writer, sizeof(constants),
+      constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_X] =
+         src_offset_blocks.x - dst_region_rect.offset.x;
+      constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_Y] =
+         src_offset_blocks.y - dst_region_rect.offset.y;
+      terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
-         constants_set = true;
-      }
 
       unsigned src_vk_aspect_mask_remaining = (unsigned)region->srcSubresource.aspectMask;
       u_foreach_bit (dst_vk_aspect_bit_index, region->dstSubresource.aspectMask) {

@@ -602,8 +602,18 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
       float const depth_clear_constants[TERAKAN_META_CLEAR_DEPTH_CONSTS_COUNT] = {
          [TERAKAN_META_CLEAR_DEPTH_CONST_CLEAR_VALUE] = depth_stencil_clear_value.depth,
       };
-      terakan_meta_config_draw_set_kcache_push_constants(
-         command_writer, sizeof(depth_clear_constants), depth_clear_constants, true, false);
+      struct terakan_bo const * depth_clear_constants_bo;
+      uint32_t depth_clear_constants_va_lines;
+      void * const depth_clear_constants_mapping = terakan_push_buffer_allocate_kcache(
+         command_writer->base.command_buffer, sizeof(depth_clear_constants),
+         &depth_clear_constants_bo, &depth_clear_constants_va_lines);
+      if (unlikely(depth_clear_constants_mapping == NULL)) {
+         return;
+      }
+      memcpy(depth_clear_constants_mapping, depth_clear_constants, sizeof(depth_clear_constants));
+      terakan_meta_config_draw_set_kcache_push_constant_buffer_vs(
+         command_writer, DIV_ROUND_UP(sizeof(depth_clear_constants), TERAKAN_KCACHE_HW_LINE_BYTES),
+         depth_clear_constants_bo, depth_clear_constants_va_lines);
 
       uint32_t const depth_stencil_slice_start =
          G_028008_SLICE_START(depth_stencil_descriptor.view);
@@ -644,6 +654,12 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
                                              TERAKAN_META_SHADER_POSITION_AND_LAYER_FROM_INDEX_VS);
       terakan_meta_config_draw_set_sq_pgm_ps(command_writer, TERAKAN_META_SHADER_CLEAR_COLOR_PS);
 
+      uint32_t color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONSTS_COUNT] = {};
+      char old_color_clear_constants[sizeof(color_clear_constants)];
+      struct terakan_meta_config_push_constants_state color_clear_constants_state =
+         terakan_meta_config_push_constants_state_init(sizeof(old_color_clear_constants),
+                                                       old_color_clear_constants);
+
       u_foreach_bit (color_attachment_index, color_clear_attachments) {
          struct terakan_app_config_draw_cb_color_rtv const * const render_pass_rtv =
             terakan_app_config_draw_get_cb_color_rtv(&command_writer->app_config_draw,
@@ -655,14 +671,12 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
 
          uint32_t const * const color_clear_value =
             color_clear_values[color_attachment_index].uint32;
-         uint32_t const color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONSTS_COUNT] = {
-            [TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_R] = color_clear_value[0],
-            [TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_G] = color_clear_value[1],
-            [TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_B] = color_clear_value[2],
-            [TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_A] = color_clear_value[3],
-         };
-         terakan_meta_config_draw_set_kcache_push_constants(
-            command_writer, sizeof(color_clear_constants), color_clear_constants, false, true);
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_R] = color_clear_value[0];
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_G] = color_clear_value[1];
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_B] = color_clear_value[2];
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_A] = color_clear_value[3];
+         terakan_meta_config_draw_update_kcache_push_constants(
+            command_writer, &color_clear_constants_state, color_clear_constants, false, true);
 
          uint32_t const render_pass_rtv_slice_start =
             G_028C6C_SLICE_START(render_pass_rtv->color.view);
