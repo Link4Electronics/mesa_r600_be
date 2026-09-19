@@ -46,6 +46,23 @@
 extern "C" {
 #endif
 
+/* Note that section 2.4 "Instruction Types and Grouping" of Evergreen Family Instruction Set
+ * Architecture says:
+ *
+ *     "When a program is organized in memory, the instructions must be ordered as follows:
+ *     - All CF instructions.
+ *     - All ALU clauses.
+ *     - All fetches through texture cache or vertex cache clauses.
+ *     - All local data share clauses.
+ *     - All global data share clauses.
+ *     - All memory read clauses.
+ *     - Wavefront sync instructions."
+ *
+ * While mixing ALU and fetch clauses doesn't seem to be causing issues according to testing on
+ * various R8xx and R9xx devices, it's probably still desirable to order programs this way.
+ * In particular, that makes it possible to align all fetch instructions to 2 qwords just once.
+ */
+
 #define TERAKAN_SHADER_GPR_LAST_NON_CLAUSE_TEMP (0x7F - 4)
 
 /* For easier writing of meta shaders: initializer for two array elements containing two words of an

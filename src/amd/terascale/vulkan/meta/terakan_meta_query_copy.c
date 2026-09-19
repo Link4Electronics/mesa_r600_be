@@ -139,19 +139,78 @@ enum {
    TERAKAN_META_QUERY_COPY_CONSTS_COUNT_PIPELINESTAT,
 };
 
+/* Program structure.
+ * The qword addresses and counts can be used in preprocessor conditions.
+ */
+
+#define TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_QWORDS 6
+
+#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_QWORDS(is_r9xx) (3 + (is_r9xx))
+
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_CF_ADDRESS(is_r9xx, store_qwords)                 \
+   (TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_QWORDS + (store_qwords) +                              \
+    TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_QWORDS(is_r9xx))
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_QWORDS(is_r9xx) (5 + 3 * (is_r9xx))
+
+#define TERAKAN_META_QUERY_COPY_RESULT_AND_PRED_ALU_CF_ADDRESS(is_r9xx, store_qwords)              \
+   (TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_CF_ADDRESS(is_r9xx, store_qwords) +                   \
+    TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_QWORDS(is_r9xx))
+
+#define TERAKAN_META_QUERY_COPY_CF_AND_ALU_QWORDS(is_r9xx, store_qwords,                           \
+                                                  result_and_pred_alu_qwords)                      \
+   (TERAKAN_META_QUERY_COPY_RESULT_AND_PRED_ALU_CF_ADDRESS(is_r9xx, store_qwords) +                \
+    (result_and_pred_alu_qwords))
+#define TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(is_r9xx, store_qwords,                          \
+                                                   result_and_pred_alu_qwords)                     \
+   (TERAKAN_META_QUERY_COPY_CF_AND_ALU_QWORDS(is_r9xx, store_qwords, result_and_pred_alu_qwords) & \
+    1)
+#define TERAKAN_META_QUERY_COPY_FETCH_CF_ADDRESS(is_r9xx, store_qwords,                            \
+                                                 result_and_pred_alu_qwords)                       \
+   ALIGN_POT(TERAKAN_META_QUERY_COPY_CF_AND_ALU_QWORDS(is_r9xx, store_qwords,                      \
+                                                       result_and_pred_alu_qwords),                \
+             2)
+
 /* clang-format off */
 
-/* The location of these in the instructions in the shader must be aligned to 2 qwords.
- *
- * R[sample_fetch_address_gpr].Y is where the sample fetch source address will be written.
+/* Load the availability to R0.Y. */
+
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX                                            \
+   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
+      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |                  \
+      S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),                                       \
+   S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
+      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |                                              \
+      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_MASK) |                                           \
+      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) |                                           \
+      S_SQ_VTX_WORD1_DATA_FORMAT(TERASCALE_FORMAT_INDEX_32) |                                      \
+      S_SQ_VTX_WORD1_NUM_FORMAT_ALL(TERASCALE_FORMAT_SQ_NUM_FORMAT_INT) |                          \
+      S_SQ_VTX_WORD1_GPR_DST_GPR(0),                                                               \
+   S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32                   \
+                                                   : TERASCALE_ENDIAN_SWAP_NONE) |                 \
+      S_SQ_VTX_WORD2_MEGA_FETCH(true),                                                             \
+   0
+
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX                                            \
+   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
+      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),                   \
+   S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
+      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |                                              \
+      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_MASK) |                                           \
+      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) |                                           \
+      S_SQ_VTX_WORD1_DATA_FORMAT(TERASCALE_FORMAT_INDEX_32) |                                      \
+      S_SQ_VTX_WORD1_NUM_FORMAT_ALL(TERASCALE_FORMAT_SQ_NUM_FORMAT_INT) |                          \
+      S_SQ_VTX_WORD1_GPR_DST_GPR(0),                                                               \
+   S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32                   \
+                                                   : TERASCALE_ENDIAN_SWAP_NONE),                  \
+   0
+
+/* R[sample_fetch_address_gpr].Y is where the sample fetch source address will be written.
  * For 64-bit, `sample_fetch_address_gpr` should be the last register overwritten by the sample
  * fetches.
  * For 32-bit, R0.Y can be used (by passing 0 as `sample_fetch_address_gpr`) for the sample fetch
  * source address because the availability write will use only R0.X.
- *
- * +0: Fetch clause. Load the availability to R0.Y.
- *
- * +2: ALU clause.
  *
  * Group 0: Apply the UAV destination address stride, writing to PS or PV.
  * MULLO_UINT is scalar-only on R8xx, 4-slot on R9xx.
@@ -174,24 +233,11 @@ enum {
  *
  *     If VK_QUERY_RESULT_64_BIT is set, the results are written as an array of 64-bit unsigned
  *     integer values as described for vkGetQueryPoolResults."
+ *
+ * Update `TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_QWORDS` if changed.
  */
 
-#define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(sample_fetch_address_gpr) \
-   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
-      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |                  \
-      S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),                                       \
-   S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
-      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |                                              \
-      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_MASK) |                                           \
-      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) |                                           \
-      S_SQ_VTX_WORD1_DATA_FORMAT(TERASCALE_FORMAT_INDEX_32) |                                      \
-      S_SQ_VTX_WORD1_NUM_FORMAT_ALL(TERASCALE_FORMAT_SQ_NUM_FORMAT_INT) |                          \
-      S_SQ_VTX_WORD1_GPR_DST_GPR(0),                                                               \
-   S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32                   \
-                                                   : TERASCALE_ENDIAN_SWAP_NONE) |                 \
-      S_SQ_VTX_WORD2_MEGA_FETCH(true),                                                             \
-   0,                                                                                              \
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_R8XX(sample_fetch_address_gpr)                    \
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_STRIDE) |                  \
       TERAKAN_SHADER_OP2_NW(true, 0, MULLO_UINT, EG, 0, 'X', 0, 0, SCL_210),                       \
    TERAKAN_SHADER_OP1(false, 0, 'X', MOV, EG, 0, 'Y', VEC_012),                                    \
@@ -203,21 +249,7 @@ enum {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |       \
       TERAKAN_SHADER_OP2(true, 0, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PS, 0, 0, 0, VEC_012)
 
-#define TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(                         \
-   sample_fetch_address_gpr)                                                                       \
-   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                       \
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |                       \
-      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),                   \
-   S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_MASK) |                                              \
-      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_X) |                                              \
-      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_MASK) |                                           \
-      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) |                                           \
-      S_SQ_VTX_WORD1_DATA_FORMAT(TERASCALE_FORMAT_INDEX_32) |                                      \
-      S_SQ_VTX_WORD1_NUM_FORMAT_ALL(TERASCALE_FORMAT_SQ_NUM_FORMAT_INT) |                          \
-      S_SQ_VTX_WORD1_GPR_DST_GPR(0),                                                               \
-   S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32                   \
-                                                   : TERASCALE_ENDIAN_SWAP_NONE),                  \
-   0,                                                                                              \
+#define TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_R9XX(sample_fetch_address_gpr)                    \
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_STRIDE) |                  \
       TERAKAN_SHADER_OP2_NW(false, 'X', MULLO_UINT, EG, 0, 'X', 0, 0, VEC_012),                    \
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_STRIDE) |                  \
@@ -235,21 +267,23 @@ enum {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |       \
       TERAKAN_SHADER_OP2(true, 0, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 0, 0, 0, VEC_012)
 
-/* 0-1: Invoke AVAILABILITY_FETCH_AND_ALU.
+/* 0: Invoke `AVAILABILITY_FETCH`.
+ * 1: Invoke `AVAILABILITY_ALU`.
  * 2: Skip writing the availability if not requested by jumping over the write.
  * 3: Write the availability.
- * 4: Fetch the samples, using the fetch clause after the AVAILABILITY_FETCH_AND_ALU.
+ * 4: Fetch the samples.
  * 5: Calculate the result, result destination addresses, and disable partial result writes if not
  *    needed, using the ALU clause after the sample fetch clause.
+ * Update `TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_QWORDS` if changed.
  */
-#define TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(is_r9xx, is_64_bit,                       \
-                                                         availability_fetch_and_alu_cf_address,    \
-                                                         sample_fetch_count,                       \
-                                                         result_and_pred_alu_count)                \
-   S_SQ_CF_WORD0_ADDR(availability_fetch_and_alu_cf_address),                                      \
+#define TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(is_r9xx, is_64_bit, store_qwords,                  \
+                                                result_and_pred_alu_qwords, sample_fetch_count)    \
+   S_SQ_CF_WORD0_ADDR(TERAKAN_META_QUERY_COPY_FETCH_CF_ADDRESS(is_r9xx, store_qwords,              \
+                                                               result_and_pred_alu_qwords)),       \
    S_SQ_CF_WORD1_COUNT(1 - 1) |                                                                    \
       ((is_r9xx) ? EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX : EG_V_SQ_CF_WORD1_SQ_CF_INST_VTX),             \
-   S_SQ_CF_WORD0_ADDR((availability_fetch_and_alu_cf_address) + 2) |                               \
+   S_SQ_CF_WORD0_ADDR(                                                                             \
+      TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_CF_ADDRESS(is_r9xx, store_qwords)) |                \
       S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |                       \
       S_SQ_CF_ALU_WORD0_KCACHE_MODE0(V_SQ_CF_KCACHE_LOCK_1),                                       \
    S_SQ_CF_ALU_WORD1_KCACHE_ADDR0(0) | S_SQ_CF_ALU_WORD1_COUNT(((is_r9xx) ? 8 : 5) - 1) |          \
@@ -259,34 +293,46 @@ enum {
       S_SQ_CF_WORD1_CF_CONST(TERAKAN_META_QUERY_COPY_BOOL_INDEX_WITH_AVAILABILITY) |               \
       EG_V_SQ_CF_WORD1_SQ_CF_INST_JUMP,                                                            \
    TERAKAN_SHADER_CF_UAV_COMBINED_STORE(is_r9xx, 0, 0, is_64_bit, false, true),                    \
-   S_SQ_CF_WORD0_ADDR(                                                                             \
-      ALIGN_POT((availability_fetch_and_alu_cf_address) + ((is_r9xx) ? 10 : 7), 2)),               \
+   S_SQ_CF_WORD0_ADDR(TERAKAN_META_QUERY_COPY_FETCH_CF_ADDRESS(is_r9xx, store_qwords,              \
+                                                               result_and_pred_alu_qwords) +       \
+                      2),                                                                          \
    S_SQ_CF_WORD1_COUNT((sample_fetch_count) - 1) |                                                 \
       ((is_r9xx) ? EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX : EG_V_SQ_CF_WORD1_SQ_CF_INST_VTX),             \
    S_SQ_CF_WORD0_ADDR(                                                                             \
-      ALIGN_POT((availability_fetch_and_alu_cf_address) + ((is_r9xx) ? 10 : 7), 2) +               \
-      2 * (sample_fetch_count)) |                                                                  \
+      TERAKAN_META_QUERY_COPY_RESULT_AND_PRED_ALU_CF_ADDRESS(is_r9xx, store_qwords)) |             \
       S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |                       \
       S_SQ_CF_ALU_WORD0_KCACHE_MODE0(V_SQ_CF_KCACHE_LOCK_1),                                       \
-   S_SQ_CF_ALU_WORD1_KCACHE_ADDR0(0) | S_SQ_CF_ALU_WORD1_COUNT((result_and_pred_alu_count) - 1) |  \
+   S_SQ_CF_ALU_WORD1_KCACHE_ADDR0(0) | S_SQ_CF_ALU_WORD1_COUNT((result_and_pred_alu_qwords) - 1) | \
       S_SQ_CF_ALU_WORD1_BARRIER(true) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU_PUSH_BEFORE
 
 /* +0: Restore the active mask without partial result writing disabling for the ending export.
  * +1-2: End.
+ * Update `TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_QWORDS` if changed.
  */
-#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(this_cf_address)                      \
-   S_SQ_CF_WORD0_ADDR((this_cf_address) + 1),                                                      \
+#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX(store_qwords)                                  \
+   S_SQ_CF_WORD0_ADDR(TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_QWORDS + (store_qwords) + 1),        \
    S_SQ_CF_WORD1_POP_COUNT(1) | S_SQ_CF_WORD1_BARRIER(1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_POP,        \
    TERAKAN_SHADER_CF_VS_DUMMY_EXPORT_POS_PARAM_DONE_AND_END_R8XX_2_QWORDS
 
 /* +0: Restore the active mask without partial result writing disabling for the ending export.
  * +1-3: End.
+ * Update `TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_QWORDS` if changed.
  */
-#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(this_cf_address)                      \
-   S_SQ_CF_WORD0_ADDR((this_cf_address) + 1),                                                      \
+#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX(store_qwords)                                  \
+   S_SQ_CF_WORD0_ADDR(TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_QWORDS + (store_qwords) + 1),        \
    S_SQ_CF_WORD1_POP_COUNT(1) | S_SQ_CF_WORD1_BARRIER(1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_POP,        \
    TERAKAN_SHADER_CF_VS_DUMMY_EXPORT_POS_PARAM_DONE_R9XX_2_QWORDS,                                 \
    TERAKAN_SHADER_CF_END_R9XX
+
+#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(store_qwords,             \
+                                                                         sample_fetch_address_gpr) \
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX(store_qwords),                                      \
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_R8XX(sample_fetch_address_gpr)
+
+#define TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(store_qwords,             \
+                                                                         sample_fetch_address_gpr) \
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX(store_qwords),                                      \
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_ALU_R9XX(sample_fetch_address_gpr)
 
 /* The maximum mega fetch counter count is 8.
  *
@@ -418,40 +464,32 @@ enum {
  * - Address calculation (end minus inline 1 for 32-bit, end minus literal 2 for 64-bit).
  */
 
+/* Can be used in preprocessor conditions. */
+#define TERAKAN_META_QUERY_COPY_ZPASS_RESULT_AND_PRED_ALU_QWORDS(is_64_bit, rb_count)              \
+   ((1 + 3 * (is_64_bit)) * ((rb_count) + ((rb_count) - 1)) + (2 + (is_64_bit)))
+#define TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(is_r9xx, is_64_bit, rb_count)             \
+   TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(                                                     \
+      is_r9xx, 1, TERAKAN_META_QUERY_COPY_ZPASS_RESULT_AND_PRED_ALU_QWORDS(is_64_bit, rb_count))
+
 /* clang-format off */
 
-/* 0-5: Control flow prolog.
- * 6: Store the result.
- * 7-9: Control flow epilog.
- * 10-16: Fetch and process the availability.
- * 17: Alignment padding for sample fetching.
- * The samples must be fetched at the address R0 for 32-bit, R[rb_count] for 64-bit.
+/* With `TERAKAN_META_QUERY_COPY_ZPASS_PROLOG`, the samples must be fetched at the address R0 for
+ * 32-bit, R[rb_count] for 64-bit.
  */
-#define TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(is_64_bit, rb_count)                             \
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(                                               \
-      false, true, 10, rb_count,                                                                   \
-      ((is_64_bit) ? 4 : 1) * ((rb_count) + ((rb_count) - 1)) + ((is_64_bit) ? 3 : 2)),            \
-   TERAKAN_SHADER_CF_UAV_COMBINED_STORE(false, 0, 1, is_64_bit, false, true),                      \
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(7),                                        \
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS((is_64_bit) ? (rb_count) : 0), \
-   0,                                                                                              \
-   0
 
-/* 0-5: Control flow prolog.
- * 6: Store the result.
- * 7-10: Control flow epilog.
- * 11 (alignment padding), 12-21: Fetch and process the availability.
- * The samples must be fetched at the address R0 for 32-bit, R[rb_count] for 64-bit.
- */
+#define TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(is_64_bit, rb_count)                             \
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(                                                        \
+      false, true, 1,                                                                              \
+      TERAKAN_META_QUERY_COPY_ZPASS_RESULT_AND_PRED_ALU_QWORDS(is_64_bit, rb_count), rb_count),    \
+   TERAKAN_SHADER_CF_UAV_COMBINED_STORE(false, 0, 1, is_64_bit, false, true),                      \
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(1, (is_64_bit) ? (rb_count) : 0)
+
 #define TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(is_64_bit, rb_count)                             \
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(                                               \
-      true, true, 12, rb_count,                                                                    \
-      ((is_64_bit) ? 4 : 1) * ((rb_count) + ((rb_count) - 1)) + ((is_64_bit) ? 3 : 2)),            \
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(                                                        \
+      true, true, 1,                                                                               \
+      TERAKAN_META_QUERY_COPY_ZPASS_RESULT_AND_PRED_ALU_QWORDS(is_64_bit, rb_count), rb_count),    \
    TERAKAN_SHADER_CF_UAV_COMBINED_STORE(true, 0, 1, is_64_bit, false, true),                       \
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(7),                                        \
-   0,                                                                                              \
-   0,                                                                                              \
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS((is_64_bit) ? (rb_count) : 0)
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(1, (is_64_bit) ? (rb_count) : 0)
 
 /* Complete the sum reduction from PV.Z and PV.W, and set the result write predicate and address.
  * Cycle 0: ZW = R0.
@@ -509,21 +547,33 @@ enum {
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_1_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(false, 1),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 3, true),
-
    TERAKAN_SHADER_OP2(false, 1, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
    TERAKAN_META_QUERY_COPY_ALU_PRED(false, 'Z', VEC_210),
    TERAKAN_SHADER_OP2(true, 1, 'W', SUB_INT, EG, 0, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_210),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 0, 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 3, true),
 };
 
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_1_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(false, 1),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
-
    TERAKAN_SHADER_OP2(false, 1, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
    TERAKAN_META_QUERY_COPY_ALU_PRED(false, 'Z', VEC_210),
    TERAKAN_SHADER_OP2(true, 1, 'W', SUB_INT, EG, 0, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_210),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 0, 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_1_rb, 2)
@@ -531,29 +581,41 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_1_rb, 2)
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_2_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(false, 2),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 7, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 3, false),
-
    /* e0-b0 */
    TERAKAN_SHADER_OP2_NW(0, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
    /* e1-b1 */
    TERAKAN_SHADER_OP2_NW(1, 'Y', SUB_INT, EG, 1, 'W', 1, 'Z', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 0, 2)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 7, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 3, false),
 };
 
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_2_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(false, 2),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1),
-
    /* e0-b0 */
    TERAKAN_SHADER_OP2_NW(0, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
    /* e1-b1 */
    TERAKAN_SHADER_OP2_NW(1, 'Y', SUB_INT, EG, 1, 'W', 1, 'Z', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 0, 2)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_2_rb, 2)
@@ -561,12 +623,6 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_2_rb, 2)
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_4_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(false, 4),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 15, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 11, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, X, Z, MASK, MASK, 0, 2, 7, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, MASK, MASK, X, Z, 0, 3, 3, false),
-
-   /* e0-b0 */
    TERAKAN_SHADER_OP2_NW(0, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
    /* e1-b1 */
    TERAKAN_SHADER_OP2_NW(0, 'Y', SUB_INT, EG, 1, 'W', 1, 'Z', VEC_012),
@@ -581,6 +637,17 @@ static uint32_t const terakan_meta_query_copy_zpass_32_bit_4_rb_vs_r8xx[] = {
    TERAKAN_SHADER_OP2_NW(1, 'Y', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 0, 4)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 15, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 11, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, X, Z, MASK, MASK, 0, 2, 7, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, MASK, MASK, X, Z, 0, 3, 3, false),
 };
 
 /* No R9xx chips with a maximum of 4 render backends, provide an aligned dummy. */
@@ -591,6 +658,46 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_4_rb, 3)
 static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(false, 8),
 
+   /* e0-b0 */
+   TERAKAN_SHADER_OP2(0, 0x7F, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
+   /* e1-b1 */
+   TERAKAN_SHADER_OP2(0, 0x7F, 'Y', SUB_INT, EG, 1, 'W', 1, 'Z', VEC_012),
+   /* e2-b2 */
+   TERAKAN_SHADER_OP2(0, 0x7F, 'Z', SUB_INT, EG, 2, 'Y', 2, 'X', VEC_102),
+   /* e3-b3 */
+   TERAKAN_SHADER_OP2(1, 0x7F, 'W', SUB_INT, EG, 2, 'W', 2, 'Z', VEC_102),
+
+   /* e4-b4 */
+   TERAKAN_SHADER_OP2_NW(0, 'X', SUB_INT, EG, 3, 'Y', 3, 'X', VEC_012),
+   /* e5-b5 */
+   TERAKAN_SHADER_OP2_NW(0, 'Y', SUB_INT, EG, 3, 'W', 3, 'Z', VEC_012),
+   /* e6-b6 */
+   TERAKAN_SHADER_OP2_NW(0, 'Z', SUB_INT, EG, 4, 'Y', 4, 'X', VEC_102),
+   /* e7-b7 */
+   TERAKAN_SHADER_OP2_NW(1, 'W', SUB_INT, EG, 4, 'W', 4, 'Z', VEC_102),
+
+   /* e0-b0+e1-b1 */
+   TERAKAN_SHADER_OP2_NW(0, 'X', ADD_INT, EG, 0x7F, 'X', 0x7F, 'Y', VEC_012),
+   /* e2-b2+e3-b3 */
+   TERAKAN_SHADER_OP2_NW(0, 'Y', ADD_INT, EG, 0x7F, 'Z', 0x7F, 'W', VEC_012),
+   /* e4-b4+e5-b5 */
+   TERAKAN_SHADER_OP2_NW(0, 'Z', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_PV, 'Y', VEC_012),
+   /* e6-b6+e7-b7 */
+   TERAKAN_SHADER_OP2_NW(1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
+
+   /* e0-b0+e1-b1+e2-b2+e3-b3 */
+   TERAKAN_SHADER_OP2_NW(0, 'X', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_PV, 'Y', VEC_012),
+   /* e4-b4+e5-b5+e6-b6+e7-b7 */
+   TERAKAN_SHADER_OP2_NW(1, 'Y', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
+
+   TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 0, 8)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 15, true),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 11, false),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, X, Z, MASK, MASK, 0, 2, 7, false),
@@ -599,6 +706,10 @@ static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 3, MASK, MASK, X, Z, 0, 5, 11, false),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 4, X, Z, MASK, MASK, 0, 6, 7, false),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 4, MASK, MASK, X, Z, 0, 7, 3, false),
+};
+
+static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r9xx[] = {
+   TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(false, 8),
 
    /* e0-b0 */
    TERAKAN_SHADER_OP2(0, 0x7F, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
@@ -633,11 +744,13 @@ static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r8xx[] = {
    TERAKAN_SHADER_OP2_NW(1, 'Y', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
-};
 
-static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r9xx[] = {
-   TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(false, 8),
-
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 0, 8)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 2, X, Z, MASK, MASK, 0, 2),
@@ -646,40 +759,6 @@ static uint32_t const terakan_meta_query_copy_zpass_32_bit_8_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 3, MASK, MASK, X, Z, 0, 5),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 4, X, Z, MASK, MASK, 0, 6),
    TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 4, MASK, MASK, X, Z, 0, 7),
-
-   /* e0-b0 */
-   TERAKAN_SHADER_OP2(0, 0x7F, 'X', SUB_INT, EG, 1, 'Y', 1, 'X', VEC_012),
-   /* e1-b1 */
-   TERAKAN_SHADER_OP2(0, 0x7F, 'Y', SUB_INT, EG, 1, 'W', 1, 'Z', VEC_012),
-   /* e2-b2 */
-   TERAKAN_SHADER_OP2(0, 0x7F, 'Z', SUB_INT, EG, 2, 'Y', 2, 'X', VEC_102),
-   /* e3-b3 */
-   TERAKAN_SHADER_OP2(1, 0x7F, 'W', SUB_INT, EG, 2, 'W', 2, 'Z', VEC_102),
-
-   /* e4-b4 */
-   TERAKAN_SHADER_OP2_NW(0, 'X', SUB_INT, EG, 3, 'Y', 3, 'X', VEC_012),
-   /* e5-b5 */
-   TERAKAN_SHADER_OP2_NW(0, 'Y', SUB_INT, EG, 3, 'W', 3, 'Z', VEC_012),
-   /* e6-b6 */
-   TERAKAN_SHADER_OP2_NW(0, 'Z', SUB_INT, EG, 4, 'Y', 4, 'X', VEC_102),
-   /* e7-b7 */
-   TERAKAN_SHADER_OP2_NW(1, 'W', SUB_INT, EG, 4, 'W', 4, 'Z', VEC_102),
-
-   /* e0-b0+e1-b1 */
-   TERAKAN_SHADER_OP2_NW(0, 'X', ADD_INT, EG, 0x7F, 'X', 0x7F, 'Y', VEC_012),
-   /* e2-b2+e3-b3 */
-   TERAKAN_SHADER_OP2_NW(0, 'Y', ADD_INT, EG, 0x7F, 'Z', 0x7F, 'W', VEC_012),
-   /* e4-b4+e5-b5 */
-   TERAKAN_SHADER_OP2_NW(0, 'Z', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_PV, 'Y', VEC_012),
-   /* e6-b6+e7-b7 */
-   TERAKAN_SHADER_OP2_NW(1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
-
-   /* e0-b0+e1-b1+e2-b2+e3-b3 */
-   TERAKAN_SHADER_OP2_NW(0, 'X', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_PV, 'Y', VEC_012),
-   /* e4-b4+e5-b5+e6-b6+e7-b7 */
-   TERAKAN_SHADER_OP2_NW(1, 'Y', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'Z', V_SQ_ALU_SRC_PV, 'W', VEC_012),
-
-   TERAKAN_META_QUERY_COPY_ZPASS_32_BIT_X_SUM_Z_PRED_W_ADDRESS(true),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_8_rb, 5)
@@ -687,27 +766,39 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_32_bit_8_rb, 5)
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_1_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(true, 1),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 1, 0, 4, true),
-
    TERAKAN_SHADER_OP2(false, 1, UTIL_ARCH_BIG_ENDIAN ? 'Y' : 'X', SUB_INT, EG, 1, 'Z', 1, 'X',
                       VEC_012),
    TERAKAN_SHADER_OP2_NW(false, 'Z', SUBB_UINT, EG, 1, 'Z', 1, 'X', VEC_012),
    TERAKAN_SHADER_OP2_NW(true, 'W', SUB_INT, EG, 1, 'W', 1, 'Y', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(SUB),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 1, 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 1, 0, 4, true),
 };
 
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_1_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(true, 1),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 1, 0),
-
    TERAKAN_SHADER_OP2(false, 1, UTIL_ARCH_BIG_ENDIAN ? 'Y' : 'X', SUB_INT, EG, 1, 'Z', 1, 'X',
                       VEC_012),
    TERAKAN_SHADER_OP2_NW(false, 'Z', SUBB_UINT, EG, 1, 'Z', 1, 'X', VEC_012),
    TERAKAN_SHADER_OP2_NW(true, 'W', SUB_INT, EG, 1, 'W', 1, 'Y', VEC_012),
 
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(SUB),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 1, 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 1, 0),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_1_rb, 1 + 1)
@@ -715,9 +806,6 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_1_rb, 1 + 1)
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_2_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(true, 2),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0, 8, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1, 4, false),
-
    /* e0-b0 */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_INITIAL_SUB_FIRST(true),
    /* e1-b1 */
@@ -727,14 +815,20 @@ static uint32_t const terakan_meta_query_copy_zpass_64_bit_2_rb_vs_r8xx[] = {
    /* Finalization. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_ADD_T0_T1_R1_LO_Z_C_W_HI32(true),
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(ADD),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 1, 2)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0, 8, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1, 4, false),
 };
 
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_2_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(true, 2),
 
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1),
-
    /* e0-b0 */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_INITIAL_SUB_FIRST(true),
    /* e1-b1 */
@@ -744,17 +838,21 @@ static uint32_t const terakan_meta_query_copy_zpass_64_bit_2_rb_vs_r9xx[] = {
    /* Finalization. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_ADD_T0_T1_R1_LO_Z_C_W_HI32(true),
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(ADD),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 1, 2)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_2_rb, 1 + 2)
 
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_4_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(true, 4),
-
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 4, 0, 16, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 4, 1, 12, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, X, Y, Z, W, 4, 2, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, X, Y, Z, W, 4, 3, 4, false),
 
    /* T0.XY <- e0-b0 (XY @ C1) | T0.Z <- e3-b3 lower (Z @ C1) */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_INITIAL_SUB_FIRST(false),
@@ -778,6 +876,17 @@ static uint32_t const terakan_meta_query_copy_zpass_64_bit_4_rb_vs_r8xx[] = {
    /* Finalization. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_ADD_T0_T1_R1_LO_Z_C_W_HI32(true),
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(ADD),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 1, 4)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 4, 0, 16, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 4, 1, 12, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, X, Y, Z, W, 4, 2, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, X, Y, Z, W, 4, 3, 4, false),
 };
 
 /* No R9xx chips with a maximum of 4 render backends, provide an aligned dummy. */
@@ -787,15 +896,6 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_4_rb, 1 + 4)
 
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_8_rb_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R8XX(true, 8),
-
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 8, 0, 16, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 8, 1, 12, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, X, Y, Z, W, 8, 2, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, X, Y, Z, W, 8, 3, 4, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 5, X, Y, Z, W, 8, 4, 16, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 6, X, Y, Z, W, 8, 5, 12, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 7, X, Y, Z, W, 8, 6, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 8, X, Y, Z, W, 8, 7, 4, false),
 
    /* Even and odd render backend chains interleaved, the vector units processing RBs bottom-up, the
     * scalar unit going top-down.
@@ -840,19 +940,25 @@ static uint32_t const terakan_meta_query_copy_zpass_64_bit_8_rb_vs_r8xx[] = {
    /* Finalization. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_ADD_T0_T1_R1_LO_Z_C_W_HI32(true),
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(ADD),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(0, 1, 8)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 8, 0, 16, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 8, 1, 12, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, X, Y, Z, W, 8, 2, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, X, Y, Z, W, 8, 3, 4, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 5, X, Y, Z, W, 8, 4, 16, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 6, X, Y, Z, W, 8, 5, 12, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 7, X, Y, Z, W, 8, 6, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 8, X, Y, Z, W, 8, 7, 4, false),
 };
 
 static uint32_t const terakan_meta_query_copy_zpass_64_bit_8_rb_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_ZPASS_PROLOG_R9XX(true, 8),
-
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 8, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 8, 1),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 3, X, Y, Z, W, 8, 2),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 4, X, Y, Z, W, 8, 3),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 5, X, Y, Z, W, 8, 4),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 6, X, Y, Z, W, 8, 5),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 7, X, Y, Z, W, 8, 6),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 8, X, Y, Z, W, 8, 7),
 
    /* e0-b0+e2-b2+... and e1-b1+e3-b3+... interleaved. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_INITIAL_SUB_FIRST(true),
@@ -874,6 +980,21 @@ static uint32_t const terakan_meta_query_copy_zpass_64_bit_8_rb_vs_r9xx[] = {
    /* Finalization. */
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_ADD_T0_T1_R1_LO_Z_C_W_HI32(true),
    TERAKAN_META_QUERY_COPY_ZPASS_64_BIT_R1_HIWBC_Z_PRED_W_ADDRESS_4_QWORDS(ADD),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_ZPASS_FETCH_IS_UNALIGNED(1, 1, 8)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 8, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 8, 1),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 3, X, Y, Z, W, 8, 2),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 4, X, Y, Z, W, 8, 3),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 5, X, Y, Z, W, 8, 4),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 6, X, Y, Z, W, 8, 5),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 7, X, Y, Z, W, 8, 6),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 8, X, Y, Z, W, 8, 7),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_8_rb, 1 + 8)
@@ -1032,10 +1153,7 @@ TERAKAN_META_QUERY_COPY_SHADER(zpass_64_bit_8_rb, 1 + 8)
 /* clang-format on */
 
 static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r8xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(false, false, 32, 11, 2 * 11 + 1),
-
-   /* 6-27: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(false, false, 2 * 11, 2 * 11 + 1, 11),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 8, 0, false, true),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 10, 1, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 12, 2, false, false),
@@ -1047,31 +1165,9 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 24, 8, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 26, 9, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 28, 10, false, false),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(2 * 11, 0),
 
-   /* 28-30: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(28),
-
-   /* 31 (alignment padding), 32-38: Fetch and process the availability. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(0),
-
-   /* 39 (alignment padding), 40-61: Fetch the samples. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, X, Z, MASK, 0, 0, 15, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 3, MASK, X, Z, MASK, 0, 1, 11, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 5, MASK, X, Z, MASK, 0, 2, 7, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 7, MASK, X, Z, MASK, 0, 3, 3, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 9, MASK, X, Z, MASK, 0, 4, 15, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 11, MASK, X, Z, MASK, 0, 5, 11, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, MASK, X, Z, MASK, 0, 6, 7, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 4, MASK, X, Z, MASK, 0, 7, 3, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 6, MASK, X, Z, MASK, 0, 8, 11, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 8, MASK, X, Z, MASK, 0, 9, 7, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 10, MASK, X, Z, MASK, 0, 10, 3, false),
-
-   /* 62: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Counter 0, counter 2 subtraction. */
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_X_SUB_W_ADDRESS(false, 0),
@@ -1097,13 +1193,28 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_X_SUB(false, 10, false),
    TERAKAN_META_QUERY_COPY_ALU_PRED(false, 'Z', VEC_210),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_W_ADDRESS(true, 10),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(0, 2 * 11, 2 * 11 + 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, X, Z, MASK, 0, 0, 15, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 3, MASK, X, Z, MASK, 0, 1, 11, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 5, MASK, X, Z, MASK, 0, 2, 7, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 7, MASK, X, Z, MASK, 0, 3, 3, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 9, MASK, X, Z, MASK, 0, 4, 15, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 11, MASK, X, Z, MASK, 0, 5, 11, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 2, MASK, X, Z, MASK, 0, 6, 7, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 4, MASK, X, Z, MASK, 0, 7, 3, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 6, MASK, X, Z, MASK, 0, 8, 11, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 8, MASK, X, Z, MASK, 0, 9, 7, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 10, MASK, X, Z, MASK, 0, 10, 3, false),
 };
 
 static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r9xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(true, false, 32, 11, 2 * 11 + 1),
-
-   /* 6-27: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(true, false, 2 * 11, 2 * 11 + 1, 11),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 8, 0, false, true),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 10, 1, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 12, 2, false, false),
@@ -1115,27 +1226,9 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 24, 8, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 26, 9, false, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 28, 10, false, false),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(2 * 11, 0),
 
-   /* 28-31: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(28),
-
-   /* 32-41: Fetch and process the availability. */
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(0),
-
-   /* 42-63: Fetch the samples. */
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, X, Z, MASK, 0, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 3, MASK, X, Z, MASK, 0, 1),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 5, MASK, X, Z, MASK, 0, 2),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 7, MASK, X, Z, MASK, 0, 3),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 9, MASK, X, Z, MASK, 0, 4),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 11, MASK, X, Z, MASK, 0, 5),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 2, MASK, X, Z, MASK, 0, 6),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 4, MASK, X, Z, MASK, 0, 7),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 6, MASK, X, Z, MASK, 0, 8),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 8, MASK, X, Z, MASK, 0, 9),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 10, MASK, X, Z, MASK, 0, 10),
-
-   /* 64: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Counters 0...9. */
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_X_SUB_W_ADDRESS(true, 0),
@@ -1152,15 +1245,30 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_32_bit_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_X_SUB(false, 10, false),
    TERAKAN_META_QUERY_COPY_ALU_PRED(false, 'Z', VEC_210),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_32_BIT_W_ADDRESS(true, 10),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(1, 2 * 11, 2 * 11 + 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, X, Z, MASK, 0, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 3, MASK, X, Z, MASK, 0, 1),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 5, MASK, X, Z, MASK, 0, 2),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 7, MASK, X, Z, MASK, 0, 3),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 9, MASK, X, Z, MASK, 0, 4),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 11, MASK, X, Z, MASK, 0, 5),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 2, MASK, X, Z, MASK, 0, 6),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 4, MASK, X, Z, MASK, 0, 7),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 6, MASK, X, Z, MASK, 0, 8),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 8, MASK, X, Z, MASK, 0, 9),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 10, MASK, X, Z, MASK, 0, 10),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(pipelinestat_32_bit, 12)
 
 static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r8xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(false, true, 32, 11, 5 * 11 + 1),
-
-   /* 6-27: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(false, true, 2 * 11, 5 * 11 + 1, 11),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 8, 0, true, true),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 10, 1, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 12, 2, true, false),
@@ -1172,31 +1280,9 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r8xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 24, 8, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 26, 9, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(false, 28, 10, true, false),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(2 * 11, 10),
 
-   /* 28-30: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(28),
-
-   /* 31 (alignment padding), 32-38: Fetch and process the availability. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(10),
-
-   /* 39 (alignment padding), 40-61: Fetch the samples. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 10, 0, 16, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, Y, X, W, Z, 10, 1, 12, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 5, X, Y, Z, W, 10, 2, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 7, Y, X, W, Z, 10, 3, 4, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 9, X, Y, Z, W, 10, 4, 16, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 11, Y, X, W, Z, 10, 5, 12, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 10, 6, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, Y, X, W, Z, 10, 7, 4, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 6, X, Y, Z, W, 10, 8, 12, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 8, Y, X, W, Z, 10, 9, 8, false),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 10, X, Y, Z, W, 10, 10, 4, false),
-
-   /* 62: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* 0 lower, borrow, upper without borrow, 10 address (overwriting 0 end). */
    TERAKAN_META_QUERY_COPY_64_BIT_LO_Z_BC_W_HI32(
@@ -1225,13 +1311,28 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r8xx[] = {
    /* 10 upper with borrow, result write predicate. */
    TERAKAN_META_QUERY_COPY_64_BIT_HIWBC(false, 1 + 10, SUB),
    TERAKAN_META_QUERY_COPY_ALU_PRED(true, 'Z', VEC_210),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(0, 2 * 11, 5 * 11 + 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 10, 0, 16, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 3, Y, X, W, Z, 10, 1, 12, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 5, X, Y, Z, W, 10, 2, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 7, Y, X, W, Z, 10, 3, 4, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 9, X, Y, Z, W, 10, 4, 16, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 11, Y, X, W, Z, 10, 5, 12, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 10, 6, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 4, Y, X, W, Z, 10, 7, 4, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 6, X, Y, Z, W, 10, 8, 12, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 8, Y, X, W, Z, 10, 9, 8, false),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 10, X, Y, Z, W, 10, 10, 4, false),
 };
 
 static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r9xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(true, true, 32, 11, 5 * 11 + 1),
-
-   /* 6-27: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(true, true, 2 * 11, 5 * 11 + 1, 11),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 8, 0, true, true),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 10, 1, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 12, 2, true, false),
@@ -1243,27 +1344,9 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r9xx[] = {
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 24, 8, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 26, 9, true, false),
    TERAKAN_META_QUERY_COPY_PIPELINESTAT_STORE_COUNTER_CONDITIONALLY(true, 28, 10, true, false),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(2 * 11, 10),
 
-   /* 28-31: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(28),
-
-   /* 32-41: Fetch and process the availability. */
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(10),
-
-   /* 42-63: Fetch the samples. */
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 10, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 3, Y, X, W, Z, 10, 1),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 5, X, Y, Z, W, 10, 2),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 7, Y, X, W, Z, 10, 3),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 9, X, Y, Z, W, 10, 4),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 11, Y, X, W, Z, 10, 5),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 10, 6),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 4, Y, X, W, Z, 10, 7),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 6, X, Y, Z, W, 10, 8),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 8, Y, X, W, Z, 10, 9),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 10, X, Y, Z, W, 10, 10),
-
-   /* 64: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Upper halves without borrow. */
 
@@ -1352,6 +1435,24 @@ static uint32_t const terakan_meta_query_copy_pipelinestat_64_bit_vs_r9xx[] = {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0,
                                    TERAKAN_META_QUERY_COPY_CONST_PIPELINESTAT_64_BIT_DST_8_TO_9) |
       TERAKAN_SHADER_OP2(true, 1 + 9, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'W', 0, 0, VEC_210),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(1, 2 * 11, 5 * 11 + 1)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 10, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 3, Y, X, W, Z, 10, 1),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 5, X, Y, Z, W, 10, 2),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 7, Y, X, W, Z, 10, 3),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 9, X, Y, Z, W, 10, 4),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 11, Y, X, W, Z, 10, 5),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 10, 6),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 4, Y, X, W, Z, 10, 7),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 6, X, Y, Z, W, 10, 8),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 8, Y, X, W, Z, 10, 9),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 10, X, Y, Z, W, 10, 10),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(pipelinestat_64_bit, 12)
@@ -1378,7 +1479,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch the availability and timestamp. */
-   S_SQ_CF_WORD0_ADDR(12),
+   S_SQ_CF_WORD0_ADDR(14),
    S_SQ_CF_WORD1_COUNT(2 - 1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_VTX,
 
    /* 2: Skip writing the availability if not requested by jumping over the write. */
@@ -1392,7 +1493,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
 
    /* 4: Disable the result write if not available, and calculate the result destination addresses.
     */
-   S_SQ_CF_WORD0_ADDR(16),
+   S_SQ_CF_WORD0_ADDR(11),
    S_SQ_CF_ALU_WORD1_COUNT(1) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU_PUSH_BEFORE,
 
@@ -1418,7 +1519,16 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |
       TERAKAN_SHADER_OP2(true, 1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PS, 0, 0, 0, VEC_012),
 
-   /* 11 (alignment padding), 12-13: Fetch the availability to R1.X. */
+   /* 11: ALU clause. */
+
+   /* +0: Set the result write predicate.
+    * +1: Calculate the result write address to R0.W.
+    */
+   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
+      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
+   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_012),
+
+   /* 13 (alignment padding), 14-15: Fetch the availability to R1.X. */
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
@@ -1437,7 +1547,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
       S_SQ_VTX_WORD2_MEGA_FETCH(true),
    0,
 
-   /* 14-15: Fetch the timestamp to R0.X. */
+   /* 16-17: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1453,15 +1563,6 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
                                                    : TERASCALE_ENDIAN_SWAP_NONE) |
       S_SQ_VTX_WORD2_MEGA_FETCH(true),
    0,
-
-   /* 16: ALU clause. */
-
-   /* +0: Set the result write predicate.
-    * +1: Calculate the result write address to R0.W.
-    */
-   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
-      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
-   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_012),
 };
 
 static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
@@ -1472,7 +1573,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch the availability and timestamp. */
-   S_SQ_CF_WORD0_ADDR(16),
+   S_SQ_CF_WORD0_ADDR(18),
    S_SQ_CF_WORD1_COUNT(2 - 1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX,
 
    /* 2: Skip writing the availability if not requested by jumping over the write. */
@@ -1486,7 +1587,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
 
    /* 4: Disable the result write if not available, and calculate the result destination addresses.
     */
-   S_SQ_CF_WORD0_ADDR(20),
+   S_SQ_CF_WORD0_ADDR(15),
    S_SQ_CF_ALU_WORD1_COUNT(1) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU_PUSH_BEFORE,
 
@@ -1519,7 +1620,16 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |
       TERAKAN_SHADER_OP2(true, 1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 0, 0, 0, VEC_012),
 
-   /* 15 (alignment padding), 16-17: Fetch the availability to R1.X. */
+   /* 15: ALU clause. */
+
+   /* +0: Set the result write predicate.
+    * +1: Calculate the result write address to R0.W.
+    */
+   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
+      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
+   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_012),
+
+   /* 17 (alignment padding), 18-19: Fetch the availability to R1.X. */
    0,
    0,
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
@@ -1536,7 +1646,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
                                                    : TERASCALE_ENDIAN_SWAP_NONE),
    0,
 
-   /* 18-19: Fetch the timestamp to R0.X. */
+   /* 20-21: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
@@ -1550,15 +1660,6 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
    S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32
                                                    : TERASCALE_ENDIAN_SWAP_NONE),
    0,
-
-   /* 20: ALU clause. */
-
-   /* +0: Set the result write predicate.
-    * +1: Calculate the result write address to R0.W.
-    */
-   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
-      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
-   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_1_INT, 0, VEC_012),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(timestamp_32_bit, 2)
@@ -1571,7 +1672,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch the availability and timestamp. */
-   S_SQ_CF_WORD0_ADDR(12),
+   S_SQ_CF_WORD0_ADDR(14),
    S_SQ_CF_WORD1_COUNT(2 - 1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_VTX,
 
    /* 2: Skip writing the availability if not requested by jumping over the write. */
@@ -1585,7 +1686,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
 
    /* 4: Disable the result write if not available, and calculate the result destination addresses.
     */
-   S_SQ_CF_WORD0_ADDR(16),
+   S_SQ_CF_WORD0_ADDR(11),
    S_SQ_CF_ALU_WORD1_COUNT(2) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU_PUSH_BEFORE,
 
@@ -1611,9 +1712,19 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |
       TERAKAN_SHADER_OP2(true, 1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PS, 0, 0, 0, VEC_012),
 
-   /* 11 (alignment padding), 12-13: Fetch the availability to R1.X. */
+   /* 11: ALU clause. */
+
+   /* +0: Set the result write predicate.
+    * +1: Calculate the result write address to R0.W.
+    * +2: Literal pair.
+    */
+   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
+      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
+   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_012),
+   2,
    0,
-   0,
+
+   /* 14-15: Fetch the availability to R1.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1629,7 +1740,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
       S_SQ_VTX_WORD2_MEGA_FETCH(true),
    0,
 
-   /* 14-15: Fetch the timestamp to R0.X. */
+   /* 16-17: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1645,18 +1756,6 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
                                                    : TERASCALE_ENDIAN_SWAP_NONE) |
       S_SQ_VTX_WORD2_MEGA_FETCH(true),
    0,
-
-   /* 16: ALU clause. */
-
-   /* +0: Set the result write predicate.
-    * +1: Calculate the result write address to R0.W.
-    * +2: Literal pair.
-    */
-   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
-      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
-   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_012),
-   2,
-   0,
 };
 
 static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
@@ -1667,7 +1766,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch the availability and timestamp. */
-   S_SQ_CF_WORD0_ADDR(16),
+   S_SQ_CF_WORD0_ADDR(18),
    S_SQ_CF_WORD1_COUNT(2 - 1) | EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX,
 
    /* 2: Skip writing the availability if not requested by jumping over the write. */
@@ -1681,7 +1780,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
 
    /* 4: Disable the result write if not available, and calculate the result destination addresses.
     */
-   S_SQ_CF_WORD0_ADDR(20),
+   S_SQ_CF_WORD0_ADDR(15),
    S_SQ_CF_ALU_WORD1_COUNT(2) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU_PUSH_BEFORE,
 
@@ -1714,9 +1813,19 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
    TERAKAN_KCACHE_DWORD_WORD0_SRC1(0, TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET) |
       TERAKAN_SHADER_OP2(true, 1, 'W', ADD_INT, EG, V_SQ_ALU_SRC_PV, 0, 0, 0, VEC_012),
 
-   /* 15 (alignment padding), 16-17: Fetch the availability to R1.X. */
+   /* 15: ALU clause. */
+
+   /* +0: Set the result write predicate.
+    * +1: Calculate the result write address to R0.W.
+    * +2: Literal pair.
+    */
+   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
+      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
+   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_012),
+   2,
    0,
-   0,
+
+   /* 18-19: Fetch the availability to R1.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
@@ -1730,7 +1839,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
                                                    : TERASCALE_ENDIAN_SWAP_NONE),
    0,
 
-   /* 18-19: Fetch the timestamp to R0.X. */
+   /* 20-21: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
       S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
@@ -1744,18 +1853,6 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
    S_SQ_VTX_WORD2_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_ENDIAN_SWAP_8IN32
                                                    : TERASCALE_ENDIAN_SWAP_NONE),
    0,
-
-   /* 20: ALU clause. */
-
-   /* +0: Set the result write predicate.
-    * +1: Calculate the result write address to R0.W.
-    * +2: Literal pair.
-    */
-   TERAKAN_SHADER_OP2_NW(false, 'X', PRED_SETNE_INT, EG, 1, 'X', V_SQ_ALU_SRC_0, 0, VEC_012) |
-      S_SQ_ALU_WORD1_OP2_UPDATE_EXECUTE_MASK(1),
-   TERAKAN_SHADER_OP2(true, 0, 'W', SUB_INT, EG, 1, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_012),
-   2,
-   0,
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(timestamp_64_bit, 2)
@@ -1763,55 +1860,36 @@ TERAKAN_META_QUERY_COPY_SHADER(timestamp_64_bit, 2)
 /* Stream out statistics. */
 
 static uint32_t const terakan_meta_query_copy_streamoutstats_32_bit_vs_r8xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(false, false, 10, 2, 2 + 3),
-
-   /* 6: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(false, false, 1, 2 + 3, 2),
    TERAKAN_SHADER_CF_UAV_COMBINED_STORE(false, 0, 1, true, false, true),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(1, 2),
 
-   /* 7-9: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(7),
-
-   /* 10-16: Fetch and process the availability. */
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(0),
-
-   /* 17 (alignment padding), 18-21: Fetch the samples. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 7, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 3, false),
-
-   /* 22: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Result, result write predicate, address. */
    TERAKAN_SHADER_OP2(false, 1, 'X', SUB_INT, EG, 1, 'X', 1, 'Z', VEC_012),
    TERAKAN_SHADER_OP2(false, 1, 'Y', SUB_INT, EG, 1, 'Y', 1, 'W', VEC_012),
    TERAKAN_META_QUERY_COPY_ALU_PRED(false, 'Z', VEC_210),
-   TERAKAN_SHADER_OP2(true, 1, 'W', SUB_INT, EG, 0, 'W', V_SQ_ALU_SRC_LITERAL, 'X', SCL_210),
+   TERAKAN_SHADER_OP2(true, 1, 'W', SUB_INT, EG, 0, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_012),
    2,
    0,
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(0, 1, 2 + 3)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0, 7, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1, 3, false),
 };
 
 static uint32_t const terakan_meta_query_copy_streamoutstats_32_bit_vs_r9xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(true, false, 12, 2, 2 + 3),
-
-   /* 6: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(true, false, 1, 2 + 3, 2),
    TERAKAN_SHADER_CF_UAV_COMBINED_STORE(true, 0, 1, true, false, true),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(1, 2),
 
-   /* 7-10: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(7),
-
-   /* 11 (alignment padding), 12-21: Fetch and process the availability. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(0),
-
-   /* 22-25: Fetch the samples. */
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1),
-
-   /* 26: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Result, result write predicate, address. */
    TERAKAN_SHADER_OP2(false, 1, 'X', SUB_INT, EG, 1, 'X', 1, 'Z', VEC_012),
@@ -1820,30 +1898,25 @@ static uint32_t const terakan_meta_query_copy_streamoutstats_32_bit_vs_r9xx[] = 
    TERAKAN_SHADER_OP2(true, 1, 'W', SUB_INT, EG, 0, 'W', V_SQ_ALU_SRC_LITERAL, 'X', VEC_210),
    2,
    0,
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(1, 1, 2 + 3)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, X, Z, MASK, MASK, 0, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32, 1, MASK, MASK, X, Z, 0, 1),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(streamoutstats_32_bit, 2)
 
 static uint32_t const terakan_meta_query_copy_streamoutstats_64_bit_vs_r8xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(false, true, 10, 2, 4 * 2 + 3),
-
-   /* 6: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(false, true, 1, 4 * 2 + 3, 2),
    TERAKAN_SHADER_CF_UAV(false, STORE_DWORD, 0, 0, 1, 0b1111, false, true),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R8XX(1, 2),
 
-   /* 7-9: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R8XX_3_QWORDS(7),
-
-   /* 10-16: Fetch and process the availability. */
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R8XX_7_QWORDS(2),
-
-   /* 17 (alignment padding), 18-21: Fetch the samples. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0, 8, true),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1, 4, false),
-
-   /* 22: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Borrows, upper halves without borrow, address. */
    TERAKAN_SHADER_OP2_NW(false, 'X', SUBB_UINT, EG, 2, 'X', 1, 'X', VEC_012),
@@ -1871,28 +1944,23 @@ static uint32_t const terakan_meta_query_copy_streamoutstats_64_bit_vs_r8xx[] = 
                       VEC_012),
 #endif
    TERAKAN_META_QUERY_COPY_ALU_PRED(true, 'Z', SCL_210),
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(0, 1, 4 * 2 + 3)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R8XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0, 8, true),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R8XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1, 4, false),
 };
 
 static uint32_t const terakan_meta_query_copy_streamoutstats_64_bit_vs_r9xx[] = {
-   /* 0-5: Control flow prolog. */
-   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE_6_QWORDS(true, true, 12, 2, 4 * 2 + 3),
-
-   /* 6: Store the result. */
+   TERAKAN_META_QUERY_COPY_CF_BEFORE_STORE(true, true, 1, 4 * 2 + 3, 2),
    TERAKAN_SHADER_CF_UAV(true, STORE_DWORD, 0, 0, 1, 0b1111, false, true),
+   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_AND_AVAILABILITY_ALU_R9XX(1, 2),
 
-   /* 7-10: Control flow epilog. */
-   TERAKAN_META_QUERY_COPY_CF_AFTER_STORE_R9XX_4_QWORDS(7),
-
-   /* 11 (alignment padding), 12-21: Fetch and process the availability. */
-   0,
-   0,
-   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_AND_ALU_R9XX_10_QWORDS(2),
-
-   /* 22-25: Fetch the samples. */
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0),
-   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1),
-
-   /* 26: Sample processing ALU clause. */
+   /* Sample processing ALU clause. */
 
    /* Borrows, upper halves without borrow. */
    TERAKAN_SHADER_OP2_NW(0, 'X', SUBB_UINT, EG, 2, 'X', 1, 'X', VEC_012),
@@ -1918,6 +1986,15 @@ static uint32_t const terakan_meta_query_copy_streamoutstats_64_bit_vs_r9xx[] = 
    TERAKAN_META_QUERY_COPY_ALU_PRED(true, 'Z', VEC_210),
    4,
    0,
+
+/* Fetch. */
+#if TERAKAN_META_QUERY_COPY_FETCH_IS_UNALIGNED(1, 1, 4 * 2 + 3)
+   0,
+   0,
+#endif
+   TERAKAN_META_QUERY_COPY_AVAILABILITY_FETCH_R9XX,
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 1, X, Y, Z, W, 2, 0),
+   TERAKAN_META_QUERY_COPY_FETCH_SAMPLES_R9XX(_32_32_32_32, 2, X, Y, Z, W, 2, 1),
 };
 
 TERAKAN_META_QUERY_COPY_SHADER(streamoutstats_64_bit, 3)

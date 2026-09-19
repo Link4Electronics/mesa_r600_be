@@ -61,14 +61,14 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r8xx[] = {
       S_SQ_CF_ALU_WORD1_COUNT(8) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch from the source. */
-   S_SQ_CF_WORD0_ADDR(16),
+   S_SQ_CF_WORD0_ADDR(18),
    S_SQ_CF_WORD1_COUNT(0) | S_SQ_CF_WORD1_BARRIER(true) | EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX,
 
    /* 2: Store the R component. */
    TERAKAN_SHADER_CF_UAV(false, STORE_TYPED, 0, 1, 0, 0xF, true, true),
 
    /* 3: Moving the G and B components to GPR.X. */
-   S_SQ_CF_WORD0_ADDR(18) | S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |
+   S_SQ_CF_WORD0_ADDR(16) | S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |
       S_SQ_CF_ALU_WORD0_KCACHE_MODE0(V_SQ_CF_KCACHE_LOCK_1),
    S_SQ_CF_ALU_WORD1_COUNT(1) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
@@ -137,19 +137,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r8xx[] = {
    TERAKAN_SHADER_OP2(true, 3, 'X', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_1_INT, 0,
                       VEC_012),
 
-   /* 16-17: Vertex-fetch from the source to R0.XYZ. */
-   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
-      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W) |
-      S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 3 - 1),
-   S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
-      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
-      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_Z) |
-      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) | S_SQ_VTX_WORD1_USE_CONST_FIELDS(true),
-   S_SQ_VTX_WORD2_MEGA_FETCH(true),
-   0,
-
-   /* 18: ALU clause after storing R and before storing G and B. */
+   /* 16-17: ALU clause after storing R and before storing G and B. */
 
    /* +0: Move the G component to R0.X.
     *
@@ -164,6 +152,18 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r8xx[] = {
     * Cycle 0: Z = R0.
     */
    TERAKAN_SHADER_OP1(true, 1, 'X', MOV, EG, 0, 'Z', VEC_012),
+
+   /* 18-19: Vertex-fetch from the source to R0.XYZ. */
+   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W) |
+      S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 3 - 1),
+   S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
+      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
+      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_Z) |
+      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) | S_SQ_VTX_WORD1_USE_CONST_FIELDS(true),
+   S_SQ_VTX_WORD2_MEGA_FETCH(true),
+   0,
 };
 
 static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
@@ -175,14 +175,14 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
       S_SQ_CF_ALU_WORD1_COUNT(13) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 1: Fetch from the source. */
-   S_SQ_CF_WORD0_ADDR(22),
+   S_SQ_CF_WORD0_ADDR(24),
    S_SQ_CF_WORD1_COUNT(0) | S_SQ_CF_WORD1_BARRIER(true) | EG_V_SQ_CF_WORD1_SQ_CF_INST_TEX,
 
    /* 2: Store the R component. */
    TERAKAN_SHADER_CF_UAV(false, STORE_TYPED, 0, 1, 0, 0xF, true, true),
 
    /* 3: Moving the G and B components to GPR.X. */
-   S_SQ_CF_WORD0_ADDR(24) | S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |
+   S_SQ_CF_WORD0_ADDR(22) | S_SQ_CF_ALU_WORD0_KCACHE_BANK0(TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS) |
       S_SQ_CF_ALU_WORD0_KCACHE_MODE0(V_SQ_CF_KCACHE_LOCK_1),
    S_SQ_CF_ALU_WORD1_COUNT(1) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
       EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
@@ -273,18 +273,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
    TERAKAN_SHADER_OP2(true, 3, 'X', ADD_INT, EG, V_SQ_ALU_SRC_PV, 'X', V_SQ_ALU_SRC_1_INT, 0,
                       VEC_012),
 
-   /* 22-23: Vertex-fetch from the source to R0.XYZ. */
-   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
-      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W),
-   S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
-      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
-      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_Z) |
-      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) | S_SQ_VTX_WORD1_USE_CONST_FIELDS(true),
-   0,
-   0,
-
-   /* 24: ALU clause after storing R and before storing G and B. */
+   /* 22-23: ALU clause after storing R and before storing G and B. */
 
    /* +0: Move the G component to R0.X.
     *
@@ -299,6 +288,17 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
     * Cycle 0: Z = R0.
     */
    TERAKAN_SHADER_OP1(true, 1, 'X', MOV, EG, 0, 'Z', VEC_012),
+
+   /* 24-25: Vertex-fetch from the source to R0.XYZ. */
+   S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W),
+   S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
+      S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
+      S_SQ_VTX_WORD1_DST_SEL_Z(TERASCALE_SWIZZLE_Z) |
+      S_SQ_VTX_WORD1_DST_SEL_W(TERASCALE_SWIZZLE_MASK) | S_SQ_VTX_WORD1_USE_CONST_FIELDS(true),
+   0,
+   0,
 };
 
 struct terakan_meta_shader const terakan_meta_copy_expand_3x_ps = {
