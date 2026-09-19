@@ -285,11 +285,14 @@ terakan_meta_config_draw_begin(
       if (begin_options->rasterization.enable) {
          terakan_meta_config_draw_set_db_shader_control(
             command_writer, TERAKAN_META_CONFIG_DRAW_DB_SHADER_CONTROL_PS_MEMORY_EXPORT);
-         terakan_app_config_draw_set_pending(
-            &command_writer->app_config_draw,
-            TERAKAN_APP_CONFIG_DRAW_ENTRY_CB_COLOR_RTV_AND_BLEND_CONTROL);
-         terakan_hw_config_draw_set_cb_target_mask(&command_writer->hw_config_draw, 0b0);
       }
+      /* `CB_TARGET_MASK` must be zeroed even without rasterization, so the kernel driver doesn't
+       * validate the UAVs as RTVs using the previously emitted mask.
+       */
+      terakan_app_config_draw_set_pending(
+         &command_writer->app_config_draw,
+         TERAKAN_APP_CONFIG_DRAW_ENTRY_CB_COLOR_RTV_AND_BLEND_CONTROL);
+      terakan_hw_config_draw_set_cb_target_mask(&command_writer->hw_config_draw, 0b0);
       terakan_meta_config_draw_set_cb_color_control_for_mode(command_writer, V_028808_CB_NORMAL);
       break;
    case TERAKAN_META_CONFIG_DRAW_BEGIN_CB_MODE_NORMAL_WITH_RTV_AND_DYNAMIC_DB_SHADER_CONTROL:
