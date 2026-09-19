@@ -35,8 +35,7 @@ static uint32_t const terakan_meta_position_from_index_vs_r8xx[] = {
 
    /* 1: Vertex position calculation. */
    S_SQ_CF_WORD0_ADDR(3),
-   S_SQ_CF_ALU_WORD1_COUNT(5) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
-      EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
+   S_SQ_CF_ALU_WORD1_COUNT(5) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 2: Export the position in R0.XY01 and end the program. */
    S_SQ_CF_ALLOC_EXPORT_WORD0_TYPE(V_SQ_CF_ALLOC_EXPORT_WORD0_SQ_EXPORT_POS) |
@@ -92,8 +91,7 @@ static uint32_t const terakan_meta_position_and_layer_from_index_vs_r8xx[] = {
 
    /* 2: Vertex position calculation. */
    S_SQ_CF_WORD0_ADDR(4),
-   S_SQ_CF_ALU_WORD1_COUNT(5) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
-      EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
+   S_SQ_CF_ALU_WORD1_COUNT(5) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 3: Export the position in R0.XY01 and end the program. */
    S_SQ_CF_ALLOC_EXPORT_WORD0_TYPE(V_SQ_CF_ALLOC_EXPORT_WORD0_SQ_EXPORT_POS) |
@@ -140,8 +138,7 @@ static uint32_t const terakan_meta_position_from_index_vs_r9xx[] = {
 
    /* 1: Vertex position calculation. */
    S_SQ_CF_WORD0_ADDR(4),
-   S_SQ_CF_ALU_WORD1_COUNT(4) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
-      EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
+   S_SQ_CF_ALU_WORD1_COUNT(4) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 2: Export the position in R0.XY01. */
    S_SQ_CF_ALLOC_EXPORT_WORD0_TYPE(V_SQ_CF_ALLOC_EXPORT_WORD0_SQ_EXPORT_POS) |
@@ -195,8 +192,7 @@ static uint32_t const terakan_meta_position_and_layer_from_index_vs_r9xx[] = {
 
    /* 2: Vertex position calculation. */
    S_SQ_CF_WORD0_ADDR(5),
-   S_SQ_CF_ALU_WORD1_COUNT(4) | S_SQ_CF_ALU_WORD1_BARRIER(true) |
-      EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
+   S_SQ_CF_ALU_WORD1_COUNT(4) | EG_V_SQ_CF_ALU_WORD1_SQ_CF_INST_ALU,
 
    /* 3: Export the position in R0.XY01. */
    S_SQ_CF_ALLOC_EXPORT_WORD0_TYPE(V_SQ_CF_ALLOC_EXPORT_WORD0_SQ_EXPORT_POS) |
