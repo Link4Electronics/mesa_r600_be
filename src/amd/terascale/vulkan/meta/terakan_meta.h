@@ -54,6 +54,7 @@ struct terakan_meta_shader {
    struct terakan_meta_shader_description r8xx;
    struct terakan_meta_shader_description r9xx;
 
+   uint32_t samplers_used;
    uint16_t kcache_used;
    /* Whether `TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META` is used. */
    bool primary_meta_srv_used;
@@ -87,6 +88,9 @@ enum terakan_meta_shader_index {
     * Exports the instance ID as an integer in all components of the first parameter.
     */
    TERAKAN_META_SHADER_POSITION_AND_LAYER_FROM_INDEX_VS,
+
+   TERAKAN_META_SHADER_BLIT_VS,
+   TERAKAN_META_SHADER_BLIT_PS,
 
    TERAKAN_META_SHADER_CLEAR_DEPTH_VS,
    TERAKAN_META_SHADER_CLEAR_COLOR_PS,

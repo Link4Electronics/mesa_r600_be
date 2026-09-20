@@ -84,6 +84,8 @@ extern struct terakan_meta_shader const terakan_meta_dummy_opaque_ps;
 extern struct terakan_meta_shader const terakan_meta_dummy_empty_cs;
 extern struct terakan_meta_shader const terakan_meta_position_from_index_vs;
 extern struct terakan_meta_shader const terakan_meta_position_and_layer_from_index_vs;
+extern struct terakan_meta_shader const terakan_meta_blit_vs;
+extern struct terakan_meta_shader const terakan_meta_blit_ps;
 extern struct terakan_meta_shader const terakan_meta_clear_depth_vs;
 extern struct terakan_meta_shader const terakan_meta_clear_color_ps;
 extern struct terakan_meta_shader const terakan_meta_copy_buffer_to_image_ps;

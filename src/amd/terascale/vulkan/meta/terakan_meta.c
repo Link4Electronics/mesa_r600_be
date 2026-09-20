@@ -39,6 +39,8 @@ struct terakan_meta_shader const * const terakan_meta_shaders[TERAKAN_META_SHADE
    [TERAKAN_META_SHADER_POSITION_FROM_INDEX_VS] = &terakan_meta_position_from_index_vs,
    [TERAKAN_META_SHADER_POSITION_AND_LAYER_FROM_INDEX_VS] =
       &terakan_meta_position_and_layer_from_index_vs,
+   [TERAKAN_META_SHADER_BLIT_VS] = &terakan_meta_blit_vs,
+   [TERAKAN_META_SHADER_BLIT_PS] = &terakan_meta_blit_ps,
    [TERAKAN_META_SHADER_CLEAR_DEPTH_VS] = &terakan_meta_clear_depth_vs,
    [TERAKAN_META_SHADER_CLEAR_COLOR_PS] = &terakan_meta_clear_color_ps,
    [TERAKAN_META_SHADER_COPY_BUFFER_TO_IMAGE_PS] = &terakan_meta_copy_buffer_to_image_ps,

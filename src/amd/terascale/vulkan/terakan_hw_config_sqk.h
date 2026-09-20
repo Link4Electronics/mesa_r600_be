@@ -295,6 +295,14 @@ void terakan_hw_config_sqk_set_sampler_fs(struct terakan_hw_config_sqk * config,
 void terakan_hw_config_sqk_set_sampler_cs(struct terakan_hw_config_sqk * config, unsigned index,
                                           struct terakan_sampler_descriptor const * descriptor);
 
+static inline struct terakan_sampler_descriptor const *
+terakan_hw_config_sqk_get_sampler(struct terakan_hw_config_sqk const * const config,
+                                  mesa_shader_stage const stage_index, unsigned const index)
+{
+   assert(index < TERAKAN_SAMPLER_HW_COUNT_PER_STAGE);
+   return &config->stages_[stage_index].samplers[index];
+}
+
 /* Pass NULL BO or descriptor pointer to the SRV setter to unbind the SRV.
  * Both the BO and the descriptor pointers are ignored if any of them is NULL.
  */
