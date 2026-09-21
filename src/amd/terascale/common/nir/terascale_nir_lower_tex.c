@@ -83,8 +83,10 @@ terascale_nir_lower_tex_instr(nir_builder * const builder, nir_tex_instr * const
       nir_src * const tex_coord_src = &tex->src[tex_coord_src_index].src;
 
       if (tex->is_array && tex->op != nir_texop_lod) {
-         /* The hardware applies the `Z_FILTER` of the sampler to array layers, but Vulkan defines
-          * the selection of the layer as rounding towards the nearest even.
+         /* According to testing on Barts, Turks and Devastator, in the hardware, array texture
+          * sampling implicitly uses `Z_FILTER = POINT`, but the layer is selected as if Z was a
+          * regular texture coordinate, first converted to fixed-point respecting `TRUNCATE_COORD`,
+          * and then floored. Vulkan specifies that the layer is rounded to the nearest even.
           */
          unsigned const array_layer_component = tex_coord_src->ssa->num_components - 1u;
          nir_src_rewrite(
