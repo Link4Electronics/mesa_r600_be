@@ -271,14 +271,17 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
       unsigned src_vk_aspect_mask_remaining = (unsigned)region->srcSubresource.aspectMask;
       u_foreach_bit (dst_vk_aspect_bit_index, region->dstSubresource.aspectMask) {
          dst_descriptor_create_info.image_aspect_index = terakan_format_aspect_index(
-            dst_image->format_info.aspect_map, (VkImageAspectFlags)1 << dst_vk_aspect_bit_index, 0);
+            dst_image->format_info.aspect_map,
+            (VkImageAspectFlagBits)((VkImageAspectFlags)1 << dst_vk_aspect_bit_index), 0);
          dst_descriptor_create_info.view_format = terakan_meta_transfer_image_block_format_info(
             terascale_format_bytes_per_block
                [dst_image->format_info.aspect_formats[dst_descriptor_create_info.image_aspect_index]
                    .format]);
          src_descriptor_create_info.image_aspect_index = terakan_format_aspect_index(
             src_image->format_info.aspect_map,
-            (VkImageAspectFlags)1 << u_bit_scan(&src_vk_aspect_mask_remaining), 0);
+            (VkImageAspectFlagBits)((VkImageAspectFlags)1
+                                    << u_bit_scan(&src_vk_aspect_mask_remaining)),
+            0);
          src_descriptor_create_info.view_format = terakan_meta_transfer_image_block_format_info(
             terascale_format_bytes_per_block
                [src_image->format_info.aspect_formats[src_descriptor_create_info.image_aspect_index]
