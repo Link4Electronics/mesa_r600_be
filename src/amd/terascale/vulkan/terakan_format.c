@@ -109,13 +109,16 @@ terakan_format_info_get(VkFormat const format, struct terakan_format_info * cons
 }
 
 VKAPI_ATTR void VKAPI_CALL
-terakan_vk_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const physicalDevice,
+terakan_vk_GetPhysicalDeviceFormatProperties2(VkPhysicalDevice const physicalDevice,
                                               VkFormat const format,
                                               VkFormatProperties2 * const pFormatProperties)
 {
    VkFormatFeatureFlags2 image_linear_tiling_features = 0;
    VkFormatFeatureFlags2 image_optimal_tiling_features = 0;
    VkFormatFeatureFlags2 buffer_features = 0;
+
+   bool const is_r8xx_eg =
+      terakan_physical_device_from_handle(physicalDevice)->chip_info.is_r8xx_eg;
 
    struct terakan_format_info format_info;
    if (terakan_format_info_get(format, &format_info)) {
@@ -126,11 +129,11 @@ terakan_vk_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const phys
       bool image_sq_vertex_fetch = true;
 
       bool image_sq_texture_fetch = true;
-      /* Ignore if image_sq_texture_fetch is false. */
+      /* Ignore `image_sq_texture_fetch_*` if `image_sq_texture_fetch` is false. */
       bool image_sq_texture_fetch_linear_filter = true;
 
       bool image_cb_color = true;
-      /* Ignore if cb_color is false. */
+      /* Ignore `image_cb_color_*` if `image_cb_color` is false. */
       bool image_cb_color_blend = true;
       bool image_cb_color_atomic = true;
 
@@ -138,6 +141,14 @@ terakan_vk_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const phys
          struct terascale_format_info const aspect_format_info =
             format_info.aspect_formats[aspect_index];
          if (aspect_format_info.format == TERASCALE_FORMAT_INDEX_INVALID) {
+            break;
+         }
+
+         if (!is_r8xx_eg && terascale_format_has_signed_2_bit_channel(&aspect_format_info)) {
+            /* The 2-bit channel is unsigned on the chip. */
+            image_sq_vertex_fetch = false;
+            image_sq_texture_fetch = false;
+            image_cb_color = false;
             break;
          }
 
@@ -281,6 +292,12 @@ terakan_vk_GetPhysicalDeviceFormatProperties2(UNUSED VkPhysicalDevice const phys
                   buffer_features |= VK_FORMAT_FEATURE_2_STORAGE_TEXEL_BUFFER_ATOMIC_BIT;
                }
             }
+         }
+         if (!is_r8xx_eg && terascale_format_has_signed_2_bit_channel(&buffer_format_info)) {
+            /* The 2-bit channel is unsigned on the chip. */
+            /* TODO(Triang3l): Support the format for vertex buffers via ALU signedness conversion.
+             */
+            buffer_features = 0;
          }
       }
 

@@ -66,6 +66,13 @@ struct terakan_physical_device_chip_info {
 
    enum radeon_family chip_family;
 
+   /* Whether the chip belongs to the original Evergreen discrete GPU families and implements an
+    * early version of the R8xx architecture. On these GPUs:
+    * - The 2-bit channel of `2_10_10_10` and `10_10_10_2` may be signed, as expected by Vulkan
+    *   (always unsigned on newer chip families);
+    * - The `GET_BUFFER_RESINFO` shader instruction doesn't work.
+    */
+   bool is_r8xx_eg;
    bool is_r9xx;
 
    bool has_dedicated_vram;

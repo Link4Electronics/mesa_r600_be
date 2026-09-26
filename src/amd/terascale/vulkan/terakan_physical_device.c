@@ -90,6 +90,7 @@ terakan_physical_device_chip_info_init(
 
    chip_info_out->pci_device_id = pci_device_id;
    chip_info_out->chip_family = chip_family;
+   chip_info_out->is_r8xx_eg = chip_family < CHIP_PALM;
    bool const is_r9xx = chip_family >= CHIP_CAYMAN;
    chip_info_out->is_r9xx = is_r9xx;
 

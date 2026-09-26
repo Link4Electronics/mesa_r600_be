@@ -322,8 +322,15 @@ struct terascale_format_info {
     * For floating-point formats, this is nonzero only if it makes a difference (such as for BC6).
     *
     * Void and nonexistent channels have the signedness of the first non-void channel copied for
-    * simplicity and consistency. The single-bit channel of 1_5_5_5 and 5_5_5_1 is always unsigned,
-    * however.
+    * simplicity and consistency.
+    *
+    * The actual signedness of the 2-bit channel of 2_10_10_10 and 10_10_10_2 depends on the chip
+    * (may be signed on R8xx Evergreen and earlier, always unsigned on R8xx Fusion / NI and R9xx),
+    * but in this field, it's specified as signed as normal if it's signed in the `pipe_format` (the
+    * client must handle the chip differences).
+    *
+    * The 1-bit channel of 1_5_5_5 and 5_5_5_1 is always unsigned, however, regardless of whether
+    * it's used.
     */
    uint32_t channels_signed : 4;
 
@@ -356,6 +363,15 @@ struct terascale_format_info {
 extern struct terascale_format_info const terascale_format_info_r6xx[PIPE_FORMAT_COUNT];
 /* For combined depth / stencil formats, index with the format of the specific aspect. */
 extern struct terascale_format_info const terascale_format_info_r8xx[PIPE_FORMAT_COUNT];
+
+static inline bool
+terascale_format_has_signed_2_bit_channel(struct terascale_format_info const * const format_info)
+{
+   return (format_info->format == TERASCALE_FORMAT_INDEX_2_10_10_10 &&
+           (format_info->channels_signed & 0b1000)) ||
+          (format_info->format == TERASCALE_FORMAT_INDEX_10_10_10_2 &&
+           (format_info->channels_signed & 0b0001));
+}
 
 static inline bool
 terascale_format_supports_uav_atomic_int(struct terascale_format_info const * const format_info)
