@@ -689,6 +689,11 @@ def get_format_info(pipe_format, is_r8xx):
         return None
 
     if is_r8xx:
+        if info.number_type == 'USCALED' or info.number_type == 'SSCALED':
+            # Not supported at least by sampling according to the `vkCmdBlitImage` CTS tests
+            # (`dEQP-VK.api.copy_and_blit.core.blit_image.all_formats.color.*`) executed on Barts
+            # and Devastator.
+            info.supports_sq_texture_fetch = False
         format_cb_color_number_types = CB_COLOR_R8XX_SUPPORTED_NUMBER_TYPES.get(info.format)
         if format_cb_color_number_types is None or info.number_type not in format_cb_color_number_types:
             info.supports_cb_color = False
