@@ -358,24 +358,20 @@ terakan_app_config_draw_apply_sq_pgm_pre_rasterization(
 
    /* Set the constant usage. */
 
-   command_writer->push_constants_state.graphics_stages_using_push_constants &=
-      ~(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
-        VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
-   command_writer->push_constants_state.usage_pre_rasterization =
-      (struct terakan_push_constants_usage){};
+   struct terakan_push_constants_usage push_constants_usage = {};
+   uint8_t stages_using_push_constants = 0b0;
    for (unsigned sw_stage_index = 0; sw_stage_index < ARRAY_SIZE(sw_stages); ++sw_stage_index) {
       struct terakan_shader_impl const * const stage_shader = sw_stages[sw_stage_index];
       if (stage_shader == NULL ||
           terakan_push_constants_usage_empty(stage_shader->push_constants_usage)) {
          continue;
       }
-      command_writer->push_constants_state.usage_pre_rasterization =
-         terakan_push_constants_usage_union(
-            command_writer->push_constants_state.usage_pre_rasterization,
-            stage_shader->push_constants_usage);
-      command_writer->push_constants_state.graphics_stages_using_push_constants |=
-         mesa_to_vk_shader_stage((mesa_shader_stage)sw_stage_index);
+      push_constants_usage = terakan_push_constants_usage_union(push_constants_usage,
+                                                                stage_shader->push_constants_usage);
+      stages_using_push_constants |= (uint8_t)1 << sw_stage_index;
    }
+   terakan_push_constants_set_usage_pre_rasterization(
+      &command_writer->push_constants_state, push_constants_usage, stages_using_push_constants);
 
    terakan_hw_config_sqk_set_usage_vs_tes(
       &command_writer->hw_config_sqk,
@@ -1119,15 +1115,9 @@ terakan_app_config_draw_apply_sq_pgm_fragment(
                                                          TERAKAN_SHADER_RING_INDEX_PSTMP, 0);
    }
 
-   command_writer->push_constants_state.usage_fragment =
-      fs != NULL ? fs->push_constants_usage : (struct terakan_push_constants_usage){};
-   if (terakan_push_constants_usage_empty(command_writer->push_constants_state.usage_fragment)) {
-      command_writer->push_constants_state.graphics_stages_using_push_constants &=
-         ~VK_SHADER_STAGE_FRAGMENT_BIT;
-   } else {
-      command_writer->push_constants_state.graphics_stages_using_push_constants |=
-         VK_SHADER_STAGE_FRAGMENT_BIT;
-   }
+   terakan_push_constants_set_usage_fragment(
+      &command_writer->push_constants_state,
+      fs != NULL ? fs->push_constants_usage : (struct terakan_push_constants_usage){});
 
    terakan_hw_config_sqk_set_usage_fs(&command_writer->hw_config_sqk,
                                       fs != NULL ? &fs->sqk_usage : NULL);
@@ -1924,14 +1914,8 @@ terakan_app_config_draw_apply_cb_color_uav_and_unused_mrt(
             &app_config->cb_color_uav_and_unused_mrt_.uav[uav_uncompacted_index];
 
          if (G_028C70_RESOURCE_TYPE(uav->color.info) == V_028C70_BUFFER) {
-            uint32_t * const uav_alignment_offset_constant =
-               &command_writer->push_constants_state.driver_constants
-                   .buffer_uav_alignment_offset[uav_count];
-            if (*uav_alignment_offset_constant != uav->color.view) {
-               *uav_alignment_offset_constant = uav->color.view;
-               command_writer->push_constants_state.driver_constants_modified |=
-                  BITFIELD_BIT(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET);
-            }
+            terakan_push_constants_set_driver_buffer_uav_alignment_offset(
+               &command_writer->push_constants_state, uav_count, uav->color.view);
             /* The driver-internal `view` field of the descriptor will be eliminated by `hw_config`.
              */
          }

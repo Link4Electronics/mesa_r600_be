@@ -148,8 +148,8 @@ terakan_meta_config_draw_set_kcache_push_constant_buffer_vs(
    struct terakan_gfx_command_writer * const command_writer, uint32_t const size_lines,
    struct terakan_bo const * const bo, uint32_t const va_lines)
 {
-   command_writer->push_constants_state.up_to_date_push_constants_bound_to_stages &=
-      ~VK_SHADER_STAGE_VERTEX_BIT;
+   terakan_push_constants_set_unbound_to_stage(&command_writer->push_constants_state,
+                                               MESA_SHADER_VERTEX);
    terakan_hw_config_sqk_set_kcache_vs(&command_writer->hw_config_sqk,
                                        TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS, size_lines, bo,
                                        va_lines);
@@ -160,8 +160,8 @@ terakan_meta_config_draw_set_kcache_push_constant_buffer_ps(
    struct terakan_gfx_command_writer * const command_writer, uint32_t const size_lines,
    struct terakan_bo const * const bo, uint32_t const va_lines)
 {
-   command_writer->push_constants_state.up_to_date_push_constants_bound_to_stages &=
-      ~VK_SHADER_STAGE_FRAGMENT_BIT;
+   terakan_push_constants_set_unbound_to_stage(&command_writer->push_constants_state,
+                                               MESA_SHADER_FRAGMENT);
    terakan_hw_config_sqk_set_kcache_fs(&command_writer->hw_config_sqk,
                                        TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS, size_lines, bo,
                                        va_lines);

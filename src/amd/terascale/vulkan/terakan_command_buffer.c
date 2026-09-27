@@ -1166,7 +1166,7 @@ terakan_vk_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
     */
    terakan_hw_config_sqk_reset(&gfx_command_writer->hw_config_sqk, false);
 
-   terakan_push_constants_state_reset(&gfx_command_writer->push_constants_state);
+   terakan_push_constants_reset(&gfx_command_writer->push_constants_state);
 
    struct terakan_device const * const device = terakan_command_buffer_device(command_buffer);
 

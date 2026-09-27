@@ -29,7 +29,6 @@
 
 #include "compiler/shader_enums.h"
 #include "util/macros.h"
-#include "vk_util.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -68,7 +67,7 @@ struct terakan_push_constants_driver {
  */
 #define TERAKAN_PUSH_CONSTANTS_APP_BASE_BYTES                                                      \
    ALIGN_POT(sizeof(struct terakan_push_constants_driver), sizeof(float) * 4)
-/* VUID-vkCmdPushConstants-size-00369: "size must be a multiple of 4" */
+/* VUID-vkCmdPushConstants-size-00369: "`size` must be a multiple of 4" */
 #define TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES                                                      \
    ((TERAKAN_KCACHE_HW_MAX_BUFFER_SIZE_BYTES - TERAKAN_PUSH_CONSTANTS_APP_BASE_BYTES) &            \
     ~(uint32_t)(4 - 1))
@@ -102,31 +101,103 @@ struct terakan_push_constants_state {
       uint32_t va_kcache_lines;
       uint32_t size_kcache_lines;
       uint32_t app_up_to_date_bytes_written;
-   } allocation;
+   } allocation_;
 
-   VkShaderStageFlags graphics_stages_using_push_constants;
-   struct terakan_push_constants_usage usage_pre_rasterization;
-   struct terakan_push_constants_usage usage_fragment;
-   struct terakan_push_constants_usage usage_compute;
+   uint8_t graphics_stages_using_push_constants_;
+   struct terakan_push_constants_usage usage_pre_rasterization_;
+   struct terakan_push_constants_usage usage_fragment_;
+   struct terakan_push_constants_usage usage_compute_;
 
-   VkShaderStageFlags up_to_date_push_constants_bound_to_stages;
+   uint8_t up_to_date_push_constants_bound_to_stages_;
 
-   uint32_t driver_constants_modified;
-   struct terakan_push_constants_driver driver_constants;
+   uint32_t driver_constants_modified_;
+   struct terakan_push_constants_driver driver_constants_;
 
-   /* Aligned to uint32_t for more optimal memcpy. Offsets and sizes are specified in bytes, but:
-    * VUID-vkCmdPushConstants-offset-00368: "offset must be a multiple of 4"
-    * VUID-vkCmdPushConstants-size-00369: "size must be a multiple of 4"
+   /* Aligned to `uint32_t` for more optimal `memcpy`.
+    * In Vulkan, offsets and sizes are specified in bytes, but:
+    * VUID-vkCmdPushConstants-offset-00368: "`offset` must be a multiple of 4"
+    * VUID-vkCmdPushConstants-size-00369: "`size` must be a multiple of 4"
     */
-   alignas(uint32_t) char app_constants[TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES];
+   alignas(uint32_t) char app_constants_[TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES];
 };
 
-void terakan_push_constants_state_reset(struct terakan_push_constants_state * state);
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_u32_(struct terakan_push_constants_state * const state,
+                                       enum terakan_push_constants_driver_index const index,
+                                       uint32_t * const value_ptr, uint32_t const new_value)
+{
+   if (*value_ptr == new_value) {
+      return false;
+   }
+   *value_ptr = new_value;
+   state->driver_constants_modified_ |= BITFIELD_BIT(index);
+   return true;
+}
+
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_buffer_uav_alignment_offset(
+   struct terakan_push_constants_state * const state, unsigned const uav_index,
+   uint32_t const value)
+{
+   assert(uav_index < TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT);
+   return terakan_push_constants_set_driver_u32_(
+      state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET,
+      &state->driver_constants_.buffer_uav_alignment_offset[uav_index], value);
+}
+
+void terakan_push_constants_set_app_constants(struct terakan_push_constants_state * state,
+                                              uint32_t offset_bytes, uint32_t size_bytes,
+                                              void const * values);
+
+static inline void
+terakan_push_constants_set_usage_pre_rasterization(struct terakan_push_constants_state * const state,
+                                                   struct terakan_push_constants_usage const usage,
+                                                   uint8_t const stages_using_push_constants)
+{
+   uint8_t const not_pre_rasterization_stages =
+      (uint8_t) ~(BITFIELD_BIT(MESA_SHADER_VERTEX) | BITFIELD_BIT(MESA_SHADER_TESS_CTRL) |
+                  BITFIELD_BIT(MESA_SHADER_TESS_EVAL) | BITFIELD_BIT(MESA_SHADER_GEOMETRY));
+   assert(!(stages_using_push_constants & not_pre_rasterization_stages));
+   state->usage_pre_rasterization_ = usage;
+   state->graphics_stages_using_push_constants_ =
+      (state->graphics_stages_using_push_constants_ & not_pre_rasterization_stages) |
+      stages_using_push_constants;
+}
+
+static inline void
+terakan_push_constants_set_usage_fragment(struct terakan_push_constants_state * const state,
+                                          struct terakan_push_constants_usage const usage)
+{
+   state->usage_fragment_ = usage;
+   if (!terakan_push_constants_usage_empty(usage)) {
+      state->graphics_stages_using_push_constants_ |= BITFIELD_BIT(MESA_SHADER_FRAGMENT);
+   } else {
+      state->graphics_stages_using_push_constants_ &= ~BITFIELD_BIT(MESA_SHADER_FRAGMENT);
+   }
+}
+
+static inline void
+terakan_push_constants_set_usage_compute(struct terakan_push_constants_state * const state,
+                                         struct terakan_push_constants_usage const usage)
+{
+   state->usage_compute_ = usage;
+}
+
+static inline void
+terakan_push_constants_set_unbound_to_stage(struct terakan_push_constants_state * const state,
+                                            mesa_shader_stage const stage)
+{
+   state->up_to_date_push_constants_bound_to_stages_ &= ~BITFIELD_BIT(stage);
+}
 
 struct terakan_gfx_command_writer;
 
 void terakan_push_constants_apply(struct terakan_gfx_command_writer * command_writer,
                                   bool is_compute);
+
+void terakan_push_constants_reset(struct terakan_push_constants_state * state);
 
 #ifdef __cplusplus
 }

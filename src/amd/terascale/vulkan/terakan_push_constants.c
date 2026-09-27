@@ -25,9 +25,9 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
-#include "terakan_vk_entrypoints.h"
-#include "terakan_vk_shader.h"
 
+#include "compiler/shader_enums.h"
+#include "util/bitscan.h"
 #include "util/macros.h"
 
 #include <assert.h>
@@ -35,41 +35,19 @@
 #include <string.h>
 
 void
-terakan_push_constants_state_reset(struct terakan_push_constants_state * const state)
+terakan_push_constants_set_app_constants(struct terakan_push_constants_state * const state,
+                                         uint32_t offset_bytes, uint32_t size_bytes,
+                                         void const * const values)
 {
-   state->allocation.mapping_if_up_to_date = NULL;
+   /* #MemoryIntegrity. */
+   offset_bytes = MIN2(offset_bytes, (uint32_t)TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES);
+   size_bytes = MIN2(size_bytes, (uint32_t)TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES - offset_bytes);
 
-   state->graphics_stages_using_push_constants = 0;
-   state->usage_pre_rasterization = (struct terakan_push_constants_usage){};
-   state->usage_fragment = (struct terakan_push_constants_usage){};
-   state->usage_compute = (struct terakan_push_constants_usage){};
-
-   state->up_to_date_push_constants_bound_to_stages = 0;
-
-   state->driver_constants_modified = BITFIELD_MASK(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_COUNT);
-
-   /* For more stable comparisons. */
-   memset(&state->driver_constants, 0, sizeof(state->driver_constants));
-}
-
-VKAPI_ATTR void VKAPI_CALL
-terakan_vk_CmdPushConstants2KHR(VkCommandBuffer const commandBuffer,
-                                VkPushConstantsInfoKHR const * const pPushConstantsInfo)
-{
-   struct terakan_gfx_command_writer * const command_writer =
-      terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
-
-   assert(pPushConstantsInfo->offset <= TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES);
-   assert(pPushConstantsInfo->size <=
-          TERAKAN_PUSH_CONSTANTS_APP_SIZE_BYTES - pPushConstantsInfo->offset);
-
-   if (command_writer->push_constants_state.allocation.app_up_to_date_bytes_written >
-       pPushConstantsInfo->offset) {
-      command_writer->push_constants_state.allocation.mapping_if_up_to_date = NULL;
+   if (state->allocation_.app_up_to_date_bytes_written > offset_bytes) {
+      state->allocation_.mapping_if_up_to_date = NULL;
    }
 
-   memcpy(command_writer->push_constants_state.app_constants + pPushConstantsInfo->offset,
-          pPushConstantsInfo->pValues, pPushConstantsInfo->size);
+   memcpy(state->app_constants_ + offset_bytes, values, size_bytes);
 }
 
 void
@@ -79,78 +57,95 @@ terakan_push_constants_apply(struct terakan_gfx_command_writer * const command_w
    struct terakan_push_constants_state * const state = &command_writer->push_constants_state;
 
    struct terakan_push_constants_usage const usage =
-      is_compute ? state->usage_compute
-                 : terakan_push_constants_usage_union(state->usage_pre_rasterization,
-                                                      state->usage_fragment);
+      is_compute ? state->usage_compute_
+                 : terakan_push_constants_usage_union(state->usage_pre_rasterization_,
+                                                      state->usage_fragment_);
    if (terakan_push_constants_usage_empty(usage)) {
       return;
    }
    uint32_t const bytes_used = TERAKAN_PUSH_CONSTANTS_APP_BASE_BYTES + usage.app_extent_bytes;
    uint32_t const kcache_lines_used = DIV_ROUND_UP(bytes_used, TERAKAN_KCACHE_HW_LINE_BYTES);
 
-   if ((state->driver_constants_modified & usage.driver_constants) ||
-       state->allocation.size_kcache_lines < kcache_lines_used) {
-      state->allocation.mapping_if_up_to_date = NULL;
+   if ((state->driver_constants_modified_ & usage.driver_constants) ||
+       state->allocation_.size_kcache_lines < kcache_lines_used) {
+      state->allocation_.mapping_if_up_to_date = NULL;
    }
 
-   if (state->allocation.mapping_if_up_to_date == NULL) {
-      state->allocation.mapping_if_up_to_date = terakan_push_buffer_allocate_kcache(
+   if (state->allocation_.mapping_if_up_to_date == NULL) {
+      state->allocation_.mapping_if_up_to_date = terakan_push_buffer_allocate_kcache(
          command_writer->base.command_buffer, TERAKAN_KCACHE_HW_LINE_BYTES * kcache_lines_used,
-         &state->allocation.bo, &state->allocation.va_kcache_lines);
-      if (unlikely(state->allocation.mapping_if_up_to_date == NULL)) {
+         &state->allocation_.bo, &state->allocation_.va_kcache_lines);
+      if (unlikely(state->allocation_.mapping_if_up_to_date == NULL)) {
          return;
       }
-      state->allocation.size_kcache_lines = kcache_lines_used;
-      state->allocation.app_up_to_date_bytes_written = 0;
+      state->allocation_.size_kcache_lines = kcache_lines_used;
+      state->allocation_.app_up_to_date_bytes_written = 0;
 
-      state->up_to_date_push_constants_bound_to_stages = 0;
+      state->up_to_date_push_constants_bound_to_stages_ = 0;
 
-      memcpy(state->allocation.mapping_if_up_to_date, &state->driver_constants,
-             sizeof(state->driver_constants));
-      state->driver_constants_modified = 0;
+      memcpy(state->allocation_.mapping_if_up_to_date, &state->driver_constants_,
+             sizeof(state->driver_constants_));
+      state->driver_constants_modified_ = 0;
    }
 
-   /* If merely expanding the used range (binding a pipeline that has a shader stage that previously
-    * wasn't used, for instance), but not changing the push constant data itself themselves, it's
-    * possible to append the newly used constants to the existing allocation without creating a new
-    * one.
+   /* If merely expanding the used range, but not changing the push constant data itself (with the
+    * same Vulkan pipeline layout, binding a shader stage that previously wasn't used, for example),
+    * it's possible to append the newly used constants to the existing allocation without creating a
+    * new one.
     */
-   if (usage.app_extent_bytes > state->allocation.app_up_to_date_bytes_written) {
-      memcpy(state->allocation.mapping_if_up_to_date + TERAKAN_PUSH_CONSTANTS_APP_BASE_BYTES +
-                state->allocation.app_up_to_date_bytes_written,
-             state->app_constants + state->allocation.app_up_to_date_bytes_written,
-             usage.app_extent_bytes - state->allocation.app_up_to_date_bytes_written);
-      state->allocation.app_up_to_date_bytes_written = usage.app_extent_bytes;
+   if (usage.app_extent_bytes > state->allocation_.app_up_to_date_bytes_written) {
+      memcpy(state->allocation_.mapping_if_up_to_date + TERAKAN_PUSH_CONSTANTS_APP_BASE_BYTES +
+                state->allocation_.app_up_to_date_bytes_written,
+             state->app_constants_ + state->allocation_.app_up_to_date_bytes_written,
+             usage.app_extent_bytes - state->allocation_.app_up_to_date_bytes_written);
+      state->allocation_.app_up_to_date_bytes_written = usage.app_extent_bytes;
    }
 
-   VkShaderStageFlags const bind_to_stages =
-      (is_compute ? VK_SHADER_STAGE_COMPUTE_BIT : state->graphics_stages_using_push_constants) &
-      ~state->up_to_date_push_constants_bound_to_stages;
+   uint8_t const bind_to_stages = (is_compute ? (uint8_t)1 << MESA_SHADER_COMPUTE
+                                              : state->graphics_stages_using_push_constants_) &
+                                  ~state->up_to_date_push_constants_bound_to_stages_;
    if (bind_to_stages) {
       struct terakan_srv_descriptor const srv = {
          .srv = {
-            [0] = state->allocation.va_kcache_lines << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
-            [1] = ((uint32_t)state->allocation.size_kcache_lines
+            [0] = state->allocation_.va_kcache_lines << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
+            [1] = ((uint32_t)state->allocation_.size_kcache_lines
                    << TERAKAN_KCACHE_HW_LINE_BYTES_LOG2) -
                   1u,
-            [2] = S_030008_BASE_ADDRESS_HI(state->allocation.va_kcache_lines >>
+            [2] = S_030008_BASE_ADDRESS_HI(state->allocation_.va_kcache_lines >>
                                            (32 - TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)) |
                   S_030008_STRIDE(1),
             [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
             [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
             [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
          }};
-      for (VkShaderStageFlags stages_remaining = bind_to_stages; stages_remaining;) {
-         mesa_shader_stage const stage = terakan_vk_shader_stage_scan(&stages_remaining);
+      u_foreach_bit (stage_index, bind_to_stages) {
          struct terakan_hw_config_sqk_set_functions const * const sqk_set_functions =
-            &terakan_hw_config_sqk_stage_set_functions[stage];
+            &terakan_hw_config_sqk_stage_set_functions[stage_index];
          sqk_set_functions->kcache(&command_writer->hw_config_sqk,
                                    TERAKAN_KCACHE_BUFFER_PUSH_CONSTANTS,
-                                   state->allocation.size_kcache_lines, state->allocation.bo,
-                                   state->allocation.va_kcache_lines);
+                                   state->allocation_.size_kcache_lines, state->allocation_.bo,
+                                   state->allocation_.va_kcache_lines);
          sqk_set_functions->srv(&command_writer->hw_config_sqk, TERAKAN_SRV_RANGE_PUSH_CONSTANTS,
-                                state->allocation.bo, &srv);
+                                state->allocation_.bo, &srv);
       }
-      state->up_to_date_push_constants_bound_to_stages |= bind_to_stages;
+      state->up_to_date_push_constants_bound_to_stages_ |= bind_to_stages;
    }
+}
+
+void
+terakan_push_constants_reset(struct terakan_push_constants_state * const state)
+{
+   state->allocation_.mapping_if_up_to_date = NULL;
+
+   state->graphics_stages_using_push_constants_ = 0b0;
+   state->usage_pre_rasterization_ = (struct terakan_push_constants_usage){};
+   state->usage_fragment_ = (struct terakan_push_constants_usage){};
+   state->usage_compute_ = (struct terakan_push_constants_usage){};
+
+   state->up_to_date_push_constants_bound_to_stages_ = 0b0;
+
+   state->driver_constants_modified_ = BITFIELD_MASK(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_COUNT);
+
+   /* For more stable comparisons. */
+   memset(&state->driver_constants_, 0, sizeof(state->driver_constants_));
 }

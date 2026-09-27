@@ -111,6 +111,11 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
          MAX2(lstmp_ring_bytes_needed_shr8, *command_buffer_lstmp_ring_bytes_needed_shr8);
    }
 
+   terakan_push_constants_set_usage_compute(&command_writer->push_constants_state,
+                                            sq_pgm_ls != NULL
+                                               ? sq_pgm_ls->push_constants_usage
+                                               : (struct terakan_push_constants_usage){});
+
    terakan_hw_config_sqk_set_usage_cs(&command_writer->hw_config_sqk, &sq_pgm_ls->sqk_usage);
 
    /* UAVs. */
@@ -130,13 +135,8 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
             &config->cb_color_.uav[uav_uncompacted_index];
 
          if (G_028C70_RESOURCE_TYPE(uav->color.info) == V_028C70_BUFFER) {
-            uint32_t * const uav_alignment_offset_constant =
-               &command_writer->push_constants_state.driver_constants
-                   .buffer_uav_alignment_offset[uav_count];
-            if (*uav_alignment_offset_constant != uav->color.view) {
-               *uav_alignment_offset_constant = uav->color.view;
-               command_writer->push_constants_state.driver_constants_modified |=
-                  BITFIELD_BIT(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET);
+            if (terakan_push_constants_set_driver_buffer_uav_alignment_offset(
+                   &command_writer->push_constants_state, uav_count, uav->color.view)) {
                /* The UAV alignment offset constants are set by both `app_config_compute` and
                 * `app_config_draw`.
                 */

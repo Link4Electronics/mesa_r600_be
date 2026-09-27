@@ -311,6 +311,15 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
    }
 }
 
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_CmdPushConstants2KHR(VkCommandBuffer const commandBuffer,
+                                VkPushConstantsInfoKHR const * const pPushConstantsInfo)
+{
+   terakan_push_constants_set_app_constants(
+      &terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx->push_constants_state,
+      pPushConstantsInfo->offset, pPushConstantsInfo->size, pPushConstantsInfo->pValues);
+}
+
 /* `compatible_types` must be terminated with `VK_DESCRIPTOR_TYPE_MAX_ENUM`, and the first element
  * must most unambiguously describe the expected descriptor type since it's used for logging.
  */
