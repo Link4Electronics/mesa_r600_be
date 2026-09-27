@@ -235,7 +235,7 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
    terakan_meta_config_draw_set_sq_pgm_ps(command_writer, TERAKAN_META_SHADER_COPY_IMAGE_PS);
 
    int32_t constants[TERAKAN_META_COPY_IMAGE_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(int32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 

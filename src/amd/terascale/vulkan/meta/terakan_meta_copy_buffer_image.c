@@ -626,7 +626,7 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
                                           TERAKAN_META_SHADER_COPY_BUFFER_TO_IMAGE_PS);
 
    uint32_t constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
@@ -751,7 +751,7 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
                                           TERAKAN_META_SHADER_COPY_IMAGE_TO_BUFFER_PS);
 
    uint32_t constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 

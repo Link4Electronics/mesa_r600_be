@@ -485,7 +485,7 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
    /* Must not return without restoring the application sampler from now. */
 
    float constants[TERAKAN_META_BLIT_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(float) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 

@@ -401,7 +401,7 @@ terakan_meta_copy_expand_3x_buffer_to_image(
       terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
@@ -504,7 +504,7 @@ terakan_meta_copy_expand_3x_image_to_buffer(
       terakan_meta_transfer_expand_3x_srv(bytes_per_surfel);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
@@ -639,7 +639,7 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
       terakan_meta_transfer_expand_3x_uav(dst_surface_aspect->bytes_per_block / 3u);
 
    uint32_t constants[TERAKAN_META_COPY_EXPAND_3X_CONSTS_COUNT] = {};
-   char old_constants[sizeof(constants)];
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
