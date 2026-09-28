@@ -289,22 +289,6 @@ bool terakan_image_create_depth_stencil_descriptor(
    struct terakan_image_descriptor_subresource_range const * subresource_range,
    struct terakan_depth_stencil_descriptor * descriptor_out);
 
-struct terakan_image_view {
-   struct vk_image_view vk;
-
-   struct terakan_bo const * bo;
-
-   struct terakan_srv_descriptor srv;
-
-   /* Used for both RTVs and UAVs, so `INFO.RAT` is not specifically defined. */
-   struct terakan_color_descriptor color;
-   struct terakan_color_meta_descriptor color_meta;
-
-   struct terakan_depth_stencil_descriptor depth_stencil;
-};
-
-VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_image_view, vk.base, VkImageView, VK_OBJECT_TYPE_IMAGE_VIEW)
-
 #ifdef __cplusplus
 }
 #endif

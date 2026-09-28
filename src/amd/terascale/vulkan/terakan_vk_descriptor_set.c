@@ -26,9 +26,9 @@
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
 #include "terakan_format.h"
-#include "terakan_image.h"
 #include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 #include "terakan_vk_sampler.h"
 
 #include "amd/terascale/common/terascale_format.h"
@@ -185,8 +185,9 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
          for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
               ++descriptor_index) {
             struct terakan_vk_descriptor_set_uav * const dst_uav = &dst_uavs[descriptor_index];
-            struct terakan_image_view const * const image_view = terakan_image_view_from_handle(
-               descriptor_write->pImageInfo[descriptor_index].imageView);
+            struct terakan_vk_image_view const * const image_view =
+               terakan_vk_image_view_from_handle(
+                  descriptor_write->pImageInfo[descriptor_index].imageView);
             if (image_view != NULL &&
                 G_028C70_FORMAT(image_view->color.info) != TERASCALE_FORMAT_INDEX_INVALID) {
                dst_uav->bo = image_view->bo;
@@ -217,8 +218,9 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
             for (uint32_t descriptor_index = 0; descriptor_index < descriptor_count;
                  ++descriptor_index) {
                struct terakan_vk_descriptor_set_srv * const dst_srv = &dst_srvs[descriptor_index];
-               struct terakan_image_view const * const image_view = terakan_image_view_from_handle(
-                  descriptor_write->pImageInfo[descriptor_index].imageView);
+               struct terakan_vk_image_view const * const image_view =
+                  terakan_vk_image_view_from_handle(
+                     descriptor_write->pImageInfo[descriptor_index].imageView);
                if (image_view != NULL &&
                    G_03001C_TYPE(image_view->srv.srv[7]) == V_03001C_SQ_TEX_VTX_VALID_TEXTURE) {
                   dst_srv->bo = image_view->bo;

@@ -23,8 +23,8 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
-#include "terakan_image.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 #include "terakan_vk_state.h"
 
 #include "util/bitscan.h"
@@ -60,8 +60,8 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
       MIN2(pRenderingInfo->colorAttachmentCount, TERAKAN_VK_STATE_MAX_COLOR_ATTACHMENTS);
    for (uint32_t color_attachment_index = 0; color_attachment_index < color_attachment_count;
         ++color_attachment_index) {
-      struct terakan_image_view const * const color_attachment_view =
-         terakan_image_view_from_handle(
+      struct terakan_vk_image_view const * const color_attachment_view =
+         terakan_vk_image_view_from_handle(
             pRenderingInfo->pColorAttachments[color_attachment_index].imageView);
       if (color_attachment_view == NULL) {
          continue;
@@ -94,19 +94,19 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
    uint32_t clear_attachment_count = 0;
    VkClearAttachment clear_attachments[TERAKAN_VK_STATE_MAX_COLOR_ATTACHMENTS + 1];
 
-   struct terakan_image_view const * const depth_attachment_view =
+   struct terakan_vk_image_view const * const depth_attachment_view =
       pRenderingInfo->pDepthAttachment != NULL
-         ? terakan_image_view_from_handle(pRenderingInfo->pDepthAttachment->imageView)
+         ? terakan_vk_image_view_from_handle(pRenderingInfo->pDepthAttachment->imageView)
          : NULL;
-   struct terakan_image_view const * const stencil_attachment_view =
+   struct terakan_vk_image_view const * const stencil_attachment_view =
       pRenderingInfo->pStencilAttachment != NULL
-         ? terakan_image_view_from_handle(pRenderingInfo->pStencilAttachment->imageView)
+         ? terakan_vk_image_view_from_handle(pRenderingInfo->pStencilAttachment->imageView)
          : NULL;
    /* VUID-VkRenderingInfo-pDepthAttachment-06085: "If neither pDepthAttachment or
     * pStencilAttachment are NULL and the imageView member of either structure is not
     * VK_NULL_HANDLE, the imageView member of each structure must be the same"
     */
-   struct terakan_image_view const * const depth_stencil_attachment_view =
+   struct terakan_vk_image_view const * const depth_stencil_attachment_view =
       depth_attachment_view != NULL ? depth_attachment_view : stencil_attachment_view;
    if (depth_stencil_attachment_view != NULL) {
       struct terakan_depth_stencil_descriptor depth_stencil_attachment_descriptor =
@@ -172,8 +172,8 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
    u_foreach_bit (color_attachment_index, color_attachments_bound) {
       VkRenderingAttachmentInfo const * const color_attachment =
          &pRenderingInfo->pColorAttachments[color_attachment_index];
-      struct terakan_image_view const * const color_attachment_view =
-         terakan_image_view_from_handle(color_attachment->imageView);
+      struct terakan_vk_image_view const * const color_attachment_view =
+         terakan_vk_image_view_from_handle(color_attachment->imageView);
 
       struct terakan_color_descriptor color_attachment_descriptor = color_attachment_view->color;
       color_attachment_descriptor.view =

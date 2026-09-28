@@ -107,6 +107,8 @@ libterakan_files = files(
   'terakan_vk_device_memory.c',
   'terakan_vk_device_memory.h',
   'terakan_vk_draw_dispatch.c',
+  'terakan_vk_image.c',
+  'terakan_vk_image.h',
   'terakan_vk_pipeline_compute.c',
   'terakan_vk_pipeline_graphics.c',
   'terakan_vk_pipeline_graphics.h',
