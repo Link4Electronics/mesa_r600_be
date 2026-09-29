@@ -1300,7 +1300,6 @@ terakan_vk_DestroyCommandPool(VkDevice const deviceHandle, VkCommandPool const c
                               VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_command_pool * const command_pool = terakan_command_pool_from_handle(commandPool);
-
    if (command_pool == NULL) {
       return;
    }
@@ -1311,11 +1310,9 @@ terakan_vk_DestroyCommandPool(VkDevice const deviceHandle, VkCommandPool const c
     */
    vk_command_pool_finish(&command_pool->vk);
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    terakan_command_pool_trim_resources(command_pool);
 
-   vk_free2(&device->vk.alloc, pAllocator, command_pool);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, command_pool);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

@@ -156,7 +156,6 @@ terakan_vk_FreeMemory(VkDevice const deviceHandle, VkDeviceMemory const deviceMe
 {
    struct terakan_vk_device_memory * const device_memory =
       terakan_vk_device_memory_from_handle(deviceMemory);
-
    if (device_memory == NULL) {
       return;
    }

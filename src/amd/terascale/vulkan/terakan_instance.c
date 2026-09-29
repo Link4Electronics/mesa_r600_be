@@ -139,7 +139,6 @@ terakan_vk_DestroyInstance(VkInstance const instanceHandle,
                            UNUSED VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_instance * const instance = terakan_instance_from_handle(instanceHandle);
-
    if (instance == NULL) {
       return;
    }

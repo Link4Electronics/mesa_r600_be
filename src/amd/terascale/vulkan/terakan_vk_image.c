@@ -44,16 +44,13 @@ terakan_vk_DestroyImageView(VkDevice const deviceHandle, VkImageView const image
                             VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_vk_image_view * const image_view = terakan_vk_image_view_from_handle(imageView);
-
    if (image_view == NULL) {
       return;
    }
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    vk_image_view_finish(&image_view->vk);
 
-   vk_free2(&device->vk.alloc, pAllocator, image_view);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, image_view);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

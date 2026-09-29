@@ -825,7 +825,6 @@ terakan_vk_DestroyQueryPool(VkDevice const deviceHandle, VkQueryPool const query
                             VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_query_pool * const query_pool = terakan_query_pool_from_handle(queryPool);
-
    if (query_pool == NULL) {
       return;
    }

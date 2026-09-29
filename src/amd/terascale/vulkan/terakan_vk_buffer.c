@@ -191,16 +191,13 @@ terakan_vk_DestroyBuffer(VkDevice const deviceHandle, VkBuffer const bufferHandl
                          VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_vk_buffer * const buffer = terakan_vk_buffer_from_handle(bufferHandle);
-
    if (buffer == NULL) {
       return;
    }
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    vk_buffer_finish(&buffer->vk);
 
-   vk_free2(&device->vk.alloc, pAllocator, buffer);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, buffer);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -231,16 +228,13 @@ terakan_vk_DestroyBufferView(VkDevice const deviceHandle, VkBufferView const buf
 {
    struct terakan_vk_buffer_view * const buffer_view =
       terakan_vk_buffer_view_from_handle(bufferView);
-
    if (buffer_view == NULL) {
       return;
    }
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    vk_buffer_view_finish(&buffer_view->vk);
 
-   vk_free2(&device->vk.alloc, pAllocator, buffer_view);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, buffer_view);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

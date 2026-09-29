@@ -678,7 +678,6 @@ terakan_vk_DestroyDescriptorPool(VkDevice const deviceHandle, VkDescriptorPool c
 {
    struct terakan_vk_descriptor_pool * const pool =
       terakan_vk_descriptor_pool_from_handle(descriptorPool);
-
    if (pool == NULL) {
       return;
    }
@@ -692,11 +691,9 @@ terakan_vk_DestroyDescriptorPool(VkDevice const deviceHandle, VkDescriptorPool c
       util_vma_heap_finish(&pool->descriptor_memory_heap);
    }
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    vk_object_base_finish(&pool->base);
 
-   vk_free2(&device->vk.alloc, pAllocator, pool);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, pool);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

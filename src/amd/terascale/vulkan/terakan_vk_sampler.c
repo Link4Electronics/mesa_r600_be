@@ -39,14 +39,11 @@ terakan_vk_DestroySampler(VkDevice const deviceHandle, VkSampler const samplerHa
                           VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_vk_sampler * const sampler = terakan_vk_sampler_from_handle(samplerHandle);
-
    if (sampler == NULL) {
       return;
    }
 
-   struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
-
-   vk_sampler_destroy(&device->vk, pAllocator, &sampler->vk);
+   vk_sampler_destroy(&terakan_device_from_handle(deviceHandle)->vk, pAllocator, &sampler->vk);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

@@ -1720,16 +1720,13 @@ terakan_vk_DestroyImage(VkDevice const deviceHandle, VkImage const imageHandle,
                         VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_image * const image = terakan_image_from_handle(imageHandle);
-
    if (image == NULL) {
       return;
    }
 
-   struct terakan_device const * const device = terakan_device_from_handle(deviceHandle);
-
    vk_image_finish(&image->vk);
 
-   vk_free2(&device->vk.alloc, pAllocator, image);
+   vk_free2(&terakan_device_from_handle(deviceHandle)->vk.alloc, pAllocator, image);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL

@@ -83,7 +83,6 @@ terakan_vk_DestroyDevice(VkDevice const deviceHandle,
                          VkAllocationCallbacks const * const pAllocator)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
-
    if (device == NULL) {
       return;
    }
