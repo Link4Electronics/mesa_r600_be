@@ -36,7 +36,6 @@
 #include "util/macros.h"
 #include "util/os_mman.h"
 #include "util/u_math.h"
-#include "vk_alloc.h"
 #include "vk_log.h"
 
 #include <assert.h>
@@ -138,7 +137,7 @@ terakan_bo_drm_radeon_unmap_impl(struct terakan_bo * const bo_base)
 
 static void
 terakan_bo_drm_radeon_free_impl(struct terakan_bo * const bo_base,
-                                VkAllocationCallbacks const * const allocator)
+                                void const * const client_allocator_context)
 {
    struct terakan_bo_drm_radeon * const bo =
       container_of(bo_base, struct terakan_bo_drm_radeon, base);
@@ -177,22 +176,22 @@ terakan_bo_drm_radeon_free_impl(struct terakan_bo * const bo_base,
       mtx_unlock(&device->shared_bo_mutex);
    }
 
-   vk_free2(&device->base.vk.alloc, allocator, bo);
+   terakan_device_host_free(&device->base, client_allocator_context, bo);
 }
 
 static VkResult
 terakan_bo_drm_radeon_allocate_device_memory(
    struct terakan_device * const device_base, VkDeviceSize const size, VkDeviceSize const alignment,
    VkMemoryPropertyFlags const flags, VkExternalMemoryHandleTypeFlags const export_handle_types,
-   VkAllocationCallbacks const * const allocator, VkSystemAllocationScope const scope,
-   struct terakan_bo ** const bo_out)
+   void const * const client_allocator_context,
+   enum terakan_device_allocation_scope const allocation_scope, struct terakan_bo ** const bo_out)
 {
    struct terakan_device_drm_radeon * const device =
       container_of(device_base, struct terakan_device_drm_radeon, base);
 
-   struct terakan_bo_drm_radeon * const bo =
-      vk_alloc2(&device->base.vk.alloc, allocator, sizeof(struct terakan_bo_drm_radeon),
-                alignof(struct terakan_bo_drm_radeon), scope);
+   struct terakan_bo_drm_radeon * const bo = terakan_device_host_allocate(
+      &device->base, client_allocator_context, sizeof(struct terakan_bo_drm_radeon),
+      alignof(struct terakan_bo_drm_radeon), allocation_scope);
    if (bo == NULL) {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
@@ -229,7 +228,7 @@ terakan_bo_drm_radeon_allocate_device_memory(
       drmCommandWriteRead(device->render_node_fd, DRM_RADEON_GEM_CREATE, &gem_create_arguments,
                           sizeof(gem_create_arguments));
    if (gem_create_result != 0) {
-      vk_free2(&device->base.vk.alloc, allocator, bo);
+      terakan_device_host_free(&device->base, client_allocator_context, bo);
       vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
               "Failed to allocate a buffer, size: 0x%" PRIX64 " bytes, alignment: 0x%" PRIX64
               " bytes, domains: 0x%" PRIX32 ", flags: 0x%" PRIX32 ", error number %d",
@@ -256,7 +255,7 @@ terakan_bo_drm_radeon_allocate_device_memory(
       if (!shared_handle_reference_count_inserted) {
          struct drm_gem_close gem_close_arguments = {.handle = gem_create_arguments.handle};
          drmIoctl(device->render_node_fd, DRM_IOCTL_GEM_CLOSE, &gem_close_arguments);
-         vk_free2(&device->base.vk.alloc, allocator, bo);
+         terakan_device_host_free(&device->base, client_allocator_context, bo);
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    } else {
@@ -314,16 +313,16 @@ terakan_bo_drm_radeon_get_fd_vram_preference(struct terakan_device * const devic
 static VkResult
 terakan_bo_drm_radeon_import_fd(struct terakan_device * const device_base, int const fd,
                                 VkDeviceSize const size, bool const prefer_vram,
-                                VkAllocationCallbacks const * const allocator,
-                                VkSystemAllocationScope const scope,
+                                void const * const client_allocator_context,
+                                enum terakan_device_allocation_scope const allocation_scope,
                                 struct terakan_bo ** const bo_out)
 {
    struct terakan_device_drm_radeon * const device =
       container_of(device_base, struct terakan_device_drm_radeon, base);
 
-   struct terakan_bo_drm_radeon * const bo =
-      vk_alloc2(&device->base.vk.alloc, allocator, sizeof(struct terakan_bo_drm_radeon),
-                alignof(struct terakan_bo_drm_radeon), scope);
+   struct terakan_bo_drm_radeon * const bo = terakan_device_host_allocate(
+      &device->base, client_allocator_context, sizeof(struct terakan_bo_drm_radeon),
+      alignof(struct terakan_bo_drm_radeon), allocation_scope);
    if (bo == NULL) {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
@@ -337,7 +336,7 @@ terakan_bo_drm_radeon_import_fd(struct terakan_device * const device_base, int c
    int const prime_fd_to_handle_result = drmPrimeFDToHandle(device->render_node_fd, fd, &handle);
    if (prime_fd_to_handle_result != 0) {
       mtx_unlock(&device->shared_bo_mutex);
-      vk_free2(&device->base.vk.alloc, allocator, bo);
+      terakan_device_host_free(&device->base, client_allocator_context, bo);
       vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
               "Failed to import a file descriptor as a buffer, size: 0x%" PRIX64 " bytes, "
               "preferred domain: %s, error number %d",
@@ -362,7 +361,7 @@ terakan_bo_drm_radeon_import_fd(struct terakan_device * const device_base, int c
          struct drm_gem_close gem_close_arguments = {.handle = handle};
          drmIoctl(device->render_node_fd, DRM_IOCTL_GEM_CLOSE, &gem_close_arguments);
          mtx_unlock(&device->shared_bo_mutex);
-         vk_free2(&device->base.vk.alloc, allocator, bo);
+         terakan_device_host_free(&device->base, client_allocator_context, bo);
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
    }

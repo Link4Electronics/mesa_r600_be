@@ -24,6 +24,8 @@
 #ifndef TERAKAN_BO_H
 #define TERAKAN_BO_H
 
+#include "terakan_device_enums.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <vulkan/vulkan_core.h>
@@ -127,7 +129,7 @@ struct terakan_bo_platform_fn {
    void * (*map_impl)(struct terakan_bo * bo);
    void (*unmap_impl)(struct terakan_bo * bo);
 
-   void (*free_impl)(struct terakan_bo * bo, VkAllocationCallbacks const * allocator);
+   void (*free_impl)(struct terakan_bo * bo, void const * client_allocator_context);
 
    /* For host-visible device-local memory, it's assumed that the kernel driver can evict
     * allocations to the GTT automatically, and that host-visible device-local memory should be
@@ -140,8 +142,9 @@ struct terakan_bo_platform_fn {
    VkResult (*allocate_device_memory)(struct terakan_device * device, VkDeviceSize size,
                                       VkDeviceSize alignment, VkMemoryPropertyFlags flags,
                                       VkExternalMemoryHandleTypeFlags export_handle_types,
-                                      VkAllocationCallbacks const * allocator,
-                                      VkSystemAllocationScope scope, struct terakan_bo ** bo_out);
+                                      void const * client_allocator_context,
+                                      enum terakan_device_allocation_scope allocation_scope,
+                                      struct terakan_bo ** bo_out);
 
    /* Only needed if the platform supports VK_KHR_external_memory_fd.
     * Returns whether the query was successful.
@@ -152,8 +155,9 @@ struct terakan_bo_platform_fn {
     * On failure, returns VK_ERROR_OUT_OF_HOST_MEMORY or VK_ERROR_INVALID_EXTERNAL_HANDLE.
     */
    VkResult (*import_fd)(struct terakan_device * device, int fd, VkDeviceSize size,
-                         bool prefer_vram, VkAllocationCallbacks const * allocator,
-                         VkSystemAllocationScope scope, struct terakan_bo ** bo_out);
+                         bool prefer_vram, void const * client_allocator_context,
+                         enum terakan_device_allocation_scope allocation_scope,
+                         struct terakan_bo ** bo_out);
 };
 
 #ifdef __cplusplus

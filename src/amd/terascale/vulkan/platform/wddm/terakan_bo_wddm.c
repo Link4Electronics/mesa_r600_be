@@ -28,7 +28,6 @@
 
 #include "amd/terascale/common/terascale_wddm.h"
 #include "util/macros.h"
-#include "vk_alloc.h"
 #include "vk_log.h"
 
 #include <assert.h>
@@ -93,7 +92,7 @@ terakan_bo_wddm_unmap_impl(struct terakan_bo * const bo_base)
 
 static void
 terakan_bo_wddm_free_impl(struct terakan_bo * const bo_base,
-                          VkAllocationCallbacks const * const allocator)
+                          void const * const client_allocator_context)
 {
    struct terakan_bo_wddm * const bo = container_of(bo_base, struct terakan_bo_wddm, base);
    struct terakan_device_wddm const * const device =
@@ -106,7 +105,7 @@ terakan_bo_wddm_free_impl(struct terakan_bo * const bo_base,
    };
    D3DKMTDestroyAllocation(&destroy_allocation_arguments);
 
-   vk_free2(&device->base.vk.alloc, allocator, bo);
+   terakan_device_host_free(&device->base, client_allocator_context, bo);
 }
 
 static VkResult
@@ -114,8 +113,8 @@ terakan_bo_wddm_allocate_device_memory(
    struct terakan_device * const device_base, VkDeviceSize const size, VkDeviceSize const alignment,
    VkMemoryPropertyFlags const flags,
    UNUSED VkExternalMemoryHandleTypeFlags const export_handle_types,
-   VkAllocationCallbacks const * const allocator, VkSystemAllocationScope const scope,
-   struct terakan_bo ** const bo_out)
+   void const * const client_allocator_context,
+   enum terakan_device_allocation_scope const allocation_scope, struct terakan_bo ** const bo_out)
 {
    if (unlikely(size > UINT32_MAX)) {
       vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
@@ -128,9 +127,9 @@ terakan_bo_wddm_allocate_device_memory(
    struct terakan_device_wddm * const device =
       container_of(device_base, struct terakan_device_wddm, base);
 
-   struct terakan_bo_wddm * const bo =
-      vk_alloc2(&device->base.vk.alloc, allocator, sizeof(struct terakan_bo_wddm),
-                alignof(struct terakan_bo_wddm), scope);
+   struct terakan_bo_wddm * const bo = terakan_device_host_allocate(
+      &device->base, client_allocator_context, sizeof(struct terakan_bo_wddm),
+      alignof(struct terakan_bo_wddm), allocation_scope);
    if (bo == NULL) {
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
@@ -213,7 +212,7 @@ terakan_bo_wddm_allocate_device_memory(
    };
    NTSTATUS const create_allocation_status = D3DKMTCreateAllocation(&create_allocation_arguments);
    if (!NT_SUCCESS(create_allocation_status)) {
-      vk_free2(&device->base.vk.alloc, allocator, bo);
+      terakan_device_host_free(&device->base, client_allocator_context, bo);
       vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
               "Failed to create a D3DKMT memory allocation, size: 0x%" PRIX64 " bytes, "
               "alignment: 0x%" PRIX64 " bytes, memory property flags: 0x%" PRIX32 ", status "

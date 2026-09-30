@@ -273,8 +273,8 @@ terakan_queue_completion_submission_drm_radeon_alloc_and_init_platform(
 
    struct terakan_bo * bo_base;
    result = device->platform_fn->bo->allocate_device_memory(
-      device, 1, 1, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
-      &bo_base);
+      device, 1, 1, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL,
+      TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE, &bo_base);
    if (result != VK_SUCCESS) {
       vk_free(&device->vk.alloc, submission);
       return result;

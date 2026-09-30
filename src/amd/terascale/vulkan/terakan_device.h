@@ -26,6 +26,7 @@
 
 #include "meta/terakan_meta.h"
 #include "terakan_bo.h"
+#include "terakan_device_enums.h"
 #include "terakan_physical_device.h"
 #include "terakan_queue.h"
 #include "terakan_shader.h"
@@ -139,6 +140,28 @@ terakan_device_physical_device(struct terakan_device const * const device)
    {                                                                                               \
       return terakan_device_physical_device(terakan_##object##_device(object));                    \
    }
+
+/* Various parts of the driver core may allocate (and subsequently free) memory with a NULL client
+ * allocator context pointer, which is expected to be treated by the implementation as allocating in
+ * the client allocator context of the device itself.
+ *
+ * May be called during device initialization.
+ */
+void * terakan_device_host_allocate(struct terakan_device const * device,
+                                    void const * client_allocator_context, size_t size,
+                                    size_t alignment, enum terakan_device_allocation_scope scope);
+
+/* The memory pointer may be NULL, in which case the function must do nothing.
+ *
+ * The client allocator context must be usable for freeing allocations created in the client
+ * allocator context used for the command that allocated the memory (like how in Vulkan, the
+ * `VkAllocationCallbacks` for `vkDestroy...` must be usable for freeing allocations made by the
+ * `vkCreate...` for the object).
+ *
+ * May be called during device initialization.
+ */
+void terakan_device_host_free(struct terakan_device const * device,
+                              void const * client_allocator_context, void * memory);
 
 /* Object that can be passed to VK_LOG_OBJS during or after the creation of the device. */
 static inline struct vk_object_base const *

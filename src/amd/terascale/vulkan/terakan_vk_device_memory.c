@@ -218,7 +218,7 @@ terakan_vk_AllocateMemory(VkDevice const deviceHandle,
          result = device->platform_fn->bo->import_fd(
             device, import_fd_info->fd, bo_size,
             (memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0, pAllocator,
-            VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &device_memory->bo);
+            TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT, &device_memory->bo);
          if (result != VK_SUCCESS) {
             result = vk_error(device, result);
             goto fail_device_memory;
@@ -234,7 +234,7 @@ terakan_vk_AllocateMemory(VkDevice const deviceHandle,
    } else {
       result = device->platform_fn->bo->allocate_device_memory(
          device, bo_size, physical_device->buffer_image_bo_alignment, memory_property_flags,
-         device_memory->vk.export_handle_types, pAllocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT,
+         device_memory->vk.export_handle_types, pAllocator, TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT,
          &device_memory->bo);
       if (result != VK_SUCCESS) {
          result = vk_error(device, result);

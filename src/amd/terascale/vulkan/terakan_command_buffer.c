@@ -242,7 +242,7 @@ terakan_push_buffer_allocate(struct terakan_command_buffer * const command_buffe
          device, TERAKAN_PUSH_BUFFER_SIZE_BYTES, TERAKAN_PUSH_BUFFER_ALIGNMENT,
          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-         0, &command_pool->vk.alloc, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &new_buffer->bo);
+         0, &command_pool->vk.alloc, TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT, &new_buffer->bo);
       if (bo_allocate_result != VK_SUCCESS) {
          vk_command_buffer_set_error(&command_buffer->vk, bo_allocate_result);
          vk_free(&command_pool->vk.alloc, new_buffer);

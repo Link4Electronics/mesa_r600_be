@@ -932,7 +932,7 @@ terakan_vk_CreateQueryPool(VkDevice const deviceHandle,
       device, bo_size, 1u << physical_device->tiling_info.pipe_interleave_bytes_log2,
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
          VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      0, pAllocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &query_pool->bo);
+      0, pAllocator, TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT, &query_pool->bo);
    if (result != VK_SUCCESS) {
       result = vk_error(device, result);
       goto fail_query_pool;

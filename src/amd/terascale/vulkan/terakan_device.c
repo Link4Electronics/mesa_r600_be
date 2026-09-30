@@ -46,6 +46,34 @@
 #include <stddef.h>
 #include <stdint.h>
 
+void *
+terakan_device_host_allocate(struct terakan_device const * const device,
+                             void const * const client_allocator_context, size_t const size,
+                             size_t const alignment,
+                             enum terakan_device_allocation_scope const scope)
+{
+   VkSystemAllocationScope vulkan_scope;
+   switch (scope) {
+   case TERAKAN_DEVICE_ALLOCATION_SCOPE_COMMAND:
+      vulkan_scope = VK_SYSTEM_ALLOCATION_SCOPE_COMMAND;
+      break;
+   case TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT:
+      vulkan_scope = VK_SYSTEM_ALLOCATION_SCOPE_OBJECT;
+      break;
+   default:
+      vulkan_scope = VK_SYSTEM_ALLOCATION_SCOPE_DEVICE;
+      break;
+   }
+   return vk_alloc2(&device->vk.alloc, client_allocator_context, size, alignment, vulkan_scope);
+}
+
+void
+terakan_device_host_free(struct terakan_device const * const device,
+                         void const * const client_allocator_context, void * const memory)
+{
+   vk_free2(&device->vk.alloc, client_allocator_context, memory);
+}
+
 void
 terakan_device_finish(struct terakan_device * const device)
 {
@@ -146,7 +174,7 @@ terakan_device_init(struct terakan_device * const device,
       /* 0x100 for base address alignment for 8-shifted addresses. */
       result = device->platform_fn->bo->allocate_device_memory(
          device, 0x100, 0x100, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL,
-         VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
+         TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE,
          &device->reference_placeholder_bos[reference_placeholder_bos_created]);
       if (result != VK_SUCCESS) {
          result = vk_errorf(physical_device->vk.instance, result,
@@ -158,7 +186,7 @@ terakan_device_init(struct terakan_device * const device,
    result = device->platform_fn->bo->allocate_device_memory(
       device, MAX2(sizeof(uint32_t), TERAKAN_CP_DMA_COPY_OPTIMAL_ALIGNMENT * 2),
       MAX2(sizeof(uint32_t), TERAKAN_CP_DMA_COPY_OPTIMAL_ALIGNMENT),
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE,
       &device->gfx_discard_bo);
    if (result != VK_SUCCESS) {
       result =
@@ -176,7 +204,7 @@ terakan_device_init(struct terakan_device * const device,
    }
    result = device->platform_fn->bo->allocate_device_memory(
       device, uav_immediate_bo_bytes_shr8 << 8, (VkDeviceSize)1 << 8,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE,
       &device->uav_immediate_bo);
    if (result != VK_SUCCESS) {
       result =
@@ -194,7 +222,7 @@ terakan_device_init(struct terakan_device * const device,
       device, TERAKAN_KCACHE_HW_LINE_BYTES,
       1u << MAX2(TERAKAN_KCACHE_HW_LINE_BYTES_LOG2,
                  physical_device->tiling_info.pipe_interleave_bytes_log2),
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE,
       &device->query_accumulator_bo);
    if (result != VK_SUCCESS) {
       result = vk_errorf(physical_device->vk.instance, result,
@@ -229,7 +257,7 @@ terakan_device_init(struct terakan_device * const device,
       device, meta_shaders_bo_size, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE, &device->meta_shaders_bo);
+      0, NULL, TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE, &device->meta_shaders_bo);
    if (result != VK_SUCCESS) {
       result = vk_errorf(physical_device->vk.instance, result,
                          "Failed to allocate memory for internal shaders");

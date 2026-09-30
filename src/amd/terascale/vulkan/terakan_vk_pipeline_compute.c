@@ -185,7 +185,7 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
       device, shader_bytecode_size_bytes, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      0, allocator, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, &pipeline->shader_bo);
+      0, allocator, TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT, &pipeline->shader_bo);
    if (result != VK_SUCCESS) {
       result = vk_error(device, result);
       goto fail_shader;

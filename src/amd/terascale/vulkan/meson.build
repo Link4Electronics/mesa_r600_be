@@ -67,6 +67,7 @@ libterakan_files = files(
   'terakan_descriptor.h',
   'terakan_device.c',
   'terakan_device.h',
+  'terakan_device_enums.h',
   'terakan_format.c',
   'terakan_format.h',
   'terakan_hw_config_compute.c',

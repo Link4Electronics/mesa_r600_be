@@ -378,7 +378,7 @@ terakan_queue_submit(struct vk_queue * const queue_base, struct vk_queue_submit 
 
       VkResult const shader_rings_allocate_result = device->platform_fn->bo->allocate_device_memory(
          device, (VkDeviceSize)shader_ring_bytes_needed_total_shr8 << 8, 0x100,
-         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, VK_SYSTEM_ALLOCATION_SCOPE_DEVICE,
+         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, NULL, TERAKAN_DEVICE_ALLOCATION_SCOPE_DEVICE,
          &queue->shader_rings);
       if (shader_rings_allocate_result != VK_SUCCESS) {
          return vk_error(device, shader_rings_allocate_result);
