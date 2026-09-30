@@ -35,6 +35,7 @@
 #include "gallium/drivers/r600/r600_opcodes.h"
 #include "util/macros.h"
 #include "util/u_math.h"
+#include "util/u_printf.h"
 #include "vk_alloc.h"
 #include "vk_cmd_enqueue_entrypoints.h"
 #include "vk_common_entrypoints.h"
@@ -45,6 +46,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 void *
 terakan_device_host_allocate(struct terakan_device const * const device,
@@ -72,6 +74,40 @@ terakan_device_host_free(struct terakan_device const * const device,
                          void const * const client_allocator_context, void * const memory)
 {
    vk_free2(&device->vk.alloc, client_allocator_context, memory);
+}
+
+void
+terakan_device_log(struct terakan_device const * const device, enum mesa_log_level const level,
+                   char const * const file, int const line, char const * const message)
+{
+   __vk_log_impl(mesa_to_vk_log_level(level), VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+                 VK_LOG_OBJS(terakan_device_log_obj(device)), file, line, "%s", message);
+}
+
+void
+terakan_device_logv(struct terakan_device const * const device, enum mesa_log_level const level,
+                    char const * const file, int const line, char const * const format,
+                    va_list arguments)
+{
+   size_t const message_size = u_printf_length(format, arguments) + 1;
+   char * const message = terakan_device_host_allocate(device, NULL, message_size, 1,
+                                                       TERAKAN_DEVICE_ALLOCATION_SCOPE_COMMAND);
+   if (unlikely(message == NULL)) {
+      return;
+   }
+   vsnprintf(message, message_size, format, arguments);
+   terakan_device_log(device, level, file, line, message);
+   terakan_device_host_free(device, NULL, message);
+}
+
+void
+terakan_device_logf(struct terakan_device const * const device, enum mesa_log_level const level,
+                    char const * const file, int const line, char const * const format, ...)
+{
+   va_list arguments;
+   va_start(arguments, format);
+   terakan_device_logv(device, level, file, line, format, arguments);
+   va_end(arguments);
 }
 
 void

@@ -32,10 +32,12 @@
 #include "terakan_shader.h"
 
 #include "c11/threads.h"
+#include "util/log.h"
 #include "util/macros.h"
 #include "amd_family.h"
 #include "vk_device.h"
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -172,6 +174,20 @@ terakan_device_log_obj(struct terakan_device const * const device)
    }
    return &terakan_device_physical_device(device)->vk.base.instance->base;
 }
+
+/* The logging functions may be called during device initialization and may allocate host memory via
+ * or similarly to `terakan_device_host_allocate`.
+ */
+void terakan_device_log(struct terakan_device const * device, enum mesa_log_level level,
+                        char const * file, int line, char const * message);
+#define TERAKAN_DEVICE_LOG(device, level, message)                                                 \
+   terakan_device_log(device, level, __FILE__, __LINE__, message)
+void terakan_device_logv(struct terakan_device const * device, enum mesa_log_level level,
+                         char const * file, int line, char const * format, va_list arguments);
+void terakan_device_logf(struct terakan_device const * device, enum mesa_log_level level,
+                         char const * file, int line, char const * format, ...);
+#define TERAKAN_DEVICE_LOGF(device, level, format, ...)                                            \
+   terakan_device_logf(device, level, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 void terakan_device_finish(struct terakan_device * device);
 
