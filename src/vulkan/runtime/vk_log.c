@@ -34,6 +34,23 @@
 #include "util/ralloc.h"
 #include "util/log.h"
 
+VkDebugUtilsMessageSeverityFlagBitsEXT
+mesa_to_vk_log_level(enum mesa_log_level level)
+{
+   switch (level) {
+   case MESA_LOG_ERROR:
+      return VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+   case MESA_LOG_WARN:
+      return VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+   case MESA_LOG_INFO:
+      return VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+   case MESA_LOG_DEBUG:
+      return VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+   default:
+      return VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+   }
+}
+
 static struct vk_device *
 vk_object_to_device(struct vk_object_base *obj)
 {

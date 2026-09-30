@@ -24,9 +24,14 @@
 #include "vk_instance.h"
 #include "vk_enum_to_str.h"
 
+#include "util/log.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+VkDebugUtilsMessageSeverityFlagBitsEXT
+mesa_to_vk_log_level(enum mesa_log_level level);
 
 /* __VK_ARG_N(...) returns the number of arguments provided to it  */
 #define __VK_ARG_SEQ(_1,_2,_3,_4,_5,_6,_7,_8,N,...) N
