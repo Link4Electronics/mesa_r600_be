@@ -28,7 +28,6 @@
 
 #include "amd/terascale/common/terascale_wddm.h"
 #include "util/macros.h"
-#include "vk_log.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -66,8 +65,8 @@ terakan_bo_wddm_map_impl(struct terakan_bo * const bo_base)
 
    NTSTATUS const lock_status = D3DKMTLock(&lock_arguments);
    if (!NT_SUCCESS(lock_status)) {
-      vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
-              "Failed to lock a D3DKMT memory allocation");
+      TERAKAN_DEVICE_LOGF(&device->base, MESA_LOG_ERROR,
+                          "Failed to lock a D3DKMT memory allocation, status 0x%08lX", lock_status);
       return NULL;
    }
 
@@ -117,10 +116,11 @@ terakan_bo_wddm_allocate_device_memory(
    enum terakan_device_allocation_scope const allocation_scope, struct terakan_bo ** const bo_out)
 {
    if (unlikely(size > UINT32_MAX)) {
-      vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
-              "Memory allocation size (0x%" PRIX64 " bytes) is too large to be specified as a "
-              "32-bit value in the D3DKMT allocation function parameters",
-              size);
+      TERAKAN_DEVICE_LOGF(&device->base, MESA_LOG_ERROR,
+                          "Memory allocation size (0x%" PRIX64 " bytes) is too large to be "
+                          "specified as a 32-bit value in the D3DKMT allocation function "
+                          "parameters",
+                          size);
       return VK_ERROR_OUT_OF_DEVICE_MEMORY;
    }
 
@@ -213,11 +213,11 @@ terakan_bo_wddm_allocate_device_memory(
    NTSTATUS const create_allocation_status = D3DKMTCreateAllocation(&create_allocation_arguments);
    if (!NT_SUCCESS(create_allocation_status)) {
       terakan_device_host_free(&device->base, client_allocator_context, bo);
-      vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
-              "Failed to create a D3DKMT memory allocation, size: 0x%" PRIX64 " bytes, "
-              "alignment: 0x%" PRIX64 " bytes, memory property flags: 0x%" PRIX32 ", status "
-              "0x%08lX",
-              size, alignment, flags, create_allocation_status);
+      TERAKAN_DEVICE_LOGF(
+         &device->base, MESA_LOG_ERROR,
+         "Failed to create a D3DKMT memory allocation, size: 0x%" PRIX64 " bytes, alignment: "
+         "0x%" PRIX64 " bytes, memory property flags: 0x%" PRIX32 ", status 0x%08lX",
+         size, alignment, flags, create_allocation_status);
       return VK_ERROR_OUT_OF_DEVICE_MEMORY;
    }
 

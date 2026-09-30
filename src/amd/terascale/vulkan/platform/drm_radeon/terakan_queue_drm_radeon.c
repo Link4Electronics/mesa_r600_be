@@ -29,7 +29,6 @@
 #include "util/u_debug.h"
 #include "c99_alloca.h"
 #include "vk_alloc.h"
-#include "vk_log.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -180,15 +179,16 @@ terakan_queue_drm_radeon_submit(
 
    if (cs_result != 0) {
       if (cs_result == -ENOMEM) {
-         vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
-                 "Not enough memory for command submission");
+         TERAKAN_DEVICE_LOG(&device->base, MESA_LOG_ERROR,
+                            "Not enough memory for command submission");
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
 
-      vk_loge(VK_LOG_OBJS(terakan_device_log_obj(&device->base)),
-              "The kernel has rejected the command submission with error number %d, see dmesg for "
-              "more information",
-              cs_result);
+      TERAKAN_DEVICE_LOGF(
+         &device->base, MESA_LOG_ERROR,
+         "The kernel has rejected the command submission with error number %d, see dmesg for more "
+         "information",
+         cs_result);
       if (debug_get_bool_option("TERAKAN_DUMP_CS", false)) {
          fputs("terakan/drm_radeon: Dumping the rejected command buffer...\n", stderr);
          for (uint32_t indirect_buffer_dword_index = 0;
