@@ -31,12 +31,14 @@
 #include "util/macros.h"
 #include "util/u_debug.h"
 #include "util/u_math.h"
+#include "util/u_printf.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 #include "wsi_common.h"
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #if defined(_WIN32)
@@ -64,6 +66,58 @@ static struct debug_control const terakan_regression_test_flags[] = {
     BITFIELD64_BIT(TERAKAN_REGRESSION_TEST_SHIFT_SPLIT_INDIRECT_BUFFER_AT_QUERY_BEGIN_END)},
    {}};
 #endif
+
+void *
+terakan_instance_host_allocate(struct terakan_instance const * const instance,
+                               void const * const client_allocator_context, size_t const size,
+                               size_t const alignment, bool const command_scope)
+{
+   return vk_alloc2(
+      &instance->vk.alloc, client_allocator_context, size, alignment,
+      command_scope ? VK_SYSTEM_ALLOCATION_SCOPE_COMMAND : VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE);
+}
+
+void
+terakan_instance_host_free(struct terakan_instance const * const instance,
+                           void const * const client_allocator_context, void * const memory)
+{
+   vk_free2(&instance->vk.alloc, client_allocator_context, memory);
+}
+
+void
+terakan_instance_log(struct terakan_instance const * const instance,
+                     enum mesa_log_level const level, char const * const file, int const line,
+                     char const * const message)
+{
+   __vk_log_impl(mesa_to_vk_log_level(level), VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+                 VK_LOG_OBJS(&instance->vk.base), file, line, "%s", message);
+}
+
+void
+terakan_instance_logv(struct terakan_instance const * const instance,
+                      enum mesa_log_level const level, char const * const file, int const line,
+                      char const * const format, va_list arguments)
+{
+   size_t const message_size = u_printf_length(format, arguments) + 1;
+   char * const message = terakan_instance_host_allocate(instance, NULL, message_size, 1, true);
+   if (unlikely(message == NULL)) {
+      return;
+   }
+   vsnprintf(message, message_size, format, arguments);
+   terakan_instance_log(instance, level, file, line, message);
+   terakan_instance_host_free(instance, NULL, message);
+}
+
+void
+terakan_instance_logf(struct terakan_instance const * const instance,
+                      enum mesa_log_level const level, char const * const file, int const line,
+                      char const * const format, ...)
+{
+   va_list arguments;
+   va_start(arguments, format);
+   terakan_instance_logv(instance, level, file, line, format, arguments);
+   va_end(arguments);
+}
 
 static struct vk_instance_extension_table const terakan_instance_extensions_supported = {
    .EXT_debug_report = true,

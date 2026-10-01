@@ -24,9 +24,13 @@
 #ifndef TERAKAN_INSTANCE_H
 #define TERAKAN_INSTANCE_H
 
+#include "util/log.h"
 #include "vk_instance.h"
 
 #include <assert.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -132,6 +136,38 @@ struct terakan_instance {
 };
 
 VK_DEFINE_HANDLE_CASTS(terakan_instance, vk.base, VkInstance, VK_OBJECT_TYPE_INSTANCE)
+
+/* Various parts of the driver core may allocate (and subsequently free) memory with a NULL client
+ * allocator context pointer, which is expected to be treated by the implementation as allocating in
+ * the client allocator context of the instance itself.
+ */
+void * terakan_instance_host_allocate(struct terakan_instance const * instance,
+                                      void const * client_allocator_context, size_t size,
+                                      size_t alignment, bool command_scope);
+
+/* The memory pointer may be NULL, in which case the function must do nothing.
+ *
+ * The client allocator context must be usable for freeing allocations created in the client
+ * allocator context used for the command that allocated the memory (like how in Vulkan, the
+ * `VkAllocationCallbacks` for `vkDestroy...` must be usable for freeing allocations made by the
+ * `vkCreate...` for the object).
+ */
+void terakan_instance_host_free(struct terakan_instance const * instance,
+                                void const * client_allocator_context, void * memory);
+
+/* The logging functions may allocate host memory via or similarly to
+ * `terakan_instance_host_allocate`.
+ */
+void terakan_instance_log(struct terakan_instance const * instance, enum mesa_log_level level,
+                          char const * file, int line, char const * message);
+#define TERAKAN_INSTANCE_LOG(instance, level, message)                                             \
+   terakan_instance_log(instance, level, __FILE__, __LINE__, message)
+void terakan_instance_logv(struct terakan_instance const * instance, enum mesa_log_level level,
+                           char const * file, int line, char const * format, va_list arguments);
+void terakan_instance_logf(struct terakan_instance const * instance, enum mesa_log_level level,
+                           char const * file, int line, char const * format, ...);
+#define TERAKAN_INSTANCE_LOGF(instance, level, format, ...)                                        \
+   terakan_instance_logf(instance, level, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 void terakan_instance_finish(struct terakan_instance * instance);
 
