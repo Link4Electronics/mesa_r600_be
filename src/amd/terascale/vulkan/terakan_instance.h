@@ -162,6 +162,7 @@ void terakan_instance_log(struct terakan_instance const * instance, enum mesa_lo
                           char const * file, int line, char const * message);
 #define TERAKAN_INSTANCE_LOG(instance, level, message)                                             \
    terakan_instance_log(instance, level, __FILE__, __LINE__, message)
+/* Uses `alloca` for `%m` and `strerror` reentrancy, avoid logging potentially long messages. */
 void terakan_instance_logv(struct terakan_instance const * instance, enum mesa_log_level level,
                            char const * file, int line, char const * format, va_list arguments);
 void terakan_instance_logf(struct terakan_instance const * instance, enum mesa_log_level level,

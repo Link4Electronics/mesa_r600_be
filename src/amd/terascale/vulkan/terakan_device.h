@@ -182,6 +182,7 @@ void terakan_device_log(struct terakan_device const * device, enum mesa_log_leve
                         char const * file, int line, char const * message);
 #define TERAKAN_DEVICE_LOG(device, level, message)                                                 \
    terakan_device_log(device, level, __FILE__, __LINE__, message)
+/* Uses `alloca` for `%m` and `strerror` reentrancy, avoid logging potentially long messages. */
 void terakan_device_logv(struct terakan_device const * device, enum mesa_log_level level,
                          char const * file, int line, char const * format, va_list arguments);
 void terakan_device_logf(struct terakan_device const * device, enum mesa_log_level level,

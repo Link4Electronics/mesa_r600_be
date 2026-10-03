@@ -153,9 +153,10 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
       NTSTATUS const open_adapter_from_luid_status =
          instance->dll_fn.d3dkmt_open_adapter_from_luid(&open_adapter_from_luid_arguments);
       if (!NT_SUCCESS(open_adapter_from_luid_status)) {
-         result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                            "Failed to open the D3DKMT adapter, status 0x%08lX",
-                            open_adapter_from_luid_status);
+         TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                               "Failed to open the D3DKMT adapter, status 0x%08lX",
+                               open_adapter_from_luid_status);
+         result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
          goto fail_alloc;
       }
       device->d3dkmt_adapter = open_adapter_from_luid_arguments.hAdapter;
@@ -166,19 +167,21 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
       NTSTATUS const open_adapter_from_device_name_status =
          D3DKMTOpenAdapterFromDeviceName(&open_adapter_from_device_name_arguments);
       if (!NT_SUCCESS(open_adapter_from_device_name_status)) {
-         result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                            "Failed to open the D3DKMT adapter, status 0x%08lX",
-                            open_adapter_from_device_name_status);
+         TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                               "Failed to open the D3DKMT adapter, status 0x%08lX",
+                               open_adapter_from_device_name_status);
+         result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
          goto fail_alloc;
       }
       device->d3dkmt_adapter = open_adapter_from_device_name_arguments.hAdapter;
       if (memcmp(&open_adapter_from_device_name_arguments.AdapterLuid, &adapter_desc->AdapterLuid,
                  sizeof(LUID)) != 0) {
-         result = vk_errorf(
-            instance, VK_ERROR_INCOMPATIBLE_DRIVER,
+         TERAKAN_INSTANCE_LOG(
+            &instance->base, MESA_LOG_WARN,
             "LUID of a display adapter was changed during enumeration, skipping the adapter "
             "because that might have happened due to a driver update, in which case compatibility "
             "would need to be checked again");
+         result = VK_ERROR_INCOMPATIBLE_DRIVER;
          goto fail_d3dkmt_adapter;
       }
    }
@@ -191,9 +194,10 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
    };
    NTSTATUS const adapter_address_query_status = D3DKMTQueryAdapterInfo(&adapter_address_query);
    if (!NT_SUCCESS(adapter_address_query_status)) {
-      result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                         "Failed to query the D3DKMT adapter PCI address, status 0x%08lX",
-                         adapter_address_query_status);
+      TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                            "Failed to query the D3DKMT adapter PCI address, status 0x%08lX",
+                            adapter_address_query_status);
+      result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
       goto fail_d3dkmt_adapter;
    }
 
@@ -207,9 +211,11 @@ terakan_physical_device_wddm_try_create(struct terakan_instance_wddm * const ins
    NTSTATUS const adapter_driver_private_data_query_status =
       D3DKMTQueryAdapterInfo(&adapter_driver_private_data_query);
    if (!NT_SUCCESS(adapter_driver_private_data_query_status)) {
-      result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                         "Failed to query the D3DKMT adapter driver private data, status 0x%08lX",
-                         adapter_driver_private_data_query_status);
+      TERAKAN_INSTANCE_LOGF(
+         &instance->base, MESA_LOG_ERROR,
+         "Failed to query the D3DKMT adapter driver private data, status 0x%08lX",
+         adapter_driver_private_data_query_status);
+      result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
       goto fail_d3dkmt_adapter;
    }
 
@@ -350,13 +356,13 @@ terakan_physical_device_wddm_enumerate(struct vk_instance * const instance_base)
             CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
          if (cm_result != CR_SUCCESS) {
             vk_free(&instance->base.vk.alloc, device_name_list);
-            return vk_errorf(
-               instance,
-               cm_result == CR_OUT_OF_MEMORY ? VK_ERROR_OUT_OF_HOST_MEMORY
-                                             : VK_ERROR_INITIALIZATION_FAILED,
-               "Failed to get the size of the display device interface list from the Configuration "
-               "Manager, result 0x%08X",
-               cm_result);
+            TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                                  "Failed to get the size of the display device interface list "
+                                  "from the Configuration Manager, result 0x%08X",
+                                  cm_result);
+            return vk_error(instance, cm_result == CR_OUT_OF_MEMORY
+                                         ? VK_ERROR_OUT_OF_HOST_MEMORY
+                                         : VK_ERROR_INITIALIZATION_FAILED);
          }
          if (device_name_list_min_size_wchars <= 1) {
             vk_free(&instance->base.vk.alloc, device_name_list);
@@ -380,13 +386,13 @@ terakan_physical_device_wddm_enumerate(struct vk_instance * const instance_base)
                continue;
             }
             vk_free(&instance->base.vk.alloc, device_name_list);
-            return vk_errorf(
-               instance,
-               cm_result == CR_OUT_OF_MEMORY ? VK_ERROR_OUT_OF_HOST_MEMORY
-                                             : VK_ERROR_INITIALIZATION_FAILED,
-               "Failed to get the display device interface list from the Configuration Manager, "
-               "result 0x%08X",
-               cm_result);
+            TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                                  "Failed to get the display device interface list from the "
+                                  "Configuration Manager, result 0x%08X",
+                                  cm_result);
+            return vk_error(instance, cm_result == CR_OUT_OF_MEMORY
+                                         ? VK_ERROR_OUT_OF_HOST_MEMORY
+                                         : VK_ERROR_INITIALIZATION_FAILED);
          }
          break;
       }
@@ -453,12 +459,13 @@ terakan_physical_device_wddm_enumerate(struct vk_instance * const instance_base)
    if (FAILED(dxgi_factory_create_result)) {
       vk_free(&instance->base.vk.alloc, device_interfaces);
       vk_free(&instance->base.vk.alloc, device_name_list);
-      return vk_errorf(
-         instance,
-         dxgi_factory_create_result == E_OUTOFMEMORY ? VK_ERROR_OUT_OF_HOST_MEMORY
-                                                     : VK_ERROR_INITIALIZATION_FAILED,
+      TERAKAN_INSTANCE_LOGF(
+         &instance->base, MESA_LOG_ERROR,
          "Failed to create a DXGI factory to enumerate Terakan-compatible adapters, result 0x%08lX",
          dxgi_factory_create_result);
+      return vk_error(instance, dxgi_factory_create_result == E_OUTOFMEMORY
+                                   ? VK_ERROR_OUT_OF_HOST_MEMORY
+                                   : VK_ERROR_INITIALIZATION_FAILED);
    }
 
    VkResult result = VK_SUCCESS;
@@ -471,9 +478,9 @@ terakan_physical_device_wddm_enumerate(struct vk_instance * const instance_base)
       HRESULT const adapter_get_desc_result =
          dxgi_adapter->lpVtbl->GetDesc(dxgi_adapter, &adapter_desc);
       if (FAILED(adapter_get_desc_result)) {
-         vk_loge(VK_LOG_NO_OBJS(&instance->base.vk),
-                 "Failed to get the DXGI adapter description, result 0x%08lX",
-                 adapter_get_desc_result);
+         TERAKAN_INSTANCE_LOGF(&instance->base, MESA_LOG_ERROR,
+                               "Failed to get the DXGI adapter description, result 0x%08lX",
+                               adapter_get_desc_result);
          continue;
       }
 

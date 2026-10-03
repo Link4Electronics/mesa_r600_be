@@ -24,6 +24,7 @@
 #include "terakan_device_wddm.h"
 
 #include "terakan_bo_wddm.h"
+#include "terakan_instance.h"
 #include "terakan_physical_device_wddm.h"
 #include "terakan_queue_wddm.h"
 #include "terakan_wddm_d3dkmthk.h"
@@ -65,10 +66,11 @@ terakan_device_wddm_create(struct terakan_physical_device * const physical_devic
    struct terakan_physical_device_wddm * const physical_device =
       container_of(physical_device_base, struct terakan_physical_device_wddm, base);
 
-   struct vk_instance const * const instance = physical_device->base.vk.instance;
+   struct terakan_instance const * const instance =
+      container_of(physical_device->base.vk.instance, struct terakan_instance const, vk);
 
    struct terakan_device_wddm * const device =
-      vk_alloc2(&instance->alloc, allocator, sizeof(struct terakan_device_wddm),
+      vk_alloc2(&instance->vk.alloc, allocator, sizeof(struct terakan_device_wddm),
                 alignof(struct terakan_device_wddm), VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
    if (device == NULL) {
       return vk_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
@@ -79,9 +81,10 @@ terakan_device_wddm_create(struct terakan_physical_device * const physical_devic
    };
    NTSTATUS const create_device_status = D3DKMTCreateDevice(&create_device_arguments);
    if (!NT_SUCCESS(create_device_status)) {
-      result =
-         vk_errorf(instance, VK_ERROR_INITIALIZATION_FAILED,
-                   "Failed to create the D3DKMT device, status 0x%08lX", create_device_status);
+      TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_ERROR,
+                            "Failed to create the D3DKMT device, status 0x%08lX",
+                            create_device_status);
+      result = vk_error(instance, VK_ERROR_INITIALIZATION_FAILED);
       goto fail_alloc;
    }
    device->d3dkmt_device = create_device_arguments.hDevice;
@@ -100,6 +103,6 @@ fail_d3dkmt_device:
    D3DKMT_DESTROYDEVICE const destroy_device_arguments = {.hDevice = device->d3dkmt_device};
    D3DKMTDestroyDevice(&destroy_device_arguments);
 fail_alloc:
-   vk_free2(&instance->alloc, allocator, device);
+   vk_free2(&instance->vk.alloc, allocator, device);
    return result;
 }

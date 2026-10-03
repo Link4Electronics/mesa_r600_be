@@ -25,6 +25,7 @@
 
 #include "terakan_physical_device_wddm.h"
 
+#include "util/log.h"
 #include "util/macros.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
@@ -67,7 +68,8 @@ terakan_instance_wddm_create(VkInstanceCreateInfo const * const create_info,
 
    instance->gdi32_module = LoadLibraryW(L"gdi32.dll");
    if (instance->gdi32_module == NULL) {
-      result = vk_errorf(NULL, VK_ERROR_INITIALIZATION_FAILED, "Failed to load gdi32.dll");
+      mesa_loge("terakan: Failed to load gdi32.dll");
+      result = vk_error(NULL, VK_ERROR_INITIALIZATION_FAILED);
       goto fail_alloc;
    }
    instance->dll_fn.d3dkmt_open_adapter_from_luid = (PFND3DKMT_OPENADAPTERFROMLUID)GetProcAddress(

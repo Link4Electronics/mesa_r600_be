@@ -137,9 +137,10 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
    char const * const render_node_path = drm_device->nodes[DRM_NODE_RENDER];
    int render_node_fd = open(render_node_path, O_RDWR | O_CLOEXEC);
    if (render_node_fd < 0) {
-      return vk_errorf(instance,
-                       errno == ENOMEM ? VK_ERROR_OUT_OF_HOST_MEMORY : VK_ERROR_INCOMPATIBLE_DRIVER,
-                       "Failed to open the DRM device '%s': %m", render_node_path);
+      result = errno == ENOMEM ? VK_ERROR_OUT_OF_HOST_MEMORY : VK_ERROR_INCOMPATIBLE_DRIVER;
+      TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_ERROR, "Failed to open the DRM device '%s': %m",
+                            render_node_path);
+      return vk_error(instance, result);
    }
 
    /* Check if the kernel driver is supported. */
@@ -147,28 +148,30 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
    {
       drmVersionPtr const drm_version = drmGetVersion(render_node_fd);
       if (drm_version == NULL) {
-         result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                            "Failed to get the kernel driver version for the DRM device '%s': %m",
-                            render_node_path);
+         TERAKAN_INSTANCE_LOGF(
+            instance, MESA_LOG_ERROR,
+            "Failed to get the kernel driver version for the DRM device '%s': %m",
+            render_node_path);
+         result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
          goto fail_render_node_fd;
       }
       if (strcmp(drm_version->name, "radeon") != 0) {
-         result =
-            vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                      "The DRM device '%s' doesn't use the Radeon kernel driver", render_node_path);
+         TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_ERROR,
+                               "The DRM device '%s' doesn't use the Radeon kernel driver",
+                               render_node_path);
+         result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
          drmFreeVersion(drm_version);
          goto fail_render_node_fd;
       }
-      /* Check if the kernel driver version is supported before doing any DRM queries.
-       * Same DRM version requirement as in the Gallium Radeon winsys as of May 2023.
-       */
+      /* Check if the kernel driver version is supported before doing any DRM queries. */
       if (drm_version->version_major != 2 || drm_version->version_minor < 50) {
-         result = vk_errorf(
-            instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-            "Device '%s' DRM version is %d.%d.%d, but this driver is only compatible with 2.50.0 "
-            "(kernel 4.12) or later",
+         TERAKAN_INSTANCE_LOGF(
+            instance, MESA_LOG_ERROR,
+            "Device '%s' Radeon DRM kernel driver version is %d.%d.%d, but Terakan is compatible "
+            "only with 2.50.0 (Linux kernel 4.12) or later",
             render_node_path, drm_version->version_major, drm_version->version_minor,
             drm_version->version_patchlevel);
+         result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
          drmFreeVersion(drm_version);
          goto fail_render_node_fd;
       }
@@ -180,14 +183,15 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
    struct stat primary_node_stat = {};
    bool has_primary_node = (drm_device->available_nodes & (1 << DRM_NODE_PRIMARY)) != 0;
    if (has_primary_node && stat(drm_device->nodes[DRM_NODE_PRIMARY], &primary_node_stat) != 0) {
-      vk_logw(VK_LOG_NO_OBJS(&instance->vk), "Failed to stat the DRM primary node '%s': %m",
-              drm_device->nodes[DRM_NODE_PRIMARY]);
+      TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_WARN, "Failed to stat the DRM primary node '%s': %m",
+                            drm_device->nodes[DRM_NODE_PRIMARY]);
       has_primary_node = false;
    }
    struct stat render_node_stat = {};
    if (stat(render_node_path, &render_node_stat) != 0) {
-      result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                         "Failed to stat the DRM render node '%s': %m", render_node_path);
+      TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_ERROR, "Failed to stat the DRM render node '%s': %m",
+                            render_node_path);
+      result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
       goto fail_render_node_fd;
    }
 
@@ -195,9 +199,11 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
    int const gem_info_result =
       drmCommandWriteRead(render_node_fd, DRM_RADEON_GEM_INFO, &gem_info, sizeof(gem_info));
    if (gem_info_result != 0) {
-      result = vk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
-                         "Failed to get the memory info for the DRM device '%s', error number %d",
-                         render_node_path, gem_info_result);
+      TERAKAN_INSTANCE_LOGF(
+         instance, MESA_LOG_ERROR,
+         "Failed to get the memory info for the DRM device '%s', error number %d", render_node_path,
+         gem_info_result);
+      result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
       goto fail_render_node_fd;
    }
 
@@ -210,10 +216,11 @@ terakan_physical_device_drm_radeon_try_create(struct vk_instance * const instanc
       drmCommandWriteRead(render_node_fd, DRM_RADEON_INFO, &tiling_config_info_arguments,
                           sizeof(tiling_config_info_arguments));
    if (tiling_config_info_result != 0) {
-      result = vk_errorf(
-         instance, VK_ERROR_INCOMPATIBLE_DRIVER,
+      TERAKAN_INSTANCE_LOGF(
+         instance, MESA_LOG_ERROR,
          "Failed to get the tiling configuration for the DRM device '%s', error number %d",
          render_node_path, tiling_config_info_result);
+      result = vk_error(instance, VK_ERROR_INCOMPATIBLE_DRIVER);
       goto fail_render_node_fd;
    }
 

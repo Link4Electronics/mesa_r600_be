@@ -36,6 +36,7 @@
 #include "util/macros.h"
 #include "util/u_math.h"
 #include "util/u_printf.h"
+#include "c99_alloca.h"
 #include "vk_alloc.h"
 #include "vk_cmd_enqueue_entrypoints.h"
 #include "vk_common_entrypoints.h"
@@ -90,11 +91,7 @@ terakan_device_logv(struct terakan_device const * const device, enum mesa_log_le
                     va_list arguments)
 {
    size_t const message_size = u_printf_length(format, arguments) + 1;
-   char * const message = terakan_device_host_allocate(device, NULL, message_size, 1,
-                                                       TERAKAN_DEVICE_ALLOCATION_SCOPE_COMMAND);
-   if (unlikely(message == NULL)) {
-      return;
-   }
+   char * const message = alloca(message_size);
    vsnprintf(message, message_size, format, arguments);
    terakan_device_log(device, level, file, line, message);
    terakan_device_host_free(device, NULL, message);

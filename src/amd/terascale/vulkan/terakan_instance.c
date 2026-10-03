@@ -32,6 +32,7 @@
 #include "util/u_debug.h"
 #include "util/u_math.h"
 #include "util/u_printf.h"
+#include "c99_alloca.h"
 #include "vk_alloc.h"
 #include "vk_log.h"
 #include "wsi_common.h"
@@ -99,10 +100,7 @@ terakan_instance_logv(struct terakan_instance const * const instance,
                       char const * const format, va_list arguments)
 {
    size_t const message_size = u_printf_length(format, arguments) + 1;
-   char * const message = terakan_instance_host_allocate(instance, NULL, message_size, 1, true);
-   if (unlikely(message == NULL)) {
-      return;
-   }
+   char * const message = alloca(message_size);
    vsnprintf(message, message_size, format, arguments);
    terakan_instance_log(instance, level, file, line, message);
    terakan_instance_host_free(instance, NULL, message);

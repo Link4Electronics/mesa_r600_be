@@ -24,6 +24,7 @@
 #include "terakan_device_drm_radeon.h"
 
 #include "terakan_bo_drm_radeon.h"
+#include "terakan_instance.h"
 #include "terakan_queue_drm_radeon.h"
 
 #include "util/macros.h"
@@ -69,10 +70,11 @@ terakan_device_drm_radeon_create(struct terakan_physical_device * const physical
    struct terakan_physical_device_drm_radeon * const physical_device =
       container_of(physical_device_base, struct terakan_physical_device_drm_radeon, base);
 
-   struct vk_instance const * const instance = physical_device->base.vk.instance;
+   struct terakan_instance const * const instance =
+      container_of(physical_device->base.vk.instance, struct terakan_instance const, vk);
 
    struct terakan_device_drm_radeon * const device =
-      vk_alloc2(&instance->alloc, allocator, sizeof(struct terakan_device_drm_radeon),
+      vk_alloc2(&instance->vk.alloc, allocator, sizeof(struct terakan_device_drm_radeon),
                 alignof(struct terakan_device_drm_radeon), VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
    if (device == NULL) {
       return vk_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
@@ -84,9 +86,10 @@ terakan_device_drm_radeon_create(struct terakan_physical_device * const physical
     */
    device->render_node_fd = open(physical_device->render_node_path, O_RDWR | O_CLOEXEC);
    if (device->render_node_fd < 0) {
-      result = vk_errorf(
-         instance, errno == ENOMEM ? VK_ERROR_OUT_OF_HOST_MEMORY : VK_ERROR_INITIALIZATION_FAILED,
-         "Failed to open the DRM device '%s': %m", physical_device->render_node_path);
+      result = errno == ENOMEM ? VK_ERROR_OUT_OF_HOST_MEMORY : VK_ERROR_INITIALIZATION_FAILED;
+      TERAKAN_INSTANCE_LOGF(instance, MESA_LOG_ERROR, "Failed to open the DRM device '%s': %m",
+                            physical_device->render_node_path);
+      result = vk_error(instance, result);
       goto fail_alloc;
    }
 
@@ -97,26 +100,29 @@ terakan_device_drm_radeon_create(struct terakan_physical_device * const physical
     * and the opening when the result of the check might have become outdated.
     */
    if (fcntl(physical_device->render_node_validation_fd, F_GETFD) == -1) {
-      result = vk_errorf(
-         instance, VK_ERROR_INITIALIZATION_FAILED,
+      TERAKAN_INSTANCE_LOGF(
+         instance, MESA_LOG_ERROR,
          "Validation of the physical device's DRM render node file descriptor failed, not creating "
          "the logical device as it's not known if the render node path '%s' still points to a "
          "supported DRM device: %m",
          physical_device->render_node_path);
+      result = vk_error(instance, VK_ERROR_INITIALIZATION_FAILED);
       goto fail_render_node_fd;
    }
 
    /* Initialize the device. */
 
    if (mtx_init(&device->shared_bo_mutex, mtx_plain) != thrd_success) {
-      result = vk_errorf(instance, VK_ERROR_OUT_OF_HOST_MEMORY,
-                         "Failed to initialize the shared buffer reference counting mutex");
+      TERAKAN_INSTANCE_LOG(instance, MESA_LOG_ERROR,
+                           "Failed to initialize the shared buffer reference counting mutex");
+      result = vk_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
       goto fail_render_node_fd;
    }
    device->shared_bo_reference_counts = _mesa_pointer_hash_table_create(NULL);
    if (device->shared_bo_reference_counts == NULL) {
-      result = vk_errorf(instance, VK_ERROR_OUT_OF_HOST_MEMORY,
-                         "Failed to create the shared buffer reference count table");
+      TERAKAN_INSTANCE_LOG(instance, MESA_LOG_ERROR,
+                           "Failed to create the shared buffer reference count table");
+      result = vk_error(instance, VK_ERROR_OUT_OF_HOST_MEMORY);
       goto fail_shared_bo_mutex;
    }
 
@@ -150,6 +156,6 @@ fail_shared_bo_mutex:
 fail_render_node_fd:
    close(device->render_node_fd);
 fail_alloc:
-   vk_free2(&instance->alloc, allocator, device);
+   vk_free2(&instance->vk.alloc, allocator, device);
    return result;
 }
