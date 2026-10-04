@@ -203,6 +203,12 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
       case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
       case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
       case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT: {
+         /* From the specification of `VkDescriptorSetLayoutBinding` in Vulkan 1.4.365:
+          *
+          *     "updates to a `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` descriptor with immutable
+          *     samplers do not modify the samplers (the image views are updated, but the sampler
+          *     updates are ignored)"
+          */
          if ((descriptor_write->descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER ||
               descriptor_write->descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) &&
              dst_binding->first_immutable_sampler_or_dynamic_offset == UINT16_MAX) {
@@ -469,15 +475,45 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
       }
 
       if (terakan_vk_descriptor_type_has_sampler(descriptor_type)) {
+         /* From the specification of `VkDescriptorSetLayoutBinding` in Vulkan 1.4.365:
+          *
+          *     "updates to a `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` descriptor with immutable
+          *     samplers do not modify the samplers (the image views are updated, but the sampler
+          *     updates are ignored)"
+          */
          assert(terakan_vk_descriptor_type_has_sampler(dst_binding->descriptor_type));
-         memcpy(
-            dst_set->descriptors + dst_set->layout->pool_first_sampler_offset_bytes +
-               sizeof(struct terakan_vk_descriptor_set_sampler) *
-                  (dst_binding->first_set_sampler + descriptor_copy->dstArrayElement),
-            src_set->descriptors + src_set->layout->pool_first_sampler_offset_bytes +
-               sizeof(struct terakan_vk_descriptor_set_sampler) *
-                  (src_binding->first_set_sampler + descriptor_copy->srcArrayElement),
-            sizeof(struct terakan_vk_descriptor_set_sampler) * descriptor_copy->descriptorCount);
+         struct terakan_vk_descriptor_set_sampler * dst_next_samplers =
+            (struct terakan_vk_descriptor_set_sampler *)(dst_set->descriptors +
+                                                         dst_set->layout
+                                                            ->pool_first_sampler_offset_bytes) +
+            (dst_binding->first_set_sampler + descriptor_copy->dstArrayElement);
+         struct terakan_vk_descriptor_set_sampler const * src_next_samplers =
+            (struct terakan_vk_descriptor_set_sampler const *)(src_set->descriptors +
+                                                               src_set->layout
+                                                                  ->pool_first_sampler_offset_bytes) +
+            (src_binding->first_set_sampler + descriptor_copy->srcArrayElement);
+         uint32_t samplers_to_update_remaining = descriptor_copy->descriptorCount;
+         for (size_t dst_sampler_binding_index = dst_binding_index;
+              samplers_to_update_remaining != 0 &&
+              likely(dst_sampler_binding_index < dst_set->layout->binding_count);
+              ++dst_sampler_binding_index) {
+            struct terakan_vk_descriptor_set_layout_binding const * const dst_sampler_binding =
+               &dst_set->layout->bindings[dst_sampler_binding_index];
+            if (dst_sampler_binding->descriptor_count == 0) {
+               continue;
+            }
+            assert(terakan_vk_descriptor_type_has_sampler(dst_sampler_binding->descriptor_type));
+            uint32_t const samplers_to_update_for_binding =
+               MIN2(dst_sampler_binding->descriptor_count, samplers_to_update_remaining);
+            if (dst_sampler_binding->first_immutable_sampler_or_dynamic_offset == UINT16_MAX) {
+               memcpy(dst_next_samplers, src_next_samplers,
+                      sizeof(struct terakan_vk_descriptor_set_sampler) *
+                         samplers_to_update_for_binding);
+            }
+            dst_next_samplers += samplers_to_update_for_binding;
+            src_next_samplers += samplers_to_update_for_binding;
+            samplers_to_update_remaining -= samplers_to_update_for_binding;
+         }
       }
    }
 }
