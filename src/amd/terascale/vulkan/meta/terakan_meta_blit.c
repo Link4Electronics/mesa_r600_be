@@ -270,7 +270,7 @@ static uint32_t const terakan_meta_blit_ps_r8xx[] = {
 
    /* 6-7: Sample the the source texture to R0. */
    S_SQ_TEX_WORD0_TEX_INST(19) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(0) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -329,7 +329,7 @@ static uint32_t const terakan_meta_blit_ps_r9xx[] = {
    0,
    0,
    S_SQ_TEX_WORD0_TEX_INST(19) |
-      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_TEX_WORD0_RESOURCE_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_TEX_WORD0_SRC_GPR(0),
    S_SQ_TEX_WORD1_DST_GPR(0) | S_SQ_TEX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_TEX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -607,7 +607,7 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
             continue;
          }
          terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
-                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
                                           src_image->bo, &src_descriptor);
 
          dst_descriptor_create_info.subresource_range = dst_subresource_range;

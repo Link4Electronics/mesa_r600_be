@@ -155,7 +155,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r8xx[] = {
 
    /* 18-19: Vertex-fetch from the source to R0.XYZ. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 3 - 1),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -291,7 +291,7 @@ static uint32_t const terakan_meta_copy_expand_3x_ps_r9xx[] = {
 
    /* 24-25: Vertex-fetch from the source to R0.XYZ. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_W),
    S_SQ_VTX_WORD1_GPR_DST_GPR(0) | S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_Y) |
@@ -467,7 +467,7 @@ terakan_meta_copy_expand_3x_buffer_to_image(
          buffer_descriptor.srv[1] =
             (uint32_t)MIN2(buffer_descriptor.srv[1], buffer->vk.size - buffer->va - 1u);
          terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
-                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
                                           buffer->bo, &buffer_descriptor);
 
          terakan_meta_draw_rect(command_writer, region_extent_rect, 1);
@@ -590,7 +590,7 @@ terakan_meta_copy_expand_3x_image_to_buffer(
          image_descriptor.srv[2] = (image_descriptor.srv[2] & C_030008_BASE_ADDRESS_HI) |
                                    S_030008_BASE_ADDRESS_HI(image_descriptor_base >> 32);
          terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
-                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
                                           image->bo, &image_descriptor);
 
          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
@@ -755,7 +755,7 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
          src_descriptor.srv[2] = (src_descriptor.srv[2] & C_030008_BASE_ADDRESS_HI) |
                                  S_030008_BASE_ADDRESS_HI(src_descriptor_base >> 32);
          terakan_hw_config_sqk_set_srv_fs(&command_writer->hw_config_sqk,
-                                          TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                          TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
                                           src_image->bo, &src_descriptor);
 
          terakan_meta_config_draw_set_cb_uav(command_writer, 0, dst_image->bo, &dst_descriptor);

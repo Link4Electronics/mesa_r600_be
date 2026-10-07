@@ -56,7 +56,7 @@ struct terakan_meta_shader {
 
    uint32_t samplers_used;
    uint16_t kcache_used;
-   /* Whether `TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META` is used. */
+   /* Whether `TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY` is used. */
    bool primary_meta_srv_used;
    /* Whether `TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC` is used.
     * Must not be used in pixel shaders.

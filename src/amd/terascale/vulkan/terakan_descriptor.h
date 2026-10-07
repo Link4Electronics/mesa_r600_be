@@ -345,13 +345,13 @@ struct terakan_srv_descriptor {
    uint32_t srv[8];
 };
 
-/* Dynamically indexable immediate constant arrays in application shader code.
+/* Immediate constants in application shader code, primarily dynamically indexed arrays.
  * Also used for a single SRV binding for meta draws or dispatches as it can be quickly invalidated
  * alongside the shader itself.
  */
-#define TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META 0
+#define TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY 0
 /* Dynamically indexable driver and application push constants. */
-#define TERAKAN_SRV_RANGE_PUSH_CONSTANTS (TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META + 1)
+#define TERAKAN_SRV_RANGE_PUSH_CONSTANTS (TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY + 1)
 /* VS: Base vertex and instance.
  * GS and VS/TES `ALT_CONST`: Ring buffer.
  * CS: Number of workgroups.

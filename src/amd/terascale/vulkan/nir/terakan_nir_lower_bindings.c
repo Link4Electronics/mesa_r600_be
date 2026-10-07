@@ -942,12 +942,12 @@ terakan_nir_lower_bindings_instr_load_constant(nir_builder * const builder,
 {
    assert(intrinsic->intrinsic == nir_intrinsic_load_constant);
 
-   BITSET_SET(state->sqk_usage_accum->srvs, TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META);
+   BITSET_SET(state->sqk_usage_accum->srvs, TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY);
    nir_def_replace(
       &intrinsic->def,
       terakan_nir_load_raw_buffer_srv(
          builder, intrinsic->num_components, intrinsic->def.bit_size, ACCESS_CAN_REORDER,
-         TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META, nir_imm_zero(builder, 1, 32),
+         TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY, nir_imm_zero(builder, 1, 32),
          nir_intrinsic_base(intrinsic), intrinsic->src[0].ssa));
 }
 

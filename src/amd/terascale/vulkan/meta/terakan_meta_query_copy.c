@@ -345,7 +345,7 @@ enum {
                                                    offset_counter_pairs, mega_fetch_dwords,        \
                                                    is_mega_fetch)                                  \
    (S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                      \
-    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |                   \
+    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |              \
     S_SQ_VTX_WORD0_SRC_GPR(src_y_gpr) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_Y) |            \
     S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * (mega_fetch_dwords) - 1)),                  \
    (S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_##dst_sel_x) |                                      \
@@ -365,7 +365,7 @@ enum {
                                                    dst_sel_z, dst_sel_w, src_y_gpr,                \
                                                    offset_counter_pairs)                           \
    (S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |                                      \
-    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |                   \
+    S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |              \
     S_SQ_VTX_WORD0_SRC_GPR(src_y_gpr) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_Y)),            \
    (S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_##dst_sel_x) |                                      \
     S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_##dst_sel_y) |                                      \
@@ -1549,7 +1549,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r8xx[] = {
 
    /* 16-17: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
@@ -1648,7 +1648,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_32_bit_vs_r9xx[] = {
 
    /* 20-21: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(TERASCALE_SWIZZLE_MASK) |
@@ -1742,7 +1742,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r8xx[] = {
 
    /* 16-17: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD0_MEGA_FETCH_COUNT(sizeof(uint32_t) * 2 - 1),
    S_SQ_VTX_WORD1_DST_SEL_X(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_Y : TERASCALE_SWIZZLE_X) |
@@ -1841,7 +1841,7 @@ static uint32_t const terakan_meta_query_copy_timestamp_64_bit_vs_r9xx[] = {
 
    /* 20-21: Fetch the timestamp to R0.X. */
    S_SQ_VTX_WORD0_FETCH_TYPE(SQ_VTX_FETCH_NO_INDEX_OFFSET) |
-      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META) |
+      S_SQ_VTX_WORD0_BUFFER_ID(TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY) |
       S_SQ_VTX_WORD0_SRC_GPR(0) | S_SQ_VTX_WORD0_SRC_SEL_X(TERASCALE_SWIZZLE_X),
    S_SQ_VTX_WORD1_DST_SEL_X(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_Y : TERASCALE_SWIZZLE_X) |
       S_SQ_VTX_WORD1_DST_SEL_Y(UTIL_ARCH_BIG_ENDIAN ? TERASCALE_SWIZZLE_X : TERASCALE_SWIZZLE_Y) |
@@ -2266,7 +2266,7 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
       src_samples_srv.srv[1] =
          (uint32_t)((uint64_t)src_samples_size_bytes * batch_query_count - 1u);
       terakan_hw_config_sqk_set_srv_vs(&command_writer->hw_config_sqk,
-                                       TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META,
+                                       TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
                                        query_pool->bo, &src_samples_srv);
 
       /* Source availability SRV. */

@@ -336,7 +336,7 @@ terakan_device_init(struct terakan_device * const device,
          meta_shader_sqk_usage->kcache = meta_shader->kcache_used;
          if (meta_shader->primary_meta_srv_used) {
             BITSET_SET(meta_shader_sqk_usage->srvs,
-                       TERAKAN_SRV_RANGE_SHADER_CONSTANT_ARRAYS_OR_META);
+                       TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY);
          }
          if (meta_shader->non_pixel_stage_specific_srv_used) {
             BITSET_SET(meta_shader_sqk_usage->srvs, TERAKAN_SRV_RANGE_NON_PIXEL_STAGE_SPECIFIC);
