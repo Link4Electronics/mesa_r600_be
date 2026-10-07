@@ -416,10 +416,24 @@ terakan_shader_rtv_mapping_rtv_dsb_uncompacted_exports(
  * shader objects (for an uncached wrapper implementing VkShaderEXT).
  */
 struct terakan_shader_impl {
+   mesa_shader_stage sw_stage;
+
    /* The BO isn't owned by this object. */
    struct terakan_shader_static static_state;
 
    uint16_t scratch_item_size_dwords;
+
+   uint32_t immediate_constants_bytes;
+   /* Ignored if `immediate_constants_bytes` is 0.
+    * The BO is `static_state.program_bo`.
+    * Immediate constants are read via an SRV, but it's desirable to align them to the pipe (memory
+    * channel) interleave (that is 256 bytes on virtually all R8xx/R9xx devices, which matches the
+    * program code alignment) to reduce memory channel conflicts and to make them more consistent
+    * regardless of factors like the size of the program code. See sections 6.1.2 "Channel
+    * Conflicts" and 6.1.5 "Alignment" of the AMD Accelerated Parallel Processing OpenCL Programming
+    * Guide rev2.3 (July 2012).
+    */
+   uint64_t immediate_constants_va;
 
    struct terakan_push_constants_usage push_constants_usage;
 
@@ -485,6 +499,11 @@ struct terakan_nir_lower_and_optimize_post_link_result terakan_nir_lower_and_opt
 void terakan_shader_impl_apply_lower_and_optimize_post_link_result(
    struct terakan_shader_impl * shader, union r600_shader_key * shader_key,
    struct terakan_nir_lower_and_optimize_post_link_result const * result, mesa_shader_stage stage);
+
+struct terakan_hw_config_sqk;
+
+void terakan_shader_impl_bind_immediate_constants(struct terakan_hw_config_sqk * hw_config_sqk,
+                                                  struct terakan_shader_impl const * shader);
 
 void terakan_shader_impl_finish(struct terakan_shader_impl * shader);
 

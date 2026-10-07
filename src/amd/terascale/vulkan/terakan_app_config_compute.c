@@ -93,6 +93,7 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
 
    terakan_hw_config_compute_set_sq_pgm_ls(&command_writer->hw_config_compute,
                                            &sq_pgm_ls->static_state);
+   terakan_shader_impl_bind_immediate_constants(&command_writer->hw_config_sqk, sq_pgm_ls);
 
    bool const lstmp_ring_used = sq_pgm_ls->scratch_item_size_dwords != 0;
    terakan_hw_config_shared_compute_set_sq_ring_usage_lstmp(&command_writer->hw_config_shared,

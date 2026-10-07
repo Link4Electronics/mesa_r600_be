@@ -57,6 +57,8 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
    terakan_physical_device_chip_info const & chip_info = physical_device.chip_info;
    amd_gfx_level const gfx_level = chip_info.is_r9xx ? CAYMAN : EVERGREEN;
 
+   shader->sw_stage = nir->info.stage;
+
    /* TODO(Triang3l): Fill stream output info from NIR. */
    pipe_stream_output_info so_info = {};
 

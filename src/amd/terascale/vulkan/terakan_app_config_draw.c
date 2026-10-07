@@ -289,6 +289,13 @@ terakan_app_config_draw_apply_sq_pgm_pre_rasterization(
    terakan_hw_config_draw_set_sq_pgm_vs(&command_writer->hw_config_draw,
                                         hw_vs ? &hw_vs->static_state : NULL);
    /* TODO(Triang3l): Bind all the shaders. */
+   for (unsigned stage_index = 0; stage_index < ARRAY_SIZE(sw_stages); ++stage_index) {
+      struct terakan_shader_impl const * const shader = sw_stages[stage_index];
+      if (shader == NULL) {
+         continue;
+      }
+      terakan_shader_impl_bind_immediate_constants(&command_writer->hw_config_sqk, shader);
+   }
 
    /* Configure the ring buffers.
     * R9xx doesn't have `SQ_THREAD_RESOURCE_MGMT`, use the maximum possible thread counts.
@@ -1091,6 +1098,9 @@ terakan_app_config_draw_apply_sq_pgm_fragment(
 
    terakan_hw_config_draw_set_sq_pgm_ps(&command_writer->hw_config_draw,
                                         fs != NULL ? &fs->static_state : NULL);
+   if (fs != NULL) {
+      terakan_shader_impl_bind_immediate_constants(&command_writer->hw_config_sqk, fs);
+   }
 
    if (fs != NULL && fs->scratch_item_size_dwords != 0) {
       terakan_hw_config_shared_draw_set_sq_ring_usage(

@@ -417,6 +417,22 @@ terakan_nir_lower_and_optimize_post_link(
     */
    NIR_PASS(_, nir, terakan_nir_lower_tex_image_deref_to_vulkan_resource_index);
 
+   /* Lower accesses to used constants that will be loaded from the immediate constant buffer to the
+    * format needed by `terakan_nir_lower_bindings`.
+    */
+   /* TODO(Triang3l): Clean up dead copy elimination invocations, earlier DCE might have been done
+    * already. This is currently placed here to specify that's it's demanded.
+    */
+   NIR_PASS(_, nir, nir_opt_dce);
+   NIR_PASS(_, nir, nir_opt_large_constants, glsl_get_natural_size_align_bytes, 16);
+   /* Lower immediate constant loads to scalar to vectorize later according to the backend access
+    * requirements.
+    */
+   NIR_PASS(_, nir, nir_lower_io_to_scalar, nir_var_mem_constant, NULL, NULL);
+   /* TODO(Triang3l): Vectorize used scalar loads of immediate constants for optimization (need
+    * `load_constant` support within `nir_opt_load_store_vectorize` itself also).
+    */
+
    /* Propagate resource addressing constants.
     * A copy propagation loop requires dead code elimination. Here it also eliminates dead code that
     * may demand SQK.
@@ -552,6 +568,33 @@ terakan_shader_impl_apply_lower_and_optimize_post_link_result(
    }
 
    /* TODO(Triang3l): All shader key fields that can be obtained from NIR. */
+}
+
+void
+terakan_shader_impl_bind_immediate_constants(struct terakan_hw_config_sqk * const hw_config_sqk,
+                                             struct terakan_shader_impl const * const shader)
+{
+   if (!BITSET_TEST(shader->sqk_usage.srvs,
+                    TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY)) {
+      return;
+   }
+   terakan_hw_config_sqk_set_srv_function const set_srv =
+      terakan_hw_config_sqk_stage_set_functions[shader->sw_stage].srv;
+   if (unlikely(shader->immediate_constants_bytes == 0)) {
+      set_srv(hw_config_sqk, TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY, NULL, NULL);
+      return;
+   }
+   struct terakan_srv_descriptor const srv = {
+      .srv = {
+         [0] = (uint32_t)shader->immediate_constants_va,
+         [1] = shader->immediate_constants_bytes - 1u,
+         [2] = S_030008_BASE_ADDRESS_HI(shader->immediate_constants_va >> 32) | S_030008_STRIDE(1),
+         [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
+         [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
+         [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,
+      }};
+   set_srv(hw_config_sqk, TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY,
+           shader->static_state.program_bo, &srv);
 }
 
 void

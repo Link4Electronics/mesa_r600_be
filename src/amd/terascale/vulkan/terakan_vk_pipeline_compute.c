@@ -131,6 +131,8 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
       }
    }
 
+   struct terakan_physical_device const * const physical_device =
+      terakan_device_physical_device(device);
    struct terakan_vk_pipeline_layout const * const pipeline_layout =
       terakan_vk_pipeline_layout_from_handle(create_info->layout);
 
@@ -143,7 +145,7 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
       /* TODO(Triang3l): `VK_EXT_pipeline_robustness`. */
       .robust_buffer_access_2 = device->vk.enabled_features.robustBufferAccess2,
 
-      .physical_device = terakan_device_physical_device(device),
+      .physical_device = physical_device,
    };
 
    nir_shader * const nir = terakan_nir_from_spirv_pre_link(
@@ -166,42 +168,79 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
       pipeline_layout->shader_app_push_constants_extents_bytes[MESA_SHADER_COMPUTE];
 
    result = terakan_shader_impl_compile(&pipeline->shader, device, &shader_key, nir, allocator);
-   ralloc_free(nir);
    if (result != VK_SUCCESS) {
+      ralloc_free(nir);
       goto fail_shader;
    }
 
-   /* Place the hardware shader in the BO. */
+   void * shader_immediate_constants_data =
+      nir->constant_data_size != 0 &&
+            BITSET_TEST(pipeline->shader.sqk_usage.srvs,
+                        TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY)
+         ? nir->constant_data
+         : NULL;
+   if (shader_immediate_constants_data != NULL) {
+      ralloc_steal(NULL, shader_immediate_constants_data);
+      pipeline->shader.immediate_constants_bytes = nir->constant_data_size;
+   }
+
+   ralloc_free(nir);
+
+   /* Place the hardware shader and the immediate constants in the BO. */
    /* TODO(Triang3l): Use a global allocator and GPU uploading instead of creating one host-visible
     * device-local BO per pipeline.
     */
-   /* TODO(Triang3l): Static constant buffer. */
-   /* 32 bits are enough for the shader size in bytes, as qword addresses in shader control flow
-    * instructions are 24-bit.
-    */
+
    uint32_t const shader_bytecode_size_bytes =
       (uint32_t)sizeof(uint32_t) * pipeline->shader.shader.bc.ndw;
+   /* Align the immediate constants to the memory channel interleave (usually the same as the shader
+    * program alignment) for more consistent access performance.
+    */
+   uint32_t const pipe_interleave_bytes =
+      (uint32_t)1 << physical_device->tiling_info.pipe_interleave_bytes_log2;
+   uint32_t const shader_immediate_constants_offset_bytes =
+      ALIGN_POT(shader_bytecode_size_bytes, pipe_interleave_bytes);
+
    result = device->platform_fn->bo->allocate_device_memory(
-      device, shader_bytecode_size_bytes, TERAKAN_SHADER_PROGRAM_ALIGNMENT,
+      device,
+      shader_immediate_constants_data != NULL ? (uint64_t)shader_immediate_constants_offset_bytes +
+                                                   pipeline->shader.immediate_constants_bytes
+                                              : shader_bytecode_size_bytes,
+      shader_immediate_constants_data != NULL
+         ? MAX2((uint32_t)TERAKAN_SHADER_PROGRAM_ALIGNMENT, pipe_interleave_bytes)
+         : (uint32_t)TERAKAN_SHADER_PROGRAM_ALIGNMENT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
       0, allocator, TERAKAN_DEVICE_ALLOCATION_SCOPE_OBJECT, &pipeline->shader_bo);
    if (result != VK_SUCCESS) {
       result = vk_error(device, result);
-      goto fail_shader;
+      goto fail_shader_immediate_constants_data;
    }
+
    {
-      uint32_t * const shader_bo_mapping = terakan_bo_map(pipeline->shader_bo);
+      char * const shader_bo_mapping = terakan_bo_map(pipeline->shader_bo);
       if (shader_bo_mapping == NULL) {
          result = vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
          goto fail_shader_bo;
       }
+
       util_memcpy_cpu_to_le32(shader_bo_mapping, pipeline->shader.shader.bc.bytecode,
                               shader_bytecode_size_bytes);
       pipeline->shader.static_state.program_bo = pipeline->shader_bo;
       pipeline->shader.static_state.program_va_shr8 = (uint32_t)(pipeline->shader_bo->va >> 8);
+
+      if (shader_immediate_constants_data != NULL) {
+         memcpy(shader_bo_mapping + shader_immediate_constants_offset_bytes,
+                shader_immediate_constants_data, pipeline->shader.immediate_constants_bytes);
+         ralloc_free(shader_immediate_constants_data);
+         shader_immediate_constants_data = NULL;
+      }
+      pipeline->shader.immediate_constants_va =
+         pipeline->shader_bo->va + shader_immediate_constants_offset_bytes;
+
       terakan_bo_unmap(pipeline->shader_bo);
    }
+
    /* Destroy the data needed only for creation. */
    r600_bytecode_clear(&pipeline->shader.shader.bc);
 
@@ -210,6 +249,8 @@ terakan_vk_pipeline_compute_create(struct terakan_device * const device,
 
 fail_shader_bo:
    terakan_bo_free(pipeline->shader_bo, allocator);
+fail_shader_immediate_constants_data:
+   ralloc_free(shader_immediate_constants_data);
 fail_shader:
    r600_bytecode_clear(&pipeline->shader.shader.bc);
    free(pipeline->shader.shader.arrays);
