@@ -300,7 +300,8 @@ nir_lower_io_to_scalar_instr(nir_builder *b, nir_intrinsic_instr *intr, void *da
         (intr->intrinsic == nir_intrinsic_load_ssbo && (state->mask & nir_var_mem_ssbo)) ||
         (intr->intrinsic == nir_intrinsic_load_global && (state->mask & nir_var_mem_global)) ||
         (intr->intrinsic == nir_intrinsic_load_shared && (state->mask & nir_var_mem_shared)) ||
-        (intr->intrinsic == nir_intrinsic_load_push_constant && (state->mask & nir_var_mem_push_const))) &&
+        (intr->intrinsic == nir_intrinsic_load_push_constant && (state->mask & nir_var_mem_push_const)) ||
+        (intr->intrinsic == nir_intrinsic_load_constant && (state->mask & nir_var_mem_constant))) &&
        (!state->filter || state->filter(intr, state->filter_data))) {
       lower_load_to_scalar(b, intr);
       return true;
