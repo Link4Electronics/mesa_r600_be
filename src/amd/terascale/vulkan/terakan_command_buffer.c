@@ -677,6 +677,9 @@ terakan_gfx_command_writer_update_compute_context_and_emit_hw_config(
           */
          command_writer->compute_context_allocated_in_indirect_buffer = true;
 
+         terakan_push_constants_set_unbound_to_stage(&command_writer->push_constants_state,
+                                                     MESA_SHADER_COMPUTE);
+
          terakan_hw_config_compute_state_cleared(&command_writer->hw_config_compute);
          terakan_hw_config_compute_emit_constant(command_writer);
 
