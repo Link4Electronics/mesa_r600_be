@@ -39,6 +39,7 @@
 #include "terakan_push_constants.h"
 #include "terakan_query.h"
 #include "terakan_queue.h"
+#include "terakan_resinfo_constants.h"
 #include "terakan_shader.h"
 
 #include "gallium/drivers/r600/evergreend.h"
@@ -237,6 +238,7 @@ struct terakan_queue_submission_size terakan_command_buffer_optimal_submission_s
  * - Push constants.
  * - vkCmdUpdateBuffer.
  * - Dynamic vertex fetch shaders.
+ * - Resource info constants.
  * - Shader direct draw parameters.
  * - Other things within those bounds, such as small index buffers.
  *
@@ -397,6 +399,9 @@ struct terakan_gfx_command_writer {
 
    /* Modifies `hw_config_sqk`. */
    struct terakan_push_constants_state push_constants_state;
+
+   /* Modifies `hw_config_sqk`. */
+   struct terakan_resinfo_constants_state resinfo_constants_state;
 
    /* Modifies `hw_config` and `push_constants_state`. */
    struct terakan_app_config_draw app_config_draw;
@@ -674,8 +679,13 @@ terakan_gfx_command_writer_before_app_draw(struct terakan_gfx_command_writer * c
       &command_writer->hw_config_shared,
       command_writer->active_pipelinestat_streamoutstats_query_count != 0);
 
-   /* May be modified by `app_config_draw`. */
+   /* May be modified by `app_config_draw`.
+    * Potentially allocating push buffer memory with large alignment.
+    */
    terakan_push_constants_apply(command_writer, false);
+
+   /* Potentially allocating push buffer memory with small alignment. */
+   terakan_resinfo_constants_apply(command_writer, false);
 
    terakan_gfx_command_writer_before_hw_draw_dispatch(command_writer);
 }
@@ -694,8 +704,13 @@ terakan_gfx_command_writer_before_app_dispatch(
       &command_writer->hw_config_shared,
       command_writer->active_pipelinestat_streamoutstats_query_count != 0);
 
-   /* May be modified by `app_config_compute`. */
+   /* May be modified by `app_config_compute`.
+    * Potentially allocating push buffer memory with large alignment.
+    */
    terakan_push_constants_apply(command_writer, true);
+
+   /* Potentially allocating push buffer memory with small alignment. */
+   terakan_resinfo_constants_apply(command_writer, true);
 
    terakan_gfx_command_writer_before_hw_draw_dispatch(command_writer);
 }

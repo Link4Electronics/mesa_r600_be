@@ -27,6 +27,7 @@
 #include "terakan_bo.h"
 #include "terakan_descriptor.h"
 #include "terakan_push_constants.h"
+#include "terakan_resinfo_constants.h"
 
 #include "gallium/drivers/r600/eg_sq.h"
 #include "gallium/drivers/r600/evergreend.h"
@@ -344,8 +345,7 @@ struct terakan_shader_uav_usage {
     * Expected to be padded to the bitset size with zero bits, so it can be used in `memcmp`.
     */
    BITSET_DECLARE(uavs_for_mutable_srvs_needed,
-                  MAX2(TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL,
-                       TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL));
+                  TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL_OR_PIXEL);
 };
 
 /* Information about the mapping between application and hardware RTV indices.
@@ -435,9 +435,11 @@ struct terakan_shader_impl {
     */
    uint64_t immediate_constants_va;
 
+   struct terakan_shader_sqk_usage sqk_usage;
+
    struct terakan_push_constants_usage push_constants_usage;
 
-   struct terakan_shader_sqk_usage sqk_usage;
+   struct terakan_resinfo_constants_usage resinfo_constants_usage;
 
    struct terakan_shader_uav_usage uav_usage;
 
@@ -486,7 +488,10 @@ struct terakan_nir_lower_and_optimize_post_link_options {
 
 struct terakan_nir_lower_and_optimize_post_link_result {
    struct terakan_shader_sqk_usage sqk_usage;
+
    uint32_t driver_push_constants_used;
+
+   struct terakan_resinfo_constants_usage resinfo_constants_usage;
 
    struct terakan_shader_rtv_mapping rtv_mapping;
 

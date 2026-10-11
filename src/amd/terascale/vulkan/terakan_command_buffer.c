@@ -183,6 +183,10 @@ static_assert(TERAKAN_PUSH_BUFFER_SIZE_BYTES >=
                     sizeof(uint32_t) * 2 * TERAKAN_VERTEX_INPUT_FS_MAX_QWORDS &&
                  TERAKAN_PUSH_BUFFER_ALIGNMENT >= TERAKAN_SHADER_PROGRAM_ALIGNMENT,
               "Push buffers must be usable for dynamic vertex fetch shaders.");
+static_assert(TERAKAN_PUSH_BUFFER_SIZE_BYTES >=
+                    sizeof(uint32_t) * TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL_OR_PIXEL &&
+                 TERAKAN_PUSH_BUFFER_ALIGNMENT >= sizeof(uint32_t),
+              "Push buffers must be usable for resource info constants.");
 static_assert(TERAKAN_PUSH_BUFFER_SIZE_BYTES >= sizeof(uint32_t) * 3 &&
                  TERAKAN_PUSH_BUFFER_ALIGNMENT >= sizeof(uint32_t),
               "Push buffers must be usable for direct draw and dispatch parameters.");
@@ -680,6 +684,9 @@ terakan_gfx_command_writer_update_compute_context_and_emit_hw_config(
          terakan_push_constants_set_unbound_to_stage(&command_writer->push_constants_state,
                                                      MESA_SHADER_COMPUTE);
 
+         terakan_resinfo_constants_set_unbound_to_stage(&command_writer->resinfo_constants_state,
+                                                        MESA_SHADER_COMPUTE);
+
          terakan_hw_config_compute_state_cleared(&command_writer->hw_config_compute);
          terakan_hw_config_compute_emit_constant(command_writer);
 
@@ -1170,6 +1177,8 @@ terakan_vk_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
    terakan_hw_config_sqk_reset(&gfx_command_writer->hw_config_sqk, false);
 
    terakan_push_constants_reset(&gfx_command_writer->push_constants_state);
+
+   terakan_resinfo_constants_reset(&gfx_command_writer->resinfo_constants_state);
 
    struct terakan_device const * const device = terakan_command_buffer_device(command_buffer);
 

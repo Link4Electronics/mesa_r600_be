@@ -106,7 +106,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
 
          /* SRVs. */
 
-         uint8_t const shader_srv_set_base = layout_set->first_shader_srvs[shader_stage];
+         uint8_t const shader_srv_set_base =
+            TERAKAN_SRV_RANGE_MUTABLE_BASE + layout_set->first_shader_mutable_srvs[shader_stage];
          struct terakan_vk_descriptor_set_layout_shader_range const * const srv_ranges =
             set_layout->shader_ranges + set_layout_shader->first_srv_range;
          for (uint8_t range_index = 0; range_index < set_layout_shader->srv_range_count;
@@ -217,9 +218,8 @@ terakan_vk_CmdBindDescriptorSets(VkCommandBuffer const commandBuffer,
          struct terakan_vk_descriptor_set_uav const * const set_uavs =
             (struct terakan_vk_descriptor_set_uav const *)(set->descriptors +
                                                            set_layout->pool_first_uav_offset_bytes);
-         assert(layout_set->first_shader_srvs[uav_shader_stage] >= TERAKAN_SRV_RANGE_MUTABLE_BASE);
          uint8_t const shader_uav_set_base =
-            layout_set->first_shader_srvs[uav_shader_stage] - TERAKAN_SRV_RANGE_MUTABLE_BASE;
+            layout_set->first_shader_mutable_srvs[uav_shader_stage];
          struct terakan_vk_descriptor_set_layout_shader_range const * const uav_ranges =
             set_layout->shader_ranges + set_layout_uav_shader->first_uav_range;
          for (uint8_t range_index = 0; range_index < set_layout_uav_shader->uav_range_count;
@@ -379,8 +379,9 @@ terakan_vk_pipeline_layout_get_binding(
          descriptor_set_binding->first_shader_samplers[stage];
    }
    if (terakan_vk_descriptor_type_has_srv(descriptor_set_binding->descriptor_type)) {
-      pipeline_layout_binding.srv_base = hw_descriptor_set_layout->first_shader_srvs[stage] +
-                                         descriptor_set_binding->first_shader_srvs[stage];
+      pipeline_layout_binding.mutable_srv_base =
+         hw_descriptor_set_layout->first_shader_mutable_srvs[stage] +
+         descriptor_set_binding->first_shader_mutable_srvs[stage];
    }
 
    /* Return the binding if the type is compatible. */
@@ -494,7 +495,7 @@ terakan_vk_pipeline_layout_create(struct terakan_device * const device,
    }
    layout->sets = sets;
 
-   uint8_t next_first_mutable_shader_srvs[MESA_SHADER_STAGES] = {};
+   uint8_t next_first_shader_mutable_srvs[MESA_SHADER_STAGES] = {};
    uint8_t next_first_shader_uniform_buffers[MESA_SHADER_STAGES] = {};
    uint8_t next_first_shader_samplers[MESA_SHADER_STAGES] = {};
 
@@ -513,14 +514,13 @@ terakan_vk_pipeline_layout_create(struct terakan_device * const device,
          struct terakan_vk_descriptor_set_layout_shader const * const set_layout_shader =
             &set_layout->shaders[stage_index];
 
-         uint8_t const first_mutable_shader_srv = next_first_mutable_shader_srvs[stage_index];
-         if (terakan_srv_range_mutable_max_count(stage_index) - first_mutable_shader_srv <
+         uint8_t const first_shader_mutable_srv = next_first_shader_mutable_srvs[stage_index];
+         if (terakan_srv_range_mutable_max_count(stage_index) - first_shader_mutable_srv <
              set_layout_shader->srv_count) {
             goto too_many_descriptors;
          }
-         set->first_shader_srvs[stage_index] =
-            TERAKAN_SRV_RANGE_MUTABLE_BASE + first_mutable_shader_srv;
-         next_first_mutable_shader_srvs[stage_index] += set_layout_shader->srv_count;
+         set->first_shader_mutable_srvs[stage_index] = first_shader_mutable_srv;
+         next_first_shader_mutable_srvs[stage_index] += set_layout_shader->srv_count;
 
          set->first_shader_uniform_buffers[stage_index] =
             next_first_shader_uniform_buffers[stage_index];

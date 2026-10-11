@@ -91,6 +91,8 @@ libterakan_files = files(
   'terakan_query.h',
   'terakan_queue.c',
   'terakan_queue.h',
+  'terakan_resinfo_constants.c',
+  'terakan_resinfo_constants.h',
   'terakan_screen_rect.h',
   'terakan_shader.c',
   'terakan_shader.h',

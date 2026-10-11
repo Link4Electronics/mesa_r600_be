@@ -94,7 +94,7 @@ struct terakan_vk_descriptor_set_layout_binding {
    uint8_t stage_flags;
 
    /* Primarily for shader compilation and pushing. */
-   uint8_t first_shader_srvs[MESA_SHADER_STAGES];
+   uint8_t first_shader_mutable_srvs[MESA_SHADER_STAGES];
    uint8_t first_shader_uniform_buffers[MESA_SHADER_STAGES];
    uint8_t first_shader_samplers[MESA_SHADER_STAGES];
 };

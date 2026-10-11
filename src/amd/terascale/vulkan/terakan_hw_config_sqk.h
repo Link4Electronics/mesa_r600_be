@@ -35,6 +35,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <string.h>
 
 #ifdef __cplusplus
@@ -240,6 +241,28 @@ struct terakan_hw_config_sqk {
    struct terakan_hw_config_sqk_srv srvs_cs_[TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE];
 };
 
+static inline struct terakan_hw_config_sqk_srv const *
+terakan_hw_config_sqk_get_stage_srvs_(struct terakan_hw_config_sqk const * const config,
+                                      mesa_shader_stage const stage)
+{
+   switch (stage) {
+   case MESA_SHADER_VERTEX:
+      return config->srvs_vs_;
+   case MESA_SHADER_TESS_CTRL:
+      return config->srvs_tcs_;
+   case MESA_SHADER_TESS_EVAL:
+      return config->srvs_tes_;
+   case MESA_SHADER_GEOMETRY:
+      return config->srvs_gs_;
+   case MESA_SHADER_FRAGMENT:
+      return config->srvs_fs_;
+   case MESA_SHADER_COMPUTE:
+      return config->srvs_cs_;
+   default:
+      assert(!"Unsupported shader stage");
+   }
+}
+
 /* #MemoryIntegrity is expected to be handled for the contents of the bound constants before the
  * call, such as during descriptor creation.
  *
@@ -305,6 +328,10 @@ terakan_hw_config_sqk_get_sampler(struct terakan_hw_config_sqk const * const con
 
 /* Pass NULL BO or descriptor pointer to the SRV setter to unbind the SRV.
  * Both the BO and the descriptor pointers are ignored if any of them is NULL.
+ *
+ * The size for the buffer resource info query, if applicable to the resource, must be set
+ * regardless of the architecture generation, because `terakan_resinfo_constants` gets it from
+ * `terakan_hw_config_sqk`.
  */
 typedef void (*terakan_hw_config_sqk_set_srv_function)(
    struct terakan_hw_config_sqk * config, unsigned index, struct terakan_bo const * bo,
@@ -330,6 +357,19 @@ void terakan_hw_config_sqk_set_srv_fs(struct terakan_hw_config_sqk * config, uns
 void terakan_hw_config_sqk_set_srv_cs(struct terakan_hw_config_sqk * config, unsigned index,
                                       struct terakan_bo const * bo,
                                       struct terakan_srv_descriptor const * descriptor);
+
+/* Returns NULL if the SRV is not bound. The BO is not returned because there's currently no need
+ * for it.
+ */
+static inline struct terakan_srv_descriptor const *
+terakan_hw_config_sqk_get_bound_srv_descriptor(struct terakan_hw_config_sqk const * const config,
+                                               mesa_shader_stage const stage, unsigned const index)
+{
+   assert(index < terakan_srv_hw_count_for_stage(stage));
+   return BITSET_TEST(config->stages_[stage].srvs_bound, index)
+             ? &terakan_hw_config_sqk_get_stage_srvs_(config, stage)[index].descriptor
+             : NULL;
+}
 
 struct terakan_hw_config_sqk_set_functions {
    terakan_hw_config_sqk_set_kcache_function kcache;

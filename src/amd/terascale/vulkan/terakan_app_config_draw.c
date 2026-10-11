@@ -291,6 +291,11 @@ terakan_app_config_draw_apply_sq_pgm_pre_rasterization(
    /* TODO(Triang3l): Bind all the shaders. */
    for (unsigned stage_index = 0; stage_index < ARRAY_SIZE(sw_stages); ++stage_index) {
       struct terakan_shader_impl const * const shader = sw_stages[stage_index];
+      terakan_resinfo_constants_set_usage(
+         &command_writer->resinfo_constants_state, (mesa_shader_stage)stage_index,
+         shader != NULL && BITSET_TEST(shader->sqk_usage.srvs, TERAKAN_SRV_RANGE_RESINFO_CONSTANTS)
+            ? &shader->resinfo_constants_usage
+            : NULL);
       if (shader == NULL) {
          continue;
       }
@@ -1128,6 +1133,12 @@ terakan_app_config_draw_apply_sq_pgm_fragment(
    terakan_push_constants_set_usage_fragment(
       &command_writer->push_constants_state,
       fs != NULL ? fs->push_constants_usage : (struct terakan_push_constants_usage){});
+
+   terakan_resinfo_constants_set_usage(
+      &command_writer->resinfo_constants_state, MESA_SHADER_FRAGMENT,
+      fs != NULL && BITSET_TEST(fs->sqk_usage.srvs, TERAKAN_SRV_RANGE_RESINFO_CONSTANTS)
+         ? &fs->resinfo_constants_usage
+         : NULL);
 
    terakan_hw_config_sqk_set_usage_fs(&command_writer->hw_config_sqk,
                                       fs != NULL ? &fs->sqk_usage : NULL);

@@ -449,6 +449,8 @@ terakan_nir_lower_and_optimize_post_link(
 
    /* Finally lower bindings to backend instructions referencing SQK at hardware register indices.
     */
+   NIR_PASS(_, nir, terakan_nir_gather_resinfo_constants_usage, options->get_binding_functions,
+            options->get_binding_functions_data, &result.resinfo_constants_usage);
    struct terakan_nir_shader_uav_usage uav_usage = {};
    if (nir->info.stage == MESA_SHADER_FRAGMENT || nir->info.stage == MESA_SHADER_COMPUTE) {
       NIR_PASS(_, nir, terakan_nir_gather_uav_usage, options->get_binding_functions,
@@ -462,8 +464,8 @@ terakan_nir_lower_and_optimize_post_link(
    }
    NIR_PASS(_, nir, terakan_nir_lower_bindings, options->get_binding_functions,
             options->get_binding_functions_data, options->robust_buffer_access_2,
-            options->physical_device, &uav_usage, &result.sqk_usage,
-            &result.driver_push_constants_used);
+            options->physical_device, &result.resinfo_constants_usage, &uav_usage,
+            &result.sqk_usage, &result.driver_push_constants_used);
 
    /* TODO(Triang3l): `nir_opt_offsets` (implement for R600 intrinsics). */
 
@@ -558,6 +560,8 @@ terakan_shader_impl_apply_lower_and_optimize_post_link_result(
    shader->sqk_usage = result->sqk_usage;
 
    shader->push_constants_usage.driver_constants = result->driver_push_constants_used;
+
+   shader->resinfo_constants_usage = result->resinfo_constants_usage;
 
    shader->uav_usage = result->uav_usage;
 

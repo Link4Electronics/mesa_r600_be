@@ -282,7 +282,7 @@ terakan_nir_lower_tex_image_deref_to_vulkan_resource_index(nir_shader * const ni
 struct terakan_nir_pipeline_layout_binding const terakan_nir_pipeline_layout_binding_empty = {
    .kcache_base = TERAKAN_NIR_BINDING_BASE_INVALID,
    .sampler_base = TERAKAN_NIR_BINDING_BASE_INVALID,
-   .srv_base = TERAKAN_NIR_BINDING_BASE_INVALID,
+   .mutable_srv_base = TERAKAN_NIR_BINDING_BASE_INVALID,
 };
 
 /* Section 8.2 "Dataflow in Memory Hierarchy" of Evergreen Family Instruction Set Architecture says:
@@ -421,7 +421,31 @@ terakan_nir_get_binding(nir_builder * const builder, nir_binding const * const b
 }
 
 static struct terakan_nir_binding
-terakan_nir_get_image_srv_binding(
+terakan_nir_get_ssbo_mutable_srv_binding(
+   nir_builder * const builder, nir_intrinsic_instr * const intrinsic,
+   unsigned const binding_src_index,
+   struct terakan_nir_get_pipeline_layout_binding_functions const * const get_binding_functions,
+   void const * const get_binding_functions_data)
+{
+   nir_binding const binding = nir_chase_binding(intrinsic->src[binding_src_index]);
+   assert(binding.success);
+   if (unlikely(!binding.success)) {
+      return (struct terakan_nir_binding){.base = TERAKAN_NIR_BINDING_BASE_INVALID};
+   }
+
+   struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
+      get_binding_functions->storage_buffer(&binding, builder->shader->info.stage,
+                                            get_binding_functions_data);
+   if (unlikely(pipeline_layout_binding.array_size == 0)) {
+      return (struct terakan_nir_binding){.base = TERAKAN_NIR_BINDING_BASE_INVALID};
+   }
+
+   return terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
+                                  pipeline_layout_binding.mutable_srv_base, false);
+}
+
+static struct terakan_nir_binding
+terakan_nir_get_image_mutable_srv_binding(
    nir_builder * const builder, nir_intrinsic_instr * const intrinsic,
    struct terakan_nir_get_pipeline_layout_binding_functions const * const get_binding_functions,
    void const * const get_binding_functions_data)
@@ -442,7 +466,102 @@ terakan_nir_get_image_srv_binding(
    }
 
    return terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                                  pipeline_layout_binding.srv_base, false);
+                                  pipeline_layout_binding.mutable_srv_base, false);
+}
+
+struct terakan_nir_gather_resinfo_constants_usage_state {
+   struct terakan_resinfo_constants_usage * resinfo_constants_usage;
+
+   struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions;
+   void const * get_binding_functions_data;
+};
+
+static bool
+terakan_nir_gather_resinfo_constants_usage_cube_elements_or_buffer_size_instr(
+   nir_builder * const builder, nir_instr * const instr, void * const state_ptr)
+{
+   struct terakan_nir_gather_resinfo_constants_usage_state * const state = state_ptr;
+
+   nir_src * binding_src = NULL;
+   terakan_nir_get_pipeline_layout_binding_function get_binding_function = NULL;
+
+   if (instr->type == nir_instr_type_intrinsic) {
+      nir_intrinsic_instr * const intrinsic = nir_instr_as_intrinsic(instr);
+      switch (intrinsic->intrinsic) {
+      case nir_intrinsic_get_ssbo_size:
+         binding_src = &intrinsic->src[0];
+         get_binding_function = state->get_binding_functions->storage_buffer;
+         break;
+
+      case nir_intrinsic_bindless_image_size:
+         switch (nir_intrinsic_image_dim(intrinsic)) {
+         case GLSL_SAMPLER_DIM_BUF:
+            binding_src = &intrinsic->src[0];
+            get_binding_function = state->get_binding_functions->storage_texel_buffer;
+            break;
+         default:
+            return false;
+         }
+         break;
+
+      default:
+         return false;
+      }
+   } else {
+      return false;
+   }
+
+   assert(binding_src != NULL);
+   assert(get_binding_function != NULL);
+
+   nir_binding const binding = nir_chase_binding(*binding_src);
+   assert(binding.success);
+   if (unlikely(!binding.success)) {
+      return false;
+   }
+
+   struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding = get_binding_function(
+      &binding, builder->shader->info.stage, state->get_binding_functions_data);
+   if (unlikely(pipeline_layout_binding.array_size == 0)) {
+      return false;
+   }
+   assert(pipeline_layout_binding.mutable_srv_base != TERAKAN_NIR_BINDING_BASE_INVALID);
+
+   builder->cursor = nir_before_instr(instr);
+   /* True must be returned from now on because `terakan_nir_get_binding` may add instructions. */
+   struct terakan_nir_binding const mutable_srv_binding =
+      terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
+                              pipeline_layout_binding.mutable_srv_base, true);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
+      return true;
+   }
+
+   BITSET_SET_RANGE(state->resinfo_constants_usage->cube_elements_or_buffer_size_for_mutable_srvs,
+                    mutable_srv_binding.base,
+                    mutable_srv_binding.base + (mutable_srv_binding.array_size - (uint8_t)1));
+
+   return true;
+}
+
+bool
+terakan_nir_gather_resinfo_constants_usage(
+   nir_shader * const nir,
+   struct terakan_nir_get_pipeline_layout_binding_functions const * const get_binding_functions,
+   void const * const get_binding_functions_data,
+   struct terakan_resinfo_constants_usage * const resinfo_constants_usage_out)
+{
+   *resinfo_constants_usage_out = (struct terakan_resinfo_constants_usage){};
+
+   struct terakan_nir_gather_resinfo_constants_usage_state state = {
+      .resinfo_constants_usage = resinfo_constants_usage_out,
+
+      .get_binding_functions = get_binding_functions,
+      .get_binding_functions_data = get_binding_functions_data,
+   };
+
+   return nir_shader_instructions_pass(
+      nir, terakan_nir_gather_resinfo_constants_usage_cube_elements_or_buffer_size_instr,
+      nir_metadata_control_flow, &state);
 }
 
 struct terakan_nir_gather_uav_usage_state {
@@ -469,11 +588,8 @@ terakan_nir_gather_uav_usage_any_written_instr(nir_builder * const builder, nir_
    case nir_intrinsic_ssbo_atomic_swap:
       state->uav_usage->any_buffer_written = true;
       break;
-   case nir_intrinsic_image_deref_store:
    case nir_intrinsic_bindless_image_store:
-   case nir_intrinsic_image_deref_atomic:
    case nir_intrinsic_bindless_image_atomic:
-   case nir_intrinsic_image_deref_atomic_swap:
    case nir_intrinsic_bindless_image_atomic_swap:
       if (nir_intrinsic_image_dim(intrinsic) == GLSL_SAMPLER_DIM_BUF) {
          state->uav_usage->any_buffer_written = true;
@@ -512,7 +628,6 @@ terakan_nir_gather_uav_usage_resource_instr(nir_builder * const builder, nir_ins
       get_binding_function = state->get_binding_functions->storage_buffer;
       break;
 
-   case nir_intrinsic_image_deref_load:
    case nir_intrinsic_bindless_image_load:
       if (nir_intrinsic_access(intrinsic) & ACCESS_NON_WRITEABLE) {
          return false;
@@ -526,11 +641,8 @@ terakan_nir_gather_uav_usage_resource_instr(nir_builder * const builder, nir_ins
          }
       }
       FALLTHROUGH;
-   case nir_intrinsic_image_deref_store:
    case nir_intrinsic_bindless_image_store:
-   case nir_intrinsic_image_deref_atomic:
    case nir_intrinsic_bindless_image_atomic:
-   case nir_intrinsic_image_deref_atomic_swap:
    case nir_intrinsic_bindless_image_atomic_swap:
       if (nir_intrinsic_image_dim(intrinsic) == GLSL_SAMPLER_DIM_BUF) {
          assert(state->uav_usage->any_buffer_written);
@@ -558,24 +670,19 @@ terakan_nir_gather_uav_usage_resource_instr(nir_builder * const builder, nir_ins
    if (unlikely(pipeline_layout_binding.array_size == 0)) {
       return false;
    }
-   assert(pipeline_layout_binding.srv_base != TERAKAN_NIR_BINDING_BASE_INVALID);
-   assert(pipeline_layout_binding.srv_base >= TERAKAN_SRV_RANGE_MUTABLE_BASE);
-   assert(pipeline_layout_binding.srv_base + pipeline_layout_binding.array_size <=
-          TERAKAN_SRV_RANGE_MUTABLE_BASE +
-             terakan_srv_range_mutable_max_count(builder->shader->info.stage));
+   assert(pipeline_layout_binding.mutable_srv_base != TERAKAN_NIR_BINDING_BASE_INVALID);
 
    builder->cursor = nir_before_instr(&intrinsic->instr);
    /* True must be returned from now on because `terakan_nir_get_binding` may add instructions. */
-   struct terakan_nir_binding const srv_binding =
+   struct terakan_nir_binding const mutable_srv_binding =
       terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                              pipeline_layout_binding.srv_base, true);
-   if (unlikely(srv_binding.array_size == 0)) {
+                              pipeline_layout_binding.mutable_srv_base, true);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       return true;
    }
 
-   uint8_t const mutable_srv_base = srv_binding.base - TERAKAN_SRV_RANGE_MUTABLE_BASE;
-   BITSET_SET_RANGE(state->uav_usage->usage.uavs_for_mutable_srvs_needed, mutable_srv_base,
-                    mutable_srv_base + (srv_binding.array_size - (uint8_t)1));
+   BITSET_SET_RANGE(state->uav_usage->usage.uavs_for_mutable_srvs_needed, mutable_srv_binding.base,
+                    mutable_srv_binding.base + (mutable_srv_binding.array_size - (uint8_t)1));
 
    return true;
 }
@@ -631,21 +738,12 @@ terakan_nir_gather_uav_usage(
  * UAVs.
  */
 static uint8_t
-terakan_nir_get_srv_range_uav_base(uint8_t const srv_base, uint8_t const array_size,
-                                   struct terakan_nir_shader_uav_usage const * const uav_usage,
-                                   mesa_shader_stage const stage)
+terakan_nir_get_mutable_srv_range_uav_base(
+   uint8_t const mutable_srv_base, uint8_t const array_size,
+   struct terakan_nir_shader_uav_usage const * const uav_usage, mesa_shader_stage const stage)
 {
    assert(array_size != 0 &&
           "Bindings with an array size of 0 are considered invalid and must be sanitized");
-   if (unlikely(srv_base < TERAKAN_SRV_RANGE_MUTABLE_BASE)) {
-      return TERAKAN_NIR_BINDING_BASE_INVALID;
-   }
-   uint8_t const mutable_srv_base = srv_base - TERAKAN_SRV_RANGE_MUTABLE_BASE;
-   uint8_t const mutable_srv_max_count = terakan_srv_range_mutable_max_count(stage);
-   if (unlikely(mutable_srv_base >= mutable_srv_max_count ||
-                array_size > mutable_srv_max_count - mutable_srv_base)) {
-      return TERAKAN_NIR_BINDING_BASE_INVALID;
-   }
    /* Checking that all SRVs in the array have corresponding UAVs, without taking shortcuts like
     * checking only the first SRV, in particular to make sure the IMMED buffer SRV usage doesn't
     * overflow the range those buffers must be in.
@@ -690,11 +788,38 @@ struct terakan_nir_lower_bindings_state {
 
    struct terakan_physical_device const * physical_device;
 
+   struct terakan_resinfo_constants_usage const * resinfo_constants_usage;
+
    struct terakan_nir_shader_uav_usage uav_usage;
 
    struct terakan_shader_sqk_usage * sqk_usage_accum;
    uint32_t * driver_push_constants_used_accum;
 };
+
+static nir_def *
+terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+   nir_builder * const builder, uint8_t const mutable_srv_index_base, nir_def * const array_index,
+   bool const include_helpers, struct terakan_nir_lower_bindings_state * const state)
+{
+   BITSET_WORD const * const cube_elements_or_buffer_size_for_mutable_srvs =
+      state->resinfo_constants_usage->cube_elements_or_buffer_size_for_mutable_srvs;
+   assert(BITSET_TEST(cube_elements_or_buffer_size_for_mutable_srvs, mutable_srv_index_base));
+   uint8_t constant_dword_index = 0;
+   unsigned preceding_mutable_srv_index;
+   BITSET_FOREACH_SET (preceding_mutable_srv_index, cube_elements_or_buffer_size_for_mutable_srvs,
+                       mutable_srv_index_base) {
+      ++constant_dword_index;
+   }
+   BITSET_SET(state->sqk_usage_accum->srvs, TERAKAN_SRV_RANGE_RESINFO_CONSTANTS);
+   return nir_load_buffer_resource_r600(
+      builder, 1, 32, nir_imm_zero(builder, 1, 32), array_index,
+      .access = ACCESS_CAN_REORDER |
+                (include_helpers && builder->shader->info.stage == MESA_SHADER_FRAGMENT
+                    ? ACCESS_INCLUDE_HELPERS
+                    : 0),
+      .binding = TERAKAN_SRV_RANGE_RESINFO_CONSTANTS,
+      .base = (uint16_t)sizeof(uint32_t) * constant_dword_index, .format = PIPE_FORMAT_R32_UINT);
+}
 
 /* Returns 0 in case of failure. */
 static unsigned
@@ -870,19 +995,22 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
                bindings_invalid = true;
             } else {
                progress = true;
-               struct terakan_nir_binding const hw_binding =
+               struct terakan_nir_binding const hw_mutable_srv_binding =
                   terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                                          pipeline_layout_binding.srv_base, true);
-               if (unlikely(hw_binding.array_size == 0)) {
+                                          pipeline_layout_binding.mutable_srv_base, true);
+               if (unlikely(hw_mutable_srv_binding.array_size == 0)) {
                   bindings_invalid = true;
                } else {
-                  BITSET_SET_RANGE(state->sqk_usage_accum->srvs, hw_binding.base,
-                                   hw_binding.base + (hw_binding.array_size - (uint8_t)1));
-                  tex->texture_index = hw_binding.base;
+                  uint8_t const first_srv_index =
+                     TERAKAN_SRV_RANGE_MUTABLE_BASE + hw_mutable_srv_binding.base;
+                  BITSET_SET_RANGE(
+                     state->sqk_usage_accum->srvs, first_srv_index,
+                     first_srv_index + (hw_mutable_srv_binding.array_size - (uint8_t)1));
+                  tex->texture_index = first_srv_index;
                   nir_tex_instr_remove_src(tex, handle_src_index);
-                  if (hw_binding.array_index_opt.def != NULL) {
+                  if (hw_mutable_srv_binding.array_index_opt.def != NULL) {
                      nir_tex_instr_add_src(tex, nir_tex_src_texture_offset,
-                                           hw_binding.array_index_opt.def);
+                                           hw_mutable_srv_binding.array_index_opt.def);
                   }
                }
             }
@@ -907,19 +1035,19 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
                bindings_invalid = true;
             } else {
                progress = true;
-               struct terakan_nir_binding const hw_binding =
+               struct terakan_nir_binding const hw_sampler_binding =
                   terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
                                           pipeline_layout_binding.sampler_base, true);
-               if (unlikely(hw_binding.array_size == 0)) {
+               if (unlikely(hw_sampler_binding.array_size == 0)) {
                   bindings_invalid = true;
                } else {
                   state->sqk_usage_accum->samplers |=
-                     BITFIELD_RANGE(hw_binding.base, hw_binding.array_size);
-                  tex->sampler_index = hw_binding.base;
+                     BITFIELD_RANGE(hw_sampler_binding.base, hw_sampler_binding.array_size);
+                  tex->sampler_index = hw_sampler_binding.base;
                   nir_tex_instr_remove_src(tex, handle_src_index);
-                  if (hw_binding.array_index_opt.def != NULL) {
+                  if (hw_sampler_binding.array_index_opt.def != NULL) {
                      nir_tex_instr_add_src(tex, nir_tex_src_sampler_offset,
-                                           hw_binding.array_index_opt.def);
+                                           hw_sampler_binding.array_index_opt.def);
                   }
                }
             }
@@ -998,22 +1126,23 @@ terakan_nir_lower_bindings_instr_load_ubo(nir_builder * const builder,
 
    /* TODO(Triang3l): Load from the kcache. */
 
-   struct terakan_nir_binding const srv_binding =
+   struct terakan_nir_binding const mutable_srv_binding =
       terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                              pipeline_layout_binding.srv_base, false);
-   if (unlikely(srv_binding.array_size == 0)) {
+                              pipeline_layout_binding.mutable_srv_base, false);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
    }
 
-   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, srv_binding.base,
-                    srv_binding.base + (srv_binding.array_size - (uint8_t)1));
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index,
+                    first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1));
    nir_def_replace(
       &intrinsic->def,
       terakan_nir_load_raw_buffer_srv(
          builder, intrinsic->num_components, intrinsic->def.bit_size,
-         nir_intrinsic_access(intrinsic) | ACCESS_CAN_REORDER, srv_binding.base,
-         nir_mov_scalar(builder, srv_binding.array_index_opt), 0, intrinsic->src[1].ssa));
+         nir_intrinsic_access(intrinsic) | ACCESS_CAN_REORDER, first_srv_index,
+         nir_mov_scalar(builder, mutable_srv_binding.array_index_opt), 0, intrinsic->src[1].ssa));
 }
 
 static void
@@ -1023,25 +1152,9 @@ terakan_nir_lower_bindings_instr_load_ssbo(nir_builder * const builder,
 {
    assert(intrinsic->intrinsic == nir_intrinsic_load_ssbo);
 
-   nir_binding const binding = nir_chase_binding(intrinsic->src[0]);
-   assert(binding.success);
-   if (unlikely(!binding.success)) {
-      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
-      return;
-   }
-
-   struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
-      state->get_binding_functions->storage_buffer(&binding, builder->shader->info.stage,
-                                                   state->get_binding_functions_data);
-   if (unlikely(pipeline_layout_binding.array_size == 0)) {
-      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
-      return;
-   }
-
-   struct terakan_nir_binding const srv_binding =
-      terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                              pipeline_layout_binding.srv_base, false);
-   if (unlikely(srv_binding.array_size == 0)) {
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_ssbo_mutable_srv_binding(
+      builder, intrinsic, 0, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
    }
@@ -1055,17 +1168,18 @@ terakan_nir_lower_bindings_instr_load_ssbo(nir_builder * const builder,
       access |= ACCESS_CAN_REORDER;
    }
 
-   uint8_t const last_srv_index = srv_binding.base + (srv_binding.array_size - (uint8_t)1);
-   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, srv_binding.base, last_srv_index);
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   uint8_t const last_srv_index = first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1);
+   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
    if (!invocation_scope_coherent) {
-      BITSET_SET_RANGE(state->sqk_usage_accum->srvs_uncached, srv_binding.base, last_srv_index);
+      BITSET_SET_RANGE(state->sqk_usage_accum->srvs_uncached, first_srv_index, last_srv_index);
    }
 
    nir_def_replace(
       &intrinsic->def,
       terakan_nir_load_raw_buffer_srv(
-         builder, intrinsic->num_components, intrinsic->def.bit_size, access, srv_binding.base,
-         nir_mov_scalar(builder, srv_binding.array_index_opt), 0, intrinsic->src[1].ssa));
+         builder, intrinsic->num_components, intrinsic->def.bit_size, access, first_srv_index,
+         nir_mov_scalar(builder, mutable_srv_binding.array_index_opt), 0, intrinsic->src[1].ssa));
 }
 
 static void
@@ -1075,31 +1189,16 @@ terakan_nir_lower_bindings_instr_store_ssbo(nir_builder * const builder,
 {
    assert(intrinsic->intrinsic == nir_intrinsic_store_ssbo);
 
-   nir_binding const binding = nir_chase_binding(intrinsic->src[1]);
-   assert(binding.success);
-   if (unlikely(!binding.success)) {
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_ssbo_mutable_srv_binding(
+      builder, intrinsic, 1, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       nir_instr_remove(&intrinsic->instr);
       return;
    }
 
-   struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
-      state->get_binding_functions->storage_buffer(&binding, builder->shader->info.stage,
-                                                   state->get_binding_functions_data);
-   if (unlikely(pipeline_layout_binding.array_size == 0)) {
-      nir_instr_remove(&intrinsic->instr);
-      return;
-   }
-
-   struct terakan_nir_binding const srv_binding =
-      terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                              pipeline_layout_binding.srv_base, false);
-   if (unlikely(srv_binding.array_size == 0)) {
-      nir_instr_remove(&intrinsic->instr);
-      return;
-   }
-
-   uint8_t const uav_base = terakan_nir_get_srv_range_uav_base(
-      srv_binding.base, srv_binding.array_size, &state->uav_usage, builder->shader->info.stage);
+   uint8_t const uav_base = terakan_nir_get_mutable_srv_range_uav_base(
+      mutable_srv_binding.base, mutable_srv_binding.array_size, &state->uav_usage,
+      builder->shader->info.stage);
    if (unlikely(uav_base == TERAKAN_NIR_BINDING_BASE_INVALID)) {
       nir_instr_remove(&intrinsic->instr);
       return;
@@ -1107,7 +1206,8 @@ terakan_nir_lower_bindings_instr_store_ssbo(nir_builder * const builder,
 
    enum gl_access_qualifier const access = nir_intrinsic_access(intrinsic);
 
-   nir_def * const binding_array_index = nir_mov_scalar(builder, srv_binding.array_index_opt);
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
 
    nir_def * uav_coord =
       terakan_nir_buffer_uav_coord(builder, intrinsic->src[2].ssa, uav_base, binding_array_index,
@@ -1189,31 +1289,16 @@ terakan_nir_lower_bindings_instr_ssbo_atomic(nir_builder * const builder,
       return;
    }
 
-   nir_binding const binding = nir_chase_binding(intrinsic->src[0]);
-   assert(binding.success);
-   if (unlikely(!binding.success)) {
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_ssbo_mutable_srv_binding(
+      builder, intrinsic, 0, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
    }
 
-   struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
-      state->get_binding_functions->storage_buffer(&binding, builder->shader->info.stage,
-                                                   state->get_binding_functions_data);
-   if (unlikely(pipeline_layout_binding.array_size == 0)) {
-      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
-      return;
-   }
-
-   struct terakan_nir_binding const srv_binding =
-      terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
-                              pipeline_layout_binding.srv_base, false);
-   if (unlikely(srv_binding.array_size == 0)) {
-      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
-      return;
-   }
-
-   uint8_t const uav_base = terakan_nir_get_srv_range_uav_base(
-      srv_binding.base, srv_binding.array_size, &state->uav_usage, builder->shader->info.stage);
+   uint8_t const uav_base = terakan_nir_get_mutable_srv_range_uav_base(
+      mutable_srv_binding.base, mutable_srv_binding.array_size, &state->uav_usage,
+      builder->shader->info.stage);
    if (unlikely(uav_base == TERAKAN_NIR_BINDING_BASE_INVALID)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
@@ -1221,7 +1306,8 @@ terakan_nir_lower_bindings_instr_ssbo_atomic(nir_builder * const builder,
 
    enum gl_access_qualifier const access = nir_intrinsic_access(intrinsic);
 
-   nir_def * const binding_array_index = nir_mov_scalar(builder, srv_binding.array_index_opt);
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
 
    nir_def * const uav_coord = nir_ushr_imm(
       builder,
@@ -1255,15 +1341,35 @@ terakan_nir_lower_bindings_instr_ssbo_atomic(nir_builder * const builder,
 }
 
 static void
+terakan_nir_lower_bindings_instr_get_ssbo_size(nir_builder * const builder,
+                                               nir_intrinsic_instr * const intrinsic,
+                                               struct terakan_nir_lower_bindings_state * const state)
+{
+   assert(intrinsic->intrinsic == nir_intrinsic_get_ssbo_size);
+
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_ssbo_mutable_srv_binding(
+      builder, intrinsic, 0, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
+      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
+      return;
+   }
+
+   nir_def_replace(&intrinsic->def,
+                   terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+                      builder, mutable_srv_binding.base,
+                      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt), true, state));
+}
+
+static void
 terakan_nir_lower_bindings_instr_image_load(nir_builder * const builder,
                                             nir_intrinsic_instr * const intrinsic,
                                             struct terakan_nir_lower_bindings_state * const state)
 {
    assert(intrinsic->intrinsic == nir_intrinsic_bindless_image_load);
 
-   struct terakan_nir_binding const srv_binding = terakan_nir_get_image_srv_binding(
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
       builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
-   if (unlikely(srv_binding.array_size == 0)) {
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
    }
@@ -1281,34 +1387,36 @@ terakan_nir_lower_bindings_instr_image_load(nir_builder * const builder,
       access |= ACCESS_CAN_REORDER;
    }
 
-   nir_def * const binding_array_index = nir_mov_scalar(builder, srv_binding.array_index_opt);
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
 
-   uint8_t const last_srv_index = srv_binding.base + (srv_binding.array_size - (uint8_t)1);
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   uint8_t const last_srv_index = first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1);
 
    nir_def * const image_coord = intrinsic->src[1].ssa;
 
    if (is_buffer) {
-      BITSET_SET_RANGE(state->sqk_usage_accum->srvs, srv_binding.base, last_srv_index);
+      BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
       if (!invocation_scope_coherent) {
-         BITSET_SET_RANGE(state->sqk_usage_accum->srvs_uncached, srv_binding.base, last_srv_index);
+         BITSET_SET_RANGE(state->sqk_usage_accum->srvs_uncached, first_srv_index, last_srv_index);
       }
       nir_def_replace(&intrinsic->def, nir_load_buffer_resource_r600(
                                           builder, intrinsic->def.num_components, 32,
                                           binding_array_index, nir_channel(builder, image_coord, 0),
-                                          .access = access, .binding = srv_binding.base));
+                                          .access = access, .binding = first_srv_index));
       return;
    }
 
    bool const image_is_array = nir_intrinsic_image_array(intrinsic);
 
-   uint8_t const uav_base =
-      invocation_scope_coherent
-         ? terakan_nir_get_srv_range_uav_base(srv_binding.base, srv_binding.array_size,
-                                              &state->uav_usage, builder->shader->info.stage)
-         : TERAKAN_NIR_BINDING_BASE_INVALID;
+   uint8_t const uav_base = invocation_scope_coherent
+                               ? terakan_nir_get_mutable_srv_range_uav_base(
+                                    mutable_srv_binding.base, mutable_srv_binding.array_size,
+                                    &state->uav_usage, builder->shader->info.stage)
+                               : TERAKAN_NIR_BINDING_BASE_INVALID;
 
    if (uav_base == TERAKAN_NIR_BINDING_BASE_INVALID) {
-      BITSET_SET_RANGE(state->sqk_usage_accum->srvs, srv_binding.base, last_srv_index);
+      BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
       nir_def_replace(
          &intrinsic->def,
          nir_load_texture_resource_r600(
@@ -1321,7 +1429,7 @@ terakan_nir_lower_bindings_instr_image_load(nir_builder * const builder,
                   ? nir_channel(builder, image_coord, dimensionality == GLSL_SAMPLER_DIM_1D ? 1 : 2)
                   : nir_imm_zero(builder, 1, 32),
                nir_imm_zero(builder, 1, 32)),
-            .access = access, .binding = srv_binding.base));
+            .access = access, .binding = first_srv_index));
       return;
    }
 
@@ -1346,15 +1454,16 @@ terakan_nir_lower_bindings_instr_image_store(nir_builder * const builder,
 {
    assert(intrinsic->intrinsic == nir_intrinsic_bindless_image_store);
 
-   struct terakan_nir_binding const srv_binding = terakan_nir_get_image_srv_binding(
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
       builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
-   if (unlikely(srv_binding.array_size == 0)) {
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       nir_instr_remove(&intrinsic->instr);
       return;
    }
 
-   uint8_t const uav_base = terakan_nir_get_srv_range_uav_base(
-      srv_binding.base, srv_binding.array_size, &state->uav_usage, builder->shader->info.stage);
+   uint8_t const uav_base = terakan_nir_get_mutable_srv_range_uav_base(
+      mutable_srv_binding.base, mutable_srv_binding.array_size, &state->uav_usage,
+      builder->shader->info.stage);
    if (unlikely(uav_base == TERAKAN_NIR_BINDING_BASE_INVALID)) {
       nir_instr_remove(&intrinsic->instr);
       return;
@@ -1362,7 +1471,8 @@ terakan_nir_lower_bindings_instr_image_store(nir_builder * const builder,
 
    enum gl_access_qualifier const access = nir_intrinsic_access(intrinsic);
 
-   nir_def * const binding_array_index = nir_mov_scalar(builder, srv_binding.array_index_opt);
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
 
    enum glsl_sampler_dim const dimensionality = nir_intrinsic_image_dim(intrinsic);
 
@@ -1395,15 +1505,16 @@ terakan_nir_lower_bindings_instr_image_atomic(nir_builder * const builder,
       return;
    }
 
-   struct terakan_nir_binding const srv_binding = terakan_nir_get_image_srv_binding(
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
       builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
-   if (unlikely(srv_binding.array_size == 0)) {
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
    }
 
-   uint8_t const uav_base = terakan_nir_get_srv_range_uav_base(
-      srv_binding.base, srv_binding.array_size, &state->uav_usage, builder->shader->info.stage);
+   uint8_t const uav_base = terakan_nir_get_mutable_srv_range_uav_base(
+      mutable_srv_binding.base, mutable_srv_binding.array_size, &state->uav_usage,
+      builder->shader->info.stage);
    if (unlikely(uav_base == TERAKAN_NIR_BINDING_BASE_INVALID)) {
       terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
       return;
@@ -1411,7 +1522,8 @@ terakan_nir_lower_bindings_instr_image_atomic(nir_builder * const builder,
 
    enum gl_access_qualifier const access = nir_intrinsic_access(intrinsic);
 
-   nir_def * const binding_array_index = nir_mov_scalar(builder, srv_binding.array_index_opt);
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
 
    enum glsl_sampler_dim const dimensionality = nir_intrinsic_image_dim(intrinsic);
 
@@ -1449,6 +1561,39 @@ terakan_nir_lower_bindings_instr_image_atomic(nir_builder * const builder,
 }
 
 static bool
+terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
+                                            nir_intrinsic_instr * const intrinsic,
+                                            struct terakan_nir_lower_bindings_state * const state)
+{
+   assert(intrinsic->intrinsic == nir_intrinsic_bindless_image_size);
+
+   bool const include_helpers = (nir_intrinsic_access(intrinsic) & ACCESS_INCLUDE_HELPERS) != 0;
+
+   enum glsl_sampler_dim const dimensionality = nir_intrinsic_image_dim(intrinsic);
+
+   if (dimensionality == GLSL_SAMPLER_DIM_BUF) {
+      struct terakan_nir_binding const mutable_srv_binding =
+         terakan_nir_get_image_mutable_srv_binding(builder, intrinsic, state->get_binding_functions,
+                                                   state->get_binding_functions_data);
+      if (unlikely(mutable_srv_binding.array_size == 0)) {
+         terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
+         /* Return true because `terakan_nir_get_image_mutable_srv_binding` might have added
+          * addressing instructions.
+          */
+         return true;
+      }
+      nir_def_replace(
+         &intrinsic->def,
+         terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+            builder, mutable_srv_binding.base,
+            nir_mov_scalar(builder, mutable_srv_binding.array_index_opt), include_helpers, state));
+      return true;
+   }
+
+   return false;
+}
+
+static bool
 terakan_nir_lower_bindings_instr(nir_builder * const builder, nir_instr * const instr,
                                  void * const state_ptr)
 {
@@ -1478,6 +1623,9 @@ terakan_nir_lower_bindings_instr(nir_builder * const builder, nir_instr * const 
       case nir_intrinsic_ssbo_atomic_swap:
          terakan_nir_lower_bindings_instr_ssbo_atomic(builder, intrinsic, state);
          return true;
+      case nir_intrinsic_get_ssbo_size:
+         terakan_nir_lower_bindings_instr_get_ssbo_size(builder, intrinsic, state);
+         return true;
       case nir_intrinsic_bindless_image_load:
          terakan_nir_lower_bindings_instr_image_load(builder, intrinsic, state);
          return true;
@@ -1488,6 +1636,8 @@ terakan_nir_lower_bindings_instr(nir_builder * const builder, nir_instr * const 
       case nir_intrinsic_bindless_image_atomic_swap:
          terakan_nir_lower_bindings_instr_image_atomic(builder, intrinsic, state);
          return true;
+      case nir_intrinsic_bindless_image_size:
+         return terakan_nir_lower_bindings_instr_image_size(builder, intrinsic, state);
       default:
          break;
       }
@@ -1501,6 +1651,7 @@ terakan_nir_lower_bindings(
    struct terakan_nir_get_pipeline_layout_binding_functions const * const get_binding_functions,
    void const * const get_binding_functions_data, bool const robust_buffer_access_2,
    struct terakan_physical_device const * const physical_device,
+   struct terakan_resinfo_constants_usage const * const resinfo_constants_usage,
    struct terakan_nir_shader_uav_usage const * const uav_usage_opt,
    struct terakan_shader_sqk_usage * const sqk_usage_accum,
    uint32_t * const driver_push_constants_used_accum)
@@ -1512,6 +1663,8 @@ terakan_nir_lower_bindings(
       .robust_buffer_access_2 = robust_buffer_access_2,
 
       .physical_device = physical_device,
+
+      .resinfo_constants_usage = resinfo_constants_usage,
 
       .sqk_usage_accum = sqk_usage_accum,
       .driver_push_constants_used_accum = driver_push_constants_used_accum,

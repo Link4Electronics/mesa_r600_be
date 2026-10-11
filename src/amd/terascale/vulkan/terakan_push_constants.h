@@ -194,6 +194,7 @@ terakan_push_constants_set_unbound_to_stage(struct terakan_push_constants_state 
 
 struct terakan_gfx_command_writer;
 
+/* `TERAKAN_SRV_RANGE_RESINFO_CONSTANTS` stride is one dword. */
 void terakan_push_constants_apply(struct terakan_gfx_command_writer * command_writer,
                                   bool is_compute);
 

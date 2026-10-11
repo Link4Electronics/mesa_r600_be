@@ -117,6 +117,13 @@ terakan_app_config_compute_apply(struct terakan_gfx_command_writer * const comma
                                                ? sq_pgm_ls->push_constants_usage
                                                : (struct terakan_push_constants_usage){});
 
+   terakan_resinfo_constants_set_usage(
+      &command_writer->resinfo_constants_state, MESA_SHADER_COMPUTE,
+      sq_pgm_ls != NULL &&
+            BITSET_TEST(sq_pgm_ls->sqk_usage.srvs, TERAKAN_SRV_RANGE_RESINFO_CONSTANTS)
+         ? &sq_pgm_ls->resinfo_constants_usage
+         : NULL);
+
    terakan_hw_config_sqk_set_usage_cs(&command_writer->hw_config_sqk, &sq_pgm_ls->sqk_usage);
 
    /* UAVs. */

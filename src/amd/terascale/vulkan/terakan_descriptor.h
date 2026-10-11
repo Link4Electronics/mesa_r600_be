@@ -332,6 +332,14 @@ terakan_depth_stencil_descriptor_is_bound(
 #define TERAKAN_SRV_HW_COUNT_VERTEX        160
 #define TERAKAN_SRV_HW_COUNT_FETCH         32
 
+static inline uint8_t
+terakan_srv_hw_count_for_stage(mesa_shader_stage const stage)
+{
+   return stage == MESA_SHADER_FRAGMENT || stage == MESA_SHADER_COMPUTE
+             ? TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE
+             : TERAKAN_SRV_HW_COUNT_VERTEX;
+}
+
 #define TERAKAN_SRV_HW_OFFSET_PS   0
 #define TERAKAN_SRV_HW_OFFSET_VSES (TERAKAN_SRV_HW_OFFSET_PS + TERAKAN_SRV_HW_COUNT_PIXEL_COMPUTE)
 #define TERAKAN_SRV_HW_OFFSET_GS   (TERAKAN_SRV_HW_OFFSET_VSES + TERAKAN_SRV_HW_COUNT_VERTEX)
@@ -350,8 +358,11 @@ struct terakan_srv_descriptor {
  * alongside the shader itself.
  */
 #define TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY 0
+/* Resource info constants for cases not covered by the resource info instructions. */
+#define TERAKAN_SRV_RANGE_RESINFO_CONSTANTS                                                        \
+   (TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY + 1)
 /* Dynamically indexable driver and application push constants. */
-#define TERAKAN_SRV_RANGE_PUSH_CONSTANTS (TERAKAN_SRV_RANGE_IMMEDIATE_CONSTANTS_OR_META_PRIMARY + 1)
+#define TERAKAN_SRV_RANGE_PUSH_CONSTANTS (TERAKAN_SRV_RANGE_RESINFO_CONSTANTS + 1)
 /* VS: Base vertex and instance.
  * GS and VS/TES `ALT_CONST`: Ring buffer.
  * CS: Number of workgroups.
@@ -400,6 +411,11 @@ static_assert(
    TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL >= 15 + 4 + 128 + 8 + 4,
    "There should be enough pixel shader mutable SRV bindings for the minimum Direct3D 11 binding "
    "counts plus Vulkan storage buffers and input attachments.");
+/* The `NON_PIXEL_OR_PIXEL` suffix is present to make it more clear when this value is used that
+ * there are separate limits for different stages, which may be smaller than this maximum count.
+ */
+#define TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL_OR_PIXEL                                     \
+   MAX2(TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL, TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL)
 #define TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_IN_PIPELINE                                            \
    (TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_NON_PIXEL * 5 + TERAKAN_SRV_RANGE_MUTABLE_MAX_COUNT_PIXEL)
 

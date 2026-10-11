@@ -25,6 +25,7 @@
 #define TERAKAN_NIR_H
 
 #include "terakan_physical_device.h"
+#include "terakan_resinfo_constants.h"
 #include "terakan_shader.h"
 
 #include "util/bitset.h"
@@ -113,13 +114,12 @@ struct terakan_nir_pipeline_layout_binding {
 
    /* `TERAKAN_NIR_BINDING_BASE_INVALID` if the binding doesn't use the given hardware register
     * range.
-    * The bases are relative to the beginning of the hardware register range for the stage. In
-    * particular, `srv_base` is not relative to `TERAKAN_SRV_RANGE_MUTABLE_BASE`, for example,
-    * however, lowerings may expect that the SRV range of the binding is in the mutable SRV range.
+    * The kcache and sampler bases are relative to the beginning of the hardware register range for
+    * the stage. The SRV base is relative to `TERAKAN_SRV_RANGE_MUTABLE_BASE`.
     */
    uint8_t kcache_base;
    uint8_t sampler_base;
-   uint8_t srv_base;
+   uint8_t mutable_srv_base;
 };
 
 extern struct terakan_nir_pipeline_layout_binding const terakan_nir_pipeline_layout_binding_empty;
@@ -188,16 +188,24 @@ struct terakan_nir_shader_uav_usage {
  * `terakan_nir_gather_uav_usage` can't assume binding array index ranges narrower than
  * `terakan_nir_lower_bindings` does, otherwise the latter would potentially not be aware that some
  * binding arrays have UAVs, or UAV arrays would overlap other MRTs or even have negative base
- * indices. Because of that, `terakan_nir_gather_uav_usage` shares the binding indexing calculations
- * with `terakan_nir_lower_bindings`, and they may insert new instructions even though the pass is
- * designed to merely gather the information. However, they may be removed via dead code
- * elimination, or reused by common subexpression elimination.
+ * indices. `terakan_nir_gather_resinfo_constants_usage` also constructs a bitset that will be used
+ * for calculating compacted SRV indices similarly.
+ * Because of that, `terakan_nir_gather_resinfo_constants_usage` and `terakan_nir_gather_uav_usage`
+ * share the binding indexing calculations with `terakan_nir_lower_bindings`, and they may insert
+ * new instructions even though the passes are designed to merely gather the information. However,
+ * those instructions may be removed via dead code elimination, or reused by common subexpression
+ * elimination.
  *
  * UAV indices in the intrinsics produced by `terakan_nir_lower_bindings` don't include the
  * `uav_cb_color_index_base` passed to `terakan_nir_gather_uav_usage`, rather the gathering only
  * uses it for bounds checking. It's expected to be set in `r600_shader::rat_base` and applied by
  * SFN.
  */
+bool terakan_nir_gather_resinfo_constants_usage(
+   nir_shader * nir,
+   struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions,
+   void const * get_binding_functions_data,
+   struct terakan_resinfo_constants_usage * resinfo_constants_usage_out);
 bool terakan_nir_gather_uav_usage(
    nir_shader * nir,
    struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions,
@@ -208,6 +216,7 @@ bool terakan_nir_lower_bindings(
    struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions,
    void const * get_binding_functions_data, bool robust_buffer_access_2,
    struct terakan_physical_device const * physical_device,
+   struct terakan_resinfo_constants_usage const * resinfo_constants_usage,
    struct terakan_nir_shader_uav_usage const * uav_usage_opt,
    struct terakan_shader_sqk_usage * sqk_usage_accum, uint32_t * driver_push_constants_used_accum);
 
