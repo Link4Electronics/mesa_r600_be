@@ -137,12 +137,12 @@ terakan_push_constants_reset(struct terakan_push_constants_state * const state)
 {
    state->allocation_.mapping_if_up_to_date = NULL;
 
+   state->up_to_date_push_constants_bound_to_stages_ = 0b0;
+
    state->graphics_stages_using_push_constants_ = 0b0;
    state->usage_pre_rasterization_ = (struct terakan_push_constants_usage){};
    state->usage_fragment_ = (struct terakan_push_constants_usage){};
    state->usage_compute_ = (struct terakan_push_constants_usage){};
-
-   state->up_to_date_push_constants_bound_to_stages_ = 0b0;
 
    state->driver_constants_modified_ = BITFIELD_MASK(TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_COUNT);
 

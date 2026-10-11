@@ -103,12 +103,12 @@ struct terakan_push_constants_state {
       uint32_t app_up_to_date_bytes_written;
    } allocation_;
 
+   uint8_t up_to_date_push_constants_bound_to_stages_;
+
    uint8_t graphics_stages_using_push_constants_;
    struct terakan_push_constants_usage usage_pre_rasterization_;
    struct terakan_push_constants_usage usage_fragment_;
    struct terakan_push_constants_usage usage_compute_;
-
-   uint8_t up_to_date_push_constants_bound_to_stages_;
 
    uint32_t driver_constants_modified_;
    struct terakan_push_constants_driver driver_constants_;
