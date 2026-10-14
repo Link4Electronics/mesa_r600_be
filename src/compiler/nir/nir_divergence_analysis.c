@@ -706,6 +706,7 @@ visit_intrinsic(nir_intrinsic_instr *instr, struct divergence_state *state)
    case nir_intrinsic_ssbo_descriptor_amd:
    case nir_intrinsic_deref_buffer_array_length:
    case nir_intrinsic_deref_buffer_address:
+   case nir_intrinsic_buffer_resource_info_r600:
    case nir_intrinsic_load_kcache_r600:
       is_divergent = src_divergent(instr->src[0], state) &&
                      (nir_intrinsic_access(instr) & ACCESS_NON_UNIFORM);

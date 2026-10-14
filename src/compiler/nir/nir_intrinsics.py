@@ -2058,6 +2058,13 @@ load("buffer_resource_r600", src_comp=[1, 1],
      indices=[ACCESS, BINDING, BASE, COMPONENT, FORMAT, MEGA_FETCH_COUNT_R600, FLAGS],
      flags=[CAN_ELIMINATE])
 
+# Load the dword 4 of a vertex fetch resource constant (on post-Evergreen R8xx and R9xx).
+# src[] = { buffer resource index offset relative to BINDING }
+# Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+# BINDING = buffer resource index base
+intrinsic("buffer_resource_info_r600", src_comp=[1], dest_comp=1, bit_sizes=[32, 32], indices=[ACCESS, BINDING],
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+
 # Load from a texture resource.
 # src[] = { texture resource index offset relative to BINDING, XYZ coordinates and LOD }
 # Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS

@@ -943,6 +943,8 @@ Shader::process_intrinsic(nir_intrinsic_instr *intr)
                                               primitiveid_modulo));
    case nir_intrinsic_load_buffer_resource_r600:
       return emit_load_buffer_resource(intr);
+   case nir_intrinsic_buffer_resource_info_r600:
+      return emit_buffer_resource_info(intr);
    case nir_intrinsic_load_texture_resource_r600:
       return emit_load_texture_resource(intr);
    case nir_intrinsic_load_kcache_r600:
@@ -1863,6 +1865,34 @@ Shader::emit_load_buffer_resource(nir_intrinsic_instr *instr)
    }
 
    emit_instruction(fetch);
+
+   return true;
+}
+
+bool
+Shader::emit_buffer_resource_info(nir_intrinsic_instr *instr)
+{
+   ValueFactory& vf = value_factory();
+
+   RegisterVec4 dest = vf.dest_vec4(instr->def, pin_group);
+
+   unsigned resource_base = nir_intrinsic_binding(instr);
+   PRegister resource_offset = nullptr;
+   const nir_const_value *resource_offset_const = nir_src_as_const_value(instr->src[0]);
+   if (resource_offset_const != nullptr) {
+      resource_base += resource_offset_const->u32;
+   } else {
+      resource_offset = vf.src(instr->src[0], 0)->as_register();
+   }
+
+   auto query = new QueryBufferSizeInstr(dest, {0, 7, 7, 7}, resource_base);
+   query->set_resource_offset(resource_offset);
+
+   if (nir_intrinsic_access(instr) & ACCESS_INCLUDE_HELPERS) {
+      query->set_instr_flag(Instr::helper);
+   }
+
+   emit_instruction(query);
 
    return true;
 }
