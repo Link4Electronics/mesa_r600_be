@@ -947,6 +947,10 @@ Shader::process_intrinsic(nir_intrinsic_instr *intr)
       return emit_buffer_resource_info(intr);
    case nir_intrinsic_load_texture_resource_r600:
       return emit_load_texture_resource(intr);
+   case nir_intrinsic_texture_resource_info_r600:
+      return emit_texture_resource_info(intr);
+   case nir_intrinsic_texture_resource_info_ms_r600:
+      return emit_texture_resource_info_ms(intr);
    case nir_intrinsic_load_kcache_r600:
       return emit_load_kcache(intr);
    case nir_intrinsic_barrier:
@@ -1925,6 +1929,73 @@ Shader::emit_load_texture_resource(nir_intrinsic_instr *instr)
                            dest,
                            dest_swizzle,
                            coord,
+                           resource_base,
+                           resource_offset);
+
+   if (nir_intrinsic_access(instr) & ACCESS_INCLUDE_HELPERS) {
+      tex->set_instr_flag(Instr::helper);
+   }
+
+   emit_instruction(tex);
+
+   return true;
+}
+
+bool
+Shader::emit_texture_resource_info(nir_intrinsic_instr *instr)
+{
+   ValueFactory& vf = value_factory();
+
+   RegisterVec4 dest = vf.dest_vec4(instr->def, pin_group);
+
+   unsigned resource_base = nir_intrinsic_binding(instr);
+   PRegister resource_offset = nullptr;
+   const nir_const_value *resource_offset_const = nir_src_as_const_value(instr->src[0]);
+   if (resource_offset_const != nullptr) {
+      resource_base += resource_offset_const->u32;
+   } else {
+      resource_offset = vf.src(instr->src[0], 0)->as_register();
+   }
+
+   /* According to testing on Barts, Turks and Devastator, the LOD is read from W, but
+    * texture fetch has explicit source swizzle.
+    */
+   auto tex = new TexInstr(TexInstr::get_resinfo,
+                           dest,
+                           {0, 1, 2, 3},
+                           vf.src_vec4(instr->src[1], pin_group, {0, 0, 0, 0}),
+                           resource_base,
+                           resource_offset);
+
+   if (nir_intrinsic_access(instr) & ACCESS_INCLUDE_HELPERS) {
+      tex->set_instr_flag(Instr::helper);
+   }
+
+   emit_instruction(tex);
+
+   return true;
+}
+
+bool
+Shader::emit_texture_resource_info_ms(nir_intrinsic_instr *instr)
+{
+   ValueFactory& vf = value_factory();
+
+   RegisterVec4 dest = vf.dest_vec4(instr->def, pin_group);
+
+   unsigned resource_base = nir_intrinsic_binding(instr);
+   PRegister resource_offset = nullptr;
+   const nir_const_value *resource_offset_const = nir_src_as_const_value(instr->src[0]);
+   if (resource_offset_const != nullptr) {
+      resource_base += resource_offset_const->u32;
+   } else {
+      resource_offset = vf.src(instr->src[0], 0)->as_register();
+   }
+
+   auto tex = new TexInstr(TexInstr::get_nsamples,
+                           dest,
+                           {0, 1, 2, 3},
+                           RegisterVec4(0, true, {4, 4, 4, 4}),
                            resource_base,
                            resource_offset);
 

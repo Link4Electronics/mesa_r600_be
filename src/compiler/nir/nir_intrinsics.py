@@ -2072,6 +2072,24 @@ intrinsic("buffer_resource_info_r600", src_comp=[1], dest_comp=1, bit_sizes=[32,
 load("texture_resource_r600", src_comp=[1, 4],
      indices=[ACCESS, BINDING, COMPONENT], flags=[CAN_ELIMINATE, CAN_REORDER])
 
+# Query the texture view width, height, depth or layer count, and mip level count.
+# For non-array view types in the texture resource constant, including cube map, the layer count is 0.
+# For LODs outside the mip level range of the view, the extent and the layer count are replaced with 0.
+# Always returning all 4 components for common subexpression elimination between different queries.
+# src[] = { texture resource index offset relative to BINDING, integer LOD }
+# Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+# BINDING = texture resource index base
+intrinsic("texture_resource_info_r600", src_comp=[1, 1], dest_comp=4, bit_sizes=[32, 32, 32], indices=[ACCESS, BINDING],
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+
+# Query the texture width, height, layer count, and sample count.
+# Always returning all 4 components for common subexpression elimination between different queries.
+# src[] = { texture resource index offset relative to BINDING }
+# Relevant ACCESS: NON_UNIFORM, INCLUDE_HELPERS
+# BINDING = texture resource index base
+intrinsic("texture_resource_info_ms_r600", src_comp=[1], dest_comp=4, bit_sizes=[32, 32], indices=[ACCESS, BINDING],
+          flags=[CAN_ELIMINATE, CAN_REORDER])
+
 # Load from a constant cache (kcache) buffer.
 # src[] = { constant cache buffer index offset relative to BINDING }
 # Relevant ACCESS: NON_UNIFORM

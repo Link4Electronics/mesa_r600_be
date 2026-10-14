@@ -359,6 +359,8 @@ private:
    bool emit_load_buffer_resource(nir_intrinsic_instr *instr);
    bool emit_buffer_resource_info(nir_intrinsic_instr *instr);
    bool emit_load_texture_resource(nir_intrinsic_instr *instr);
+   bool emit_texture_resource_info(nir_intrinsic_instr *instr);
+   bool emit_texture_resource_info_ms(nir_intrinsic_instr *instr);
    bool emit_load_kcache(nir_intrinsic_instr *instr);
 
    bool equal_to(const Shader& other) const;
