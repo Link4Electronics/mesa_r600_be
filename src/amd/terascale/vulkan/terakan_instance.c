@@ -63,6 +63,7 @@ static struct debug_control const terakan_test_flags[] = {
 static struct debug_control const terakan_regression_test_flags[] = {
    {"2048_vertex_stride_workaround_on_r9xx",
     BITFIELD64_BIT(TERAKAN_REGRESSION_TEST_SHIFT_2048_VERTEX_STRIDE_WORKAROUND_ON_R9XX)},
+   {"no_get_buffer_resinfo", BITFIELD64_BIT(TERAKAN_REGRESSION_TEST_SHIFT_NO_GET_BUFFER_RESINFO)},
    {"split_indirect_buffer_at_query_begin_end",
     BITFIELD64_BIT(TERAKAN_REGRESSION_TEST_SHIFT_SPLIT_INDIRECT_BUFFER_AT_QUERY_BEGIN_END)},
    {}};

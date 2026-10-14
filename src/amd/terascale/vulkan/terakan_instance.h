@@ -69,6 +69,11 @@ enum {
     */
    TERAKAN_REGRESSION_TEST_SHIFT_2048_VERTEX_STRIDE_WORKAROUND_ON_R9XX,
 
+   /* Use explicitly passed buffer resource info constants instead of the `GET_BUFFER_RESINFO`
+    * shader instruction even on post-Evergreen chips where it's supported by the hardware.
+    */
+   TERAKAN_REGRESSION_TEST_SHIFT_NO_GET_BUFFER_RESINFO,
+
    /* Switch to a new indirect buffer when beginning or ending a query.
     *
     * This causes query sample accumulation operations to be performed for all queries with both a

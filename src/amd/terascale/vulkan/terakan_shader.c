@@ -28,6 +28,7 @@
 #include "terakan_command_buffer.h"
 #include "terakan_descriptor.h"
 #include "terakan_device.h"
+#include "terakan_instance.h"
 #include "terakan_physical_device.h"
 
 #include "amd/terascale/common/nir/terascale_nir.h"
@@ -449,8 +450,17 @@ terakan_nir_lower_and_optimize_post_link(
 
    /* Finally lower bindings to backend instructions referencing SQK at hardware register indices.
     */
+   bool use_get_buffer_resinfo = !options->physical_device->chip_info.is_r8xx_eg;
+#ifdef TERAKAN_REGRESSION_TEST
+   if (container_of(options->physical_device->vk.base.instance, struct terakan_instance const, vk)
+          ->regression_test_flags &
+       BITFIELD64_BIT(TERAKAN_REGRESSION_TEST_SHIFT_NO_GET_BUFFER_RESINFO)) {
+      use_get_buffer_resinfo = false;
+   }
+#endif
    NIR_PASS(_, nir, terakan_nir_gather_resinfo_constants_usage, options->get_binding_functions,
-            options->get_binding_functions_data, &result.resinfo_constants_usage);
+            options->get_binding_functions_data, use_get_buffer_resinfo,
+            &result.resinfo_constants_usage);
    struct terakan_nir_shader_uav_usage uav_usage = {};
    if (nir->info.stage == MESA_SHADER_FRAGMENT || nir->info.stage == MESA_SHADER_COMPUTE) {
       NIR_PASS(_, nir, terakan_nir_gather_uav_usage, options->get_binding_functions,
@@ -464,8 +474,8 @@ terakan_nir_lower_and_optimize_post_link(
    }
    NIR_PASS(_, nir, terakan_nir_lower_bindings, options->get_binding_functions,
             options->get_binding_functions_data, options->robust_buffer_access_2,
-            options->physical_device, &result.resinfo_constants_usage, &uav_usage,
-            &result.sqk_usage, &result.driver_push_constants_used);
+            options->physical_device, use_get_buffer_resinfo, &result.resinfo_constants_usage,
+            &uav_usage, &result.sqk_usage, &result.driver_push_constants_used);
 
    /* TODO(Triang3l): `nir_opt_offsets` (implement for R600 intrinsics). */
 

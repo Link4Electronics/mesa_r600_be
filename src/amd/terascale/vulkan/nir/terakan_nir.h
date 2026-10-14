@@ -204,7 +204,7 @@ struct terakan_nir_shader_uav_usage {
 bool terakan_nir_gather_resinfo_constants_usage(
    nir_shader * nir,
    struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions,
-   void const * get_binding_functions_data,
+   void const * get_binding_functions_data, bool use_get_buffer_resinfo,
    struct terakan_resinfo_constants_usage * resinfo_constants_usage_out);
 bool terakan_nir_gather_uav_usage(
    nir_shader * nir,
@@ -215,7 +215,7 @@ bool terakan_nir_lower_bindings(
    nir_shader * nir,
    struct terakan_nir_get_pipeline_layout_binding_functions const * get_binding_functions,
    void const * get_binding_functions_data, bool robust_buffer_access_2,
-   struct terakan_physical_device const * physical_device,
+   struct terakan_physical_device const * physical_device, bool use_get_buffer_resinfo,
    struct terakan_resinfo_constants_usage const * resinfo_constants_usage,
    struct terakan_nir_shader_uav_usage const * uav_usage_opt,
    struct terakan_shader_sqk_usage * sqk_usage_accum, uint32_t * driver_push_constants_used_accum);
