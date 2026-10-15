@@ -679,8 +679,7 @@ TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
    }
 
    RegisterVec4::Swizzle hw_coord_swizzle{7, 7, 7, 7};
-   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
-        ++component_index) {
+   for (uint8_t component_index = 0; component_index < 4; ++component_index) {
       if (hw_coord_components[component_index]) {
          hw_coord_swizzle[component_index] = component_index;
       }
