@@ -487,7 +487,30 @@ terakan_nir_gather_resinfo_constants_usage_cube_elements_or_buffer_size_instr(
    nir_src * binding_src = NULL;
    terakan_nir_get_pipeline_layout_binding_function get_binding_function = NULL;
 
-   if (instr->type == nir_instr_type_intrinsic) {
+   if (instr->type == nir_instr_type_tex) {
+      nir_tex_instr * const tex = nir_instr_as_tex(instr);
+      if (tex->op != nir_texop_txs) {
+         return false;
+      }
+      int const texture_handle_src_index = nir_tex_instr_src_index(tex, nir_tex_src_texture_handle);
+      assert(texture_handle_src_index >= 0);
+      if (unlikely(texture_handle_src_index < 0)) {
+         return false;
+      }
+      binding_src = &tex->src[texture_handle_src_index].src;
+      if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
+         if (state->use_get_buffer_resinfo) {
+            return false;
+         }
+         get_binding_function = state->get_binding_functions->uniform_texel_buffer;
+      } else {
+         if (!(tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE && tex->is_array &&
+               (nir_def_components_read(&tex->def) & BITFIELD_BIT(2)))) {
+            return false;
+         }
+         get_binding_function = state->get_binding_functions->sampled_image;
+      }
+   } else if (instr->type == nir_instr_type_intrinsic) {
       nir_intrinsic_instr * const intrinsic = nir_instr_as_intrinsic(instr);
       switch (intrinsic->intrinsic) {
       case nir_intrinsic_get_ssbo_size:
@@ -500,6 +523,14 @@ terakan_nir_gather_resinfo_constants_usage_cube_elements_or_buffer_size_instr(
 
       case nir_intrinsic_bindless_image_size:
          switch (nir_intrinsic_image_dim(intrinsic)) {
+         case GLSL_SAMPLER_DIM_CUBE:
+            if (!nir_intrinsic_image_array(intrinsic) ||
+                !(nir_def_components_read(&intrinsic->def) & BITFIELD_BIT(2))) {
+               return false;
+            }
+            binding_src = &intrinsic->src[0];
+            get_binding_function = state->get_binding_functions->storage_image;
+            break;
          case GLSL_SAMPLER_DIM_BUF:
             if (state->use_get_buffer_resinfo) {
                return false;
@@ -975,6 +1006,146 @@ static bool
 terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr * const tex,
                                      struct terakan_nir_lower_bindings_state * const state)
 {
+   terakan_nir_get_pipeline_layout_binding_function const get_texture_binding_function =
+      tex->sampler_dim == GLSL_SAMPLER_DIM_BUF ? state->get_binding_functions->uniform_texel_buffer
+                                               : state->get_binding_functions->sampled_image;
+
+   if (tex->op == nir_texop_txs || tex->op == nir_texop_query_levels ||
+       tex->op == nir_texop_texture_samples) {
+      /* Samplerless texture operations lowered to other NIR instructions. */
+
+      int const handle_src_index = nir_tex_instr_src_index(tex, nir_tex_src_texture_handle);
+      assert(handle_src_index >= 0);
+      if (unlikely(handle_src_index < 0)) {
+         return false;
+      }
+
+      nir_binding const binding = nir_chase_binding(tex->src[handle_src_index].src);
+      assert(binding.success);
+      if (unlikely(!binding.success)) {
+         terakan_nir_lower_bindings_instr_to_null(&tex->instr);
+         return true;
+      }
+
+      assert(nir_tex_instr_src_index(tex, nir_tex_src_texture_offset) < 0 &&
+             "Texture offset source must be lowered to the index in the handle source");
+      struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
+         get_texture_binding_function(&binding, builder->shader->info.stage,
+                                      state->get_binding_functions_data);
+      if (unlikely(pipeline_layout_binding.array_size == 0)) {
+         terakan_nir_lower_bindings_instr_to_null(&tex->instr);
+         return true;
+      }
+
+      struct terakan_nir_binding const hw_mutable_srv_binding =
+         terakan_nir_get_binding(builder, &binding, pipeline_layout_binding.array_size,
+                                 pipeline_layout_binding.mutable_srv_base, false);
+      if (unlikely(hw_mutable_srv_binding.array_size == 0)) {
+         terakan_nir_lower_bindings_instr_to_null(&tex->instr);
+         return true;
+      }
+      nir_def * const hw_binding_array_index =
+         nir_mov_scalar(builder, hw_mutable_srv_binding.array_index_opt);
+
+      uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + hw_mutable_srv_binding.base;
+      uint8_t const last_srv_index =
+         first_srv_index + (hw_mutable_srv_binding.array_size - (uint8_t)1);
+
+      bool const include_helpers =
+         !tex->skip_helpers && builder->shader->info.stage == MESA_SHADER_FRAGMENT;
+
+      if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
+         if (likely(tex->op == nir_texop_txs)) {
+            if (state->use_get_buffer_resinfo) {
+               BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
+               nir_def_replace(&tex->def, nir_buffer_resource_info_r600(
+                                             builder, 32, hw_binding_array_index,
+                                             .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0,
+                                             .binding = first_srv_index));
+            } else {
+               nir_def_replace(&tex->def,
+                               terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+                                  builder, hw_mutable_srv_binding.base, hw_binding_array_index,
+                                  include_helpers, state));
+            }
+            return true;
+         }
+
+         assert(!"Queries other than size ones are not supported for uniform texel buffers");
+         terakan_nir_lower_bindings_instr_to_null(&tex->instr);
+         return true;
+      }
+
+      /* For cube map arrays, for which the `GET_TEXTURE_RESINFO` instruction doesn't provide the
+       * layer count, construct the size from the query instruction result and the layer count from
+       * the constant buffer, depending on which components are read.
+       */
+      nir_def * layer_count_override = NULL;
+      if (tex->op == nir_texop_txs && tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE && tex->is_array) {
+         unsigned const components_read = nir_def_components_read(&tex->def);
+         if (components_read & BITFIELD_BIT(2)) {
+            /* Note that for out-of-range LODs, the hardware `GET_TEXTURE_RESINFO` returns 0 as the
+             * layer count, but that's not the case for this load from the constant buffer. However,
+             * section "SPIR-V Image Query Instructions" of the Vulkan 1.4.365 specification says:
+             *
+             *     "If `Level of Detail` is greater than or equal to
+             *     `VkImageSubresourceRange::levelCount`, the result is undefined."
+             */
+            layer_count_override = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+               builder, hw_mutable_srv_binding.base, hw_binding_array_index, include_helpers,
+               state);
+            if (!(components_read & BITFIELD_MASK(2))) {
+               nir_def * const undef = nir_undef(builder, 1, 32);
+               assert(tex->def.num_components == 3);
+               nir_def_replace(&tex->def, nir_vec3(builder, undef, undef, layer_count_override));
+               return true;
+            }
+         }
+      }
+
+      BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
+      nir_def * texture_info;
+      if (tex->sampler_dim == GLSL_SAMPLER_DIM_MS ||
+          tex->sampler_dim == GLSL_SAMPLER_DIM_SUBPASS_MS) {
+         texture_info = nir_texture_resource_info_ms_r600(
+            builder, 32, hw_binding_array_index,
+            .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0, .binding = first_srv_index);
+      } else {
+         nir_def * texture_size_lod =
+            tex->op == nir_texop_txs ? nir_get_tex_src(tex, nir_tex_src_lod) : NULL;
+         if (texture_size_lod == NULL) {
+            texture_size_lod = nir_imm_zero(builder, 1, 32);
+         }
+         texture_info = nir_texture_resource_info_r600(
+            builder, 32, hw_binding_array_index, texture_size_lod,
+            .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0, .binding = first_srv_index);
+      }
+
+      if (tex->op == nir_texop_query_levels || tex->op == nir_texop_texture_samples) {
+         nir_def_replace(&tex->def, nir_channel(builder, texture_info, 3));
+         return true;
+      }
+
+      assert(tex->op == nir_texop_txs);
+      unsigned const layer_size_num_components = tex->def.num_components - (unsigned)tex->is_array;
+      nir_def * texture_size_components[3];
+      for (unsigned component_index = 0; component_index < layer_size_num_components;
+           ++component_index) {
+         texture_size_components[component_index] =
+            nir_channel(builder, texture_info, component_index);
+      }
+      if (tex->is_array) {
+         texture_size_components[layer_size_num_components] =
+            layer_count_override != NULL ? layer_count_override
+                                         : nir_channel(builder, texture_info, 2);
+      }
+      nir_def_replace(&tex->def,
+                      nir_vec(builder, texture_size_components, tex->def.num_components));
+      return true;
+   }
+
+   /* Texture operations implemented in the backend. */
+
    bool progress = false;
    bool bindings_invalid = false;
 
@@ -1000,8 +1171,8 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
             assert(nir_tex_instr_src_index(tex, nir_tex_src_texture_offset) < 0 &&
                    "Texture offset source must be lowered to the index in the handle source");
             struct terakan_nir_pipeline_layout_binding const pipeline_layout_binding =
-               state->get_binding_functions->sampled_image(&binding, builder->shader->info.stage,
-                                                           state->get_binding_functions_data);
+               get_texture_binding_function(&binding, builder->shader->info.stage,
+                                            state->get_binding_functions_data);
             if (unlikely(pipeline_layout_binding.array_size == 0)) {
                bindings_invalid = true;
             } else {
@@ -1583,7 +1754,7 @@ terakan_nir_lower_bindings_instr_image_atomic(nir_builder * const builder,
    }
 }
 
-static bool
+static void
 terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
                                             nir_intrinsic_instr * const intrinsic,
                                             struct terakan_nir_lower_bindings_state * const state)
@@ -1594,23 +1765,24 @@ terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
 
    enum glsl_sampler_dim const dimensionality = nir_intrinsic_image_dim(intrinsic);
 
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
+      builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
+      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
+      return;
+   }
+   nir_def * const binding_array_index =
+      nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
+
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   uint8_t const last_srv_index = first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1);
+
    if (dimensionality == GLSL_SAMPLER_DIM_BUF) {
-      struct terakan_nir_binding const mutable_srv_binding =
-         terakan_nir_get_image_mutable_srv_binding(builder, intrinsic, state->get_binding_functions,
-                                                   state->get_binding_functions_data);
-      if (unlikely(mutable_srv_binding.array_size == 0)) {
-         terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
-         /* Return true because `terakan_nir_get_image_mutable_srv_binding` might have added
-          * addressing instructions.
-          */
-         return true;
-      }
       nir_def * const binding_array_index =
          nir_mov_scalar(builder, mutable_srv_binding.array_index_opt);
       if (state->use_get_buffer_resinfo) {
          uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
-         BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index,
-                          first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1));
+         BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
          nir_def_replace(&intrinsic->def, nir_buffer_resource_info_r600(
                                              builder, 32, binding_array_index,
                                              .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0,
@@ -1621,10 +1793,106 @@ terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
             terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
                builder, mutable_srv_binding.base, binding_array_index, include_helpers, state));
       }
-      return true;
+      return;
    }
 
-   return false;
+   bool const is_array = nir_intrinsic_image_array(intrinsic);
+
+   /* For cube map arrays, for which the `GET_TEXTURE_RESINFO` instruction doesn't provide the layer
+    * count, construct the size from the query instruction result and the layer count from the
+    * constant buffer, depending on which components are read.
+    */
+   nir_def * layer_count_override = NULL;
+   if (dimensionality == GLSL_SAMPLER_DIM_CUBE && is_array) {
+      unsigned const components_read = nir_def_components_read(&intrinsic->def);
+      if (components_read & BITFIELD_BIT(2)) {
+         layer_count_override = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+            builder, mutable_srv_binding.base, binding_array_index, include_helpers, state);
+         if (!(components_read & BITFIELD_MASK(2))) {
+            nir_def * const undef = nir_undef(builder, 1, 32);
+            assert(intrinsic->def.num_components == 3);
+            nir_def_replace(&intrinsic->def, nir_vec3(builder, undef, undef, layer_count_override));
+            return;
+         }
+      }
+   }
+
+   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
+   nir_def * const image_info =
+      dimensionality == GLSL_SAMPLER_DIM_MS
+         ? nir_texture_resource_info_ms_r600(builder, 32, binding_array_index,
+                                             .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0,
+                                             .binding = first_srv_index)
+         : nir_texture_resource_info_r600(
+              builder, 32, binding_array_index, nir_imm_zero(builder, 1, 32),
+              .access = include_helpers ? ACCESS_INCLUDE_HELPERS : 0, .binding = first_srv_index);
+   unsigned const layer_size_num_components = intrinsic->def.num_components - (unsigned)is_array;
+   nir_def * size_components[3];
+   for (unsigned component_index = 0; component_index < layer_size_num_components;
+        ++component_index) {
+      size_components[component_index] = nir_channel(builder, image_info, component_index);
+   }
+   if (is_array) {
+      size_components[layer_size_num_components] =
+         layer_count_override != NULL ? layer_count_override : nir_channel(builder, image_info, 2);
+   }
+   nir_def_replace(&intrinsic->def,
+                   nir_vec(builder, size_components, intrinsic->def.num_components));
+}
+
+static void
+terakan_nir_lower_bindings_instr_image_levels(nir_builder * const builder,
+                                              nir_intrinsic_instr * const intrinsic,
+                                              struct terakan_nir_lower_bindings_state * const state)
+{
+   assert(intrinsic->intrinsic == nir_intrinsic_bindless_image_levels);
+
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
+      builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
+      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
+      return;
+   }
+
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index,
+                    first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1));
+   nir_def_replace(
+      &intrinsic->def,
+      nir_channel(builder,
+                  nir_texture_resource_info_r600(
+                     builder, 32, nir_mov_scalar(builder, mutable_srv_binding.array_index_opt),
+                     nir_imm_zero(builder, 1, 32),
+                     .access = nir_intrinsic_access(intrinsic) & ACCESS_INCLUDE_HELPERS,
+                     .binding = first_srv_index),
+                  3));
+}
+
+static void
+terakan_nir_lower_bindings_instr_image_samples(nir_builder * const builder,
+                                               nir_intrinsic_instr * const intrinsic,
+                                               struct terakan_nir_lower_bindings_state * const state)
+{
+   assert(intrinsic->intrinsic == nir_intrinsic_bindless_image_samples);
+
+   struct terakan_nir_binding const mutable_srv_binding = terakan_nir_get_image_mutable_srv_binding(
+      builder, intrinsic, state->get_binding_functions, state->get_binding_functions_data);
+   if (unlikely(mutable_srv_binding.array_size == 0)) {
+      terakan_nir_lower_bindings_instr_to_null(&intrinsic->instr);
+      return;
+   }
+
+   uint8_t const first_srv_index = TERAKAN_SRV_RANGE_MUTABLE_BASE + mutable_srv_binding.base;
+   BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index,
+                    first_srv_index + (mutable_srv_binding.array_size - (uint8_t)1));
+   nir_def_replace(
+      &intrinsic->def,
+      nir_channel(builder,
+                  nir_texture_resource_info_ms_r600(
+                     builder, 32, nir_mov_scalar(builder, mutable_srv_binding.array_index_opt),
+                     .access = nir_intrinsic_access(intrinsic) & ACCESS_INCLUDE_HELPERS,
+                     .binding = first_srv_index),
+                  3));
 }
 
 static bool
@@ -1671,7 +1939,14 @@ terakan_nir_lower_bindings_instr(nir_builder * const builder, nir_instr * const 
          terakan_nir_lower_bindings_instr_image_atomic(builder, intrinsic, state);
          return true;
       case nir_intrinsic_bindless_image_size:
-         return terakan_nir_lower_bindings_instr_image_size(builder, intrinsic, state);
+         terakan_nir_lower_bindings_instr_image_size(builder, intrinsic, state);
+         return true;
+      case nir_intrinsic_bindless_image_levels:
+         terakan_nir_lower_bindings_instr_image_levels(builder, intrinsic, state);
+         return true;
+      case nir_intrinsic_bindless_image_samples:
+         terakan_nir_lower_bindings_instr_image_samples(builder, intrinsic, state);
+         return true;
       default:
          break;
       }

@@ -138,6 +138,7 @@ struct terakan_nir_get_pipeline_layout_binding_functions {
    terakan_nir_get_pipeline_layout_binding_function sampler;
    terakan_nir_get_pipeline_layout_binding_function sampled_image;
    terakan_nir_get_pipeline_layout_binding_function storage_image;
+   terakan_nir_get_pipeline_layout_binding_function uniform_texel_buffer;
    terakan_nir_get_pipeline_layout_binding_function storage_texel_buffer;
    terakan_nir_get_pipeline_layout_binding_function uniform_buffer;
    terakan_nir_get_pipeline_layout_binding_function storage_buffer;

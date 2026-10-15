@@ -434,6 +434,16 @@ terakan_vk_pipeline_layout_get_storage_image_binding(nir_binding const * const b
 }
 
 static struct terakan_nir_pipeline_layout_binding
+terakan_vk_pipeline_layout_get_uniform_texel_buffer_binding(nir_binding const * const binding,
+                                                            mesa_shader_stage const stage,
+                                                            void const * const callback_data)
+{
+   static VkDescriptorType const compatible_types[] = {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+                                                       VK_DESCRIPTOR_TYPE_MAX_ENUM};
+   return terakan_vk_pipeline_layout_get_binding(binding, stage, callback_data, compatible_types);
+}
+
+static struct terakan_nir_pipeline_layout_binding
 terakan_vk_pipeline_layout_get_storage_texel_buffer_binding(nir_binding const * const binding,
                                                             mesa_shader_stage const stage,
                                                             void const * const callback_data)
@@ -470,6 +480,7 @@ struct terakan_nir_get_pipeline_layout_binding_functions const
       .sampler = terakan_vk_pipeline_layout_get_sampler_binding,
       .sampled_image = terakan_vk_pipeline_layout_get_sampled_image_binding,
       .storage_image = terakan_vk_pipeline_layout_get_storage_image_binding,
+      .uniform_texel_buffer = terakan_vk_pipeline_layout_get_uniform_texel_buffer_binding,
       .storage_texel_buffer = terakan_vk_pipeline_layout_get_storage_texel_buffer_binding,
       .uniform_buffer = terakan_vk_pipeline_layout_get_uniform_buffer_binding,
       .storage_buffer = terakan_vk_pipeline_layout_get_storage_buffer_binding,
