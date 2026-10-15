@@ -656,11 +656,6 @@ TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
       hw_coord_components[2] = hw_coord_components[1];
       hw_coord_components[1] = nullptr;
    }
-   /* TODO(Triang3l): Research array layer zeroing (ideally via `SRC_SEL`) when an array
-    * descriptor is used with a non-array image, if possible, or rather revisit descriptor
-    * dimensionality consistency (whether `TEX_DEPTH` and `BASE_ARRAY` are supported for
-    * non-array `DIM`).
-    */
 
    /* The comparator is in Z when there's an explicit LOD, or in W otherwise. */
    if (tex->is_shadow) {
@@ -678,7 +673,10 @@ TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
       hw_coord_components[3] = vf.src(*lod_src, 0);
    }
 
-   RegisterVec4::Swizzle hw_coord_swizzle{7, 7, 7, 7};
+   /* Set Z to 0 if not provided, so array views can be sampled via non-array bindings,
+    * for more texture resource constant setup flexibility.
+    */
+   RegisterVec4::Swizzle hw_coord_swizzle{7, 7, 4, 7};
    for (uint8_t component_index = 0; component_index < 4; ++component_index) {
       if (hw_coord_components[component_index]) {
          hw_coord_swizzle[component_index] = component_index;
