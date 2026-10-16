@@ -80,7 +80,7 @@ terakan_image_vk_sample_count_to_hw_log2(VkSampleCountFlagBits const sample_coun
 struct terakan_image_surface_level {
    uint32_t offset_in_memory_bytes_shr8;
    uint32_t slice_size_bytes_shr8;
-   /* [2] is depth for 3D, array layers otherwise. */
+   /* [2] is depth for 3D, array layers otherwise. May be padded as necessary along any axes. */
    uint16_t aligned_extent_surfels[3];
    /* 2D is degraded to 1D for small mips. */
    uint8_t array_mode;

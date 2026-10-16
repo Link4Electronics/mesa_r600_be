@@ -620,6 +620,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
 static void
 terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_create_info,
                                      enum terascale_format_index const aspect_format,
+                                     bool const cube_compatible,
                                      struct terakan_physical_device const * const physical_device,
                                      struct terakan_image_surface_tiling const tiling,
                                      uint8_t const base_level_array_mode,
@@ -668,6 +669,23 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    uint8_t level_array_mode = base_level_array_mode;
    bool alignments_are_for_1d_mips = false;
 
+   uint32_t aligned_array_layers = image_create_info->arrayLayers;
+   if (image_create_info->mipLevels > 1u) {
+      /* Pad the array layer count to match the hardware texture fetch mip stride calculations, but
+       * not for single-level images to avoid allocating excess memory.
+       */
+      if (cube_compatible) {
+         /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't
+          * require that the array layer count of a cube-compatible image is a multiple of 6, only
+          * that it's greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
+          */
+         aligned_array_layers =
+            6u * (aligned_array_layers / 6u + (unsigned)(aligned_array_layers % 6u != 0u));
+      }
+      /* TODO(Triang3l): Is this needed for all arrays or only for cubes? */
+      aligned_array_layers = util_next_power_of_two(aligned_array_layers);
+   }
+
    unsigned const mip_surface_power_of_two_axes =
       image_create_info->imageType == VK_IMAGE_TYPE_3D ? 3 : 2;
 
@@ -691,9 +709,8 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
          u_minify(image_create_info->extent.height, level_index),
          image_create_info->imageType == VK_IMAGE_TYPE_3D
             ? u_minify(image_create_info->extent.depth, level_index)
-            : image_create_info->arrayLayers,
+            : aligned_array_layers,
       };
-      /* TODO(Triang3l): Research power of two padding of the array slice count. */
       if (level_index != 0) {
          for (unsigned axis = 0; axis < mip_surface_power_of_two_axes; ++axis) {
             level_extent_compute_pixels_expand_3x[axis] =
@@ -816,6 +833,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
 static void
 terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
                               struct terakan_format_info const * const format_info,
+                              bool const cube_compatible,
                               struct terakan_physical_device const * const physical_device,
                               struct terakan_image_surface * const surface_out)
 {
@@ -853,8 +871,8 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
             image_create_info, format_info, aspect_index, physical_device, &aspect_tiling);
       }
       terakan_image_surface_aspect_compute(
-         image_create_info, format_info->aspect_formats[aspect_index].format, physical_device,
-         aspect_tiling, aspect_array_mode, is_combined_depth_stencil_used_by_db,
+         image_create_info, format_info->aspect_formats[aspect_index].format, cube_compatible,
+         physical_device, aspect_tiling, aspect_array_mode, is_combined_depth_stencil_used_by_db,
          surface_out->size_bytes_shr8, surface_aspect);
       surface_out->alignment_bytes_shr8 =
          MAX2(surface_aspect->alignment_bytes_shr8, surface_out->alignment_bytes_shr8);
@@ -882,7 +900,10 @@ terakan_vk_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
    struct terakan_format_info format_info;
    if (likely(terakan_format_info_get(pInfo->pCreateInfo->format, &format_info))) {
       struct terakan_image_surface surface;
-      terakan_image_surface_compute(pInfo->pCreateInfo, &format_info, physical_device, &surface);
+      terakan_image_surface_compute(
+         pInfo->pCreateInfo, &format_info,
+         (pInfo->pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0, physical_device,
+         &surface);
       pMemoryRequirements->memoryRequirements.size = (VkDeviceSize)surface.size_bytes_shr8 << 8;
       pMemoryRequirements->memoryRequirements.alignment = (VkDeviceSize)surface.alignment_bytes_shr8
                                                           << 8;
@@ -1141,6 +1162,8 @@ terakan_image_create_srv_descriptor(
 
    uint32_t const origin_level =
       extract_single_level ? descriptor_create_info->subresource_range.base_mip_level : 0;
+   struct terakan_image_surface_level const * const surface_origin_level =
+      &surface_aspect->levels[origin_level];
 
    uint32_t origin_level_view_width = u_minify(image->vk.extent.width, origin_level);
    uint32_t origin_level_view_height = u_minify(image->vk.extent.height, origin_level);
@@ -1152,11 +1175,10 @@ terakan_image_create_srv_descriptor(
          (origin_level_view_height + ((1u << image_block_texels_log2[1]) - 1u)) >>
          image_block_texels_log2[1];
    }
-   uint32_t const origin_level_depth_or_array_layers =
-      terakan_image_depth_or_array_layers(image, origin_level);
-
-   struct terakan_image_surface_level const * const surface_origin_level =
-      &surface_aspect->levels[origin_level];
+   uint32_t const origin_level_depth_or_surface_array_layers =
+      desired_dimensionality == V_030000_SQ_TEX_DIM_3D
+         ? u_minify(image->vk.extent.depth, origin_level)
+         : surface_origin_level->aligned_extent_surfels[2];
 
    uint32_t hw_dimensionality;
    bool const is_multisampled = desired_dimensionality == V_030000_SQ_TEX_DIM_2D_MSAA ||
@@ -1165,8 +1187,9 @@ terakan_image_create_srv_descriptor(
       if (image->vk.samples <= VK_SAMPLE_COUNT_1_BIT) {
          return false;
       }
-      hw_dimensionality = origin_level_depth_or_array_layers > 1 ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
-                                                                 : V_030000_SQ_TEX_DIM_2D_MSAA;
+      hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
+                             ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
+                             : V_030000_SQ_TEX_DIM_2D_MSAA;
    } else {
       if (image->vk.samples > VK_SAMPLE_COUNT_1_BIT) {
          return false;
@@ -1176,7 +1199,7 @@ terakan_image_create_srv_descriptor(
       case V_030000_SQ_TEX_DIM_1D_ARRAY:
          if (surface_origin_level->array_mode <= V_028C70_ARRAY_LINEAR_ALIGNED &&
              likely(origin_level_view_height <= 1)) {
-            hw_dimensionality = origin_level_depth_or_array_layers > 1
+            hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
                                    ? V_030000_SQ_TEX_DIM_1D_ARRAY
                                    : V_030000_SQ_TEX_DIM_1D;
             break;
@@ -1185,8 +1208,9 @@ terakan_image_create_srv_descriptor(
          FALLTHROUGH;
       case V_030000_SQ_TEX_DIM_2D:
       case V_030000_SQ_TEX_DIM_2D_ARRAY:
-         hw_dimensionality = origin_level_depth_or_array_layers > 1 ? V_030000_SQ_TEX_DIM_2D_ARRAY
-                                                                    : V_030000_SQ_TEX_DIM_2D;
+         hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
+                                ? V_030000_SQ_TEX_DIM_2D_ARRAY
+                                : V_030000_SQ_TEX_DIM_2D;
          break;
       case V_030000_SQ_TEX_DIM_3D:
          hw_dimensionality = V_030000_SQ_TEX_DIM_3D;
@@ -1205,7 +1229,7 @@ terakan_image_create_srv_descriptor(
 
    uint32_t descriptor_width = origin_level_view_width;
    uint32_t descriptor_height = origin_level_view_height;
-   uint32_t descriptor_depth_or_array_layers = origin_level_depth_or_array_layers;
+   uint32_t descriptor_depth_or_array_layers = origin_level_depth_or_surface_array_layers;
    if (origin_level != 0) {
       /* The base level and mips are stored differently - the hardware rounds the extents up to
        * powers of 2 in memory addressing for mips, but not for the base level.
@@ -1266,8 +1290,9 @@ terakan_image_create_srv_descriptor(
           */
          descriptor_height = origin_level_view_height << 1;
       }
-      if (hw_dimensionality == V_030000_SQ_TEX_DIM_3D && origin_level_depth_or_array_layers > 1) {
-         descriptor_depth_or_array_layers = origin_level_depth_or_array_layers << 1;
+      if (hw_dimensionality == V_030000_SQ_TEX_DIM_3D &&
+          origin_level_depth_or_surface_array_layers > 1) {
+         descriptor_depth_or_array_layers = origin_level_depth_or_surface_array_layers << 1;
       }
       if (descriptor_width <= 1 && descriptor_height <= 1 &&
           (hw_dimensionality != V_030000_SQ_TEX_DIM_3D || descriptor_depth_or_array_layers <= 1)) {
@@ -1291,6 +1316,27 @@ terakan_image_create_srv_descriptor(
             descriptor_height = 2;
          }
       }
+   }
+   uint32_t const descriptor_last_array_layer =
+      hw_dimensionality == V_030000_SQ_TEX_DIM_3D
+         ? descriptor_depth_or_array_layers - 1u
+         : descriptor_create_info->subresource_range.base_z_or_array_layer +
+              (descriptor_create_info->subresource_range.max_depth_or_layer_count - 1u);
+   if (hw_dimensionality == V_030000_SQ_TEX_DIM_CUBEMAP) {
+      /* The hardware accepts the cube count, not the face count. */
+      descriptor_depth_or_array_layers /= 6u;
+      /* For single-level images, the surface face count may be not padded to a multiple of 6 to
+       * avoid allocating excess memory for cube maps whose base face is not a multiple of 6.
+       */
+      if (unlikely(descriptor_last_array_layer >= origin_level_depth_or_surface_array_layers)) {
+         /* #MemoryIntegrity: Prevent creating views of images with the face count not padded to a
+          * multiple of 6 (due to being either single-level or not created as cube-compatible) with
+          * an out-of-bounds face range.
+          */
+         return false;
+      }
+      descriptor_depth_or_array_layers =
+         MAX2(descriptor_depth_or_array_layers, descriptor_last_array_layer / 6u + 1u);
    }
 
    /* For the fake base level when extracting a single mip, it's okay to keep using the pitch of the
@@ -1370,12 +1416,10 @@ terakan_image_create_srv_descriptor(
          S_030010_DST_SEL_Z(view_format.swizzle_b) | S_030010_DST_SEL_W(view_format.swizzle_a);
    }
    descriptor_out->srv[5] =
-      hw_dimensionality == V_030000_SQ_TEX_DIM_3D
-         ? S_030014_LAST_ARRAY(descriptor_depth_or_array_layers - 1)
-         : S_030014_BASE_ARRAY(descriptor_create_info->subresource_range.base_z_or_array_layer) |
-              S_030014_LAST_ARRAY(
-                 descriptor_create_info->subresource_range.base_z_or_array_layer +
-                 (descriptor_create_info->subresource_range.max_depth_or_layer_count - 1));
+      S_030014_BASE_ARRAY(hw_dimensionality == V_030000_SQ_TEX_DIM_3D
+                             ? 0u
+                             : descriptor_create_info->subresource_range.base_z_or_array_layer) |
+      S_030014_LAST_ARRAY(descriptor_last_array_layer);
    /* TODO(Triang3l): `MIN_LOD` for `VK_EXT_image_view_min_lod` (research the base level and out of
     * bounds behavior).
     */
@@ -1753,6 +1797,7 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
    }
 
    terakan_image_surface_compute(pCreateInfo, &image->format_info,
+                                 (pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0,
                                  terakan_device_physical_device(device), &image->surface);
 
    image->bo = NULL;
