@@ -134,6 +134,7 @@ terascale_nir_lower_tex_instr(nir_builder * const builder, nir_tex_instr * const
             /* TODO(Triang3l): Array layer clamping if needed. */
             cube_2d_coord_components[2] =
                nir_ffma_weak_imm1(builder, cube_array_layer, 8.0, cube_2d_coord_components[2]);
+            tex->coord_components = 3;
             tex->array_is_lowered_cube = true;
          }
 
