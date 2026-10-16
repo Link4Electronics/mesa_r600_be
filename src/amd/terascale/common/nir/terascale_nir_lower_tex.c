@@ -130,8 +130,22 @@ terascale_nir_lower_tex_instr(nir_builder * const builder, nir_tex_instr * const
          };
 
          if (tex->is_array) {
-            nir_def * const cube_array_layer = nir_channel(builder, tex_coord_src->ssa, 3);
-            /* TODO(Triang3l): Array layer clamping if needed. */
+            nir_def * cube_array_layer = nir_channel(builder, tex_coord_src->ssa, 3);
+            {
+               /* The hardware clamps the cube index in the array separately from the face, but the
+                * face isn't selected correctly for a negative layer, and the combined layer and
+                * face index must have enough floating-point precision to represent the face index
+                * exactly if the layer index specified by the application is too large. Clamp the
+                * layer index to 0 and the highest cube array element index that can be represented
+                * in a texture resource constant.
+                */
+               uint32_t const old_fp_math_ctrl = builder->fp_math_ctrl;
+               builder->fp_math_ctrl |= nir_fp_preserve_inf;
+               cube_array_layer =
+                  nir_fclamp(builder, cube_array_layer, nir_imm_float(builder, 0.0f),
+                             nir_imm_float(builder, (float)((1 << 13) / 6 - 1)));
+               builder->fp_math_ctrl = old_fp_math_ctrl;
+            }
             cube_2d_coord_components[2] =
                nir_ffma_weak_imm1(builder, cube_array_layer, 8.0, cube_2d_coord_components[2]);
             tex->coord_components = 3;
