@@ -1080,7 +1080,7 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
        * layer count, construct the size from the query instruction result and the layer count from
        * the constant buffer, depending on which components are read.
        */
-      nir_def * layer_count_override = NULL;
+      nir_def * layer_count = NULL;
       if (tex->op == nir_texop_txs && tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE && tex->is_array) {
          unsigned const components_read = nir_def_components_read(&tex->def);
          if (components_read & BITFIELD_BIT(2)) {
@@ -1091,13 +1091,13 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
              *     "If `Level of Detail` is greater than or equal to
              *     `VkImageSubresourceRange::levelCount`, the result is undefined."
              */
-            layer_count_override = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+            layer_count = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
                builder, hw_mutable_srv_binding.base, hw_binding_array_index, include_helpers,
                state);
             if (!(components_read & BITFIELD_MASK(2))) {
                nir_def * const undef = nir_undef(builder, 1, 32);
                assert(tex->def.num_components == 3);
-               nir_def_replace(&tex->def, nir_vec3(builder, undef, undef, layer_count_override));
+               nir_def_replace(&tex->def, nir_vec3(builder, undef, undef, layer_count));
                return true;
             }
          }
@@ -1135,9 +1135,17 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
             nir_channel(builder, texture_info, component_index);
       }
       if (tex->is_array) {
-         texture_size_components[layer_size_num_components] =
-            layer_count_override != NULL ? layer_count_override
-                                         : nir_channel(builder, texture_info, 2);
+         if (layer_count == NULL) {
+            layer_count = nir_channel(builder, texture_info, 2);
+            if (tex->sampler_dim == GLSL_SAMPLER_DIM_1D) {
+               /* For 1D array views, `GET_TEXTURE_RESINFO` returns the layer count in Y and 0 in Z,
+                * but they may be promoted to 2D.
+                */
+               layer_count = nir_icsel_eqz(builder, layer_count,
+                                           nir_channel(builder, texture_info, 1), layer_count);
+            }
+         }
+         texture_size_components[layer_size_num_components] = layer_count;
       }
       nir_def_replace(&tex->def,
                       nir_vec(builder, texture_size_components, tex->def.num_components));
@@ -1802,16 +1810,16 @@ terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
     * count, construct the size from the query instruction result and the layer count from the
     * constant buffer, depending on which components are read.
     */
-   nir_def * layer_count_override = NULL;
+   nir_def * layer_count = NULL;
    if (dimensionality == GLSL_SAMPLER_DIM_CUBE && is_array) {
       unsigned const components_read = nir_def_components_read(&intrinsic->def);
       if (components_read & BITFIELD_BIT(2)) {
-         layer_count_override = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
+         layer_count = terakan_nir_load_resinfo_constants_cube_elements_or_buffer_size(
             builder, mutable_srv_binding.base, binding_array_index, include_helpers, state);
          if (!(components_read & BITFIELD_MASK(2))) {
             nir_def * const undef = nir_undef(builder, 1, 32);
             assert(intrinsic->def.num_components == 3);
-            nir_def_replace(&intrinsic->def, nir_vec3(builder, undef, undef, layer_count_override));
+            nir_def_replace(&intrinsic->def, nir_vec3(builder, undef, undef, layer_count));
             return;
          }
       }
@@ -1833,8 +1841,17 @@ terakan_nir_lower_bindings_instr_image_size(nir_builder * const builder,
       size_components[component_index] = nir_channel(builder, image_info, component_index);
    }
    if (is_array) {
-      size_components[layer_size_num_components] =
-         layer_count_override != NULL ? layer_count_override : nir_channel(builder, image_info, 2);
+      if (layer_count == NULL) {
+         layer_count = nir_channel(builder, image_info, 2);
+         if (dimensionality == GLSL_SAMPLER_DIM_1D) {
+            /* For 1D array views, `GET_TEXTURE_RESINFO` returns the layer count in Y and 0 in Z,
+             * but they may be promoted to 2D.
+             */
+            layer_count = nir_icsel_eqz(builder, layer_count, nir_channel(builder, image_info, 1),
+                                        layer_count);
+         }
+      }
+      size_components[layer_size_num_components] = layer_count;
    }
    nir_def_replace(&intrinsic->def,
                    nir_vec(builder, size_components, intrinsic->def.num_components));
