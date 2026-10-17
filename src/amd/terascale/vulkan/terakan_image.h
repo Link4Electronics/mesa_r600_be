@@ -241,6 +241,9 @@ struct terakan_image_descriptor_create_info {
  * is similar to what `VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT` allows for color attachments).
  * Also, for transfers, cross-aspect reinterpretation is allowed.
  *
+ * Non-array 1D and 2D SRVs may be created only for single-slice images, as the hardware disregards
+ * `BASE_ARRAY` and even `TEX_DEPTH` for them.
+ *
  * If `component_mapping_opt` is NULL, an identity component mapping will be used.
  *
  * `terakan_image_descriptor_subresource_range_sanitize` must be done before calling.

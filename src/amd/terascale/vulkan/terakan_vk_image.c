@@ -28,6 +28,7 @@
 #include "terakan_vk_entrypoints.h"
 
 #include "gallium/drivers/r600/evergreend.h"
+#include "util/compiler.h"
 #include "util/macros.h"
 #include "util/u_math.h"
 #include "vk_alloc.h"
@@ -112,27 +113,30 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
       view_format_info.aspect_formats[view_format_main_aspect_index];
    descriptor_create_info.image_aspect_index = image_format_main_aspect_index;
 
-   uint32_t srv_dimensionality = V_030000_SQ_TEX_DIM_1D;
-   uint32_t color_resource_type = V_028C70_TEXTURE1D;
+   /* Always using array hardware view dimensionalities for non-array Vulkan view types with the
+    * array layer zeroed in shaders, because the hardware doesn't support non-array 1D and 2D views
+    * for `VkImage`s with multiple slices.
+    * Also, with `VK_IMAGE_CREATE_ALIAS_SINGLE_LAYER_DESCRIPTOR_BIT_KHR`, whether the shader binding
+    * is arrayed must override whether the view is arrayed, and layer count queries (returning 0 for
+    * non-array dimensionalities in the hardware) and access robustness must work as expected by the
+    * shader binding type.
+    */
+   uint32_t srv_dimensionality = V_030000_SQ_TEX_DIM_2D_ARRAY;
+   uint32_t color_resource_type = V_028C70_TEXTURE2DARRAY;
    switch (pCreateInfo->viewType) {
-   case VK_IMAGE_VIEW_TYPE_1D:
-      srv_dimensionality = V_030000_SQ_TEX_DIM_1D;
-      color_resource_type = V_028C70_TEXTURE1D;
-      break;
    case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          pCreateInfo->subresourceRange.layerCount;
+      FALLTHROUGH;
+   case VK_IMAGE_VIEW_TYPE_1D:
       srv_dimensionality = V_030000_SQ_TEX_DIM_1D_ARRAY;
       color_resource_type = V_028C70_TEXTURE1DARRAY;
-      break;
-   case VK_IMAGE_VIEW_TYPE_2D:
-      srv_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT ? V_030000_SQ_TEX_DIM_2D_MSAA
-                                                                     : V_030000_SQ_TEX_DIM_2D;
-      color_resource_type = V_028C70_TEXTURE2D;
       break;
    case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
          pCreateInfo->subresourceRange.layerCount;
+      FALLTHROUGH;
+   case VK_IMAGE_VIEW_TYPE_2D:
       srv_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT
                               ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
                               : V_030000_SQ_TEX_DIM_2D_ARRAY;

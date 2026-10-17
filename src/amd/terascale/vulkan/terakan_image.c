@@ -1199,61 +1199,50 @@ terakan_image_create_srv_descriptor(
          (origin_level_view_height + ((1u << image_block_texels_log2[1]) - 1u)) >>
          image_block_texels_log2[1];
    }
-   uint32_t const origin_level_depth_or_level_stride_array_layers =
-      desired_dimensionality == V_030000_SQ_TEX_DIM_3D
-         ? u_minify(image->vk.extent.depth, origin_level)
-         : image->surface.level_stride_array_layers;
 
-   uint32_t hw_dimensionality;
+   uint32_t hw_dimensionality = desired_dimensionality;
    bool const is_multisampled = desired_dimensionality == V_030000_SQ_TEX_DIM_2D_MSAA ||
                                 desired_dimensionality == V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA;
    if (is_multisampled) {
       if (image->vk.samples <= VK_SAMPLE_COUNT_1_BIT) {
+         /* #MemoryIntegrity. */
          return false;
       }
-      hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
-                             ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
-                             : V_030000_SQ_TEX_DIM_2D_MSAA;
    } else {
       if (image->vk.samples > VK_SAMPLE_COUNT_1_BIT) {
+         /* #MemoryIntegrity. */
          return false;
       }
-      switch (desired_dimensionality) {
-      case V_030000_SQ_TEX_DIM_1D:
-      case V_030000_SQ_TEX_DIM_1D_ARRAY:
-         if (surface_origin_level->array_mode <= V_028C70_ARRAY_LINEAR_ALIGNED &&
-             likely(origin_level_view_height <= 1)) {
-            hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
-                                   ? V_030000_SQ_TEX_DIM_1D_ARRAY
-                                   : V_030000_SQ_TEX_DIM_1D;
-            break;
+      if (surface_origin_level->array_mode > V_028C70_ARRAY_LINEAR_ALIGNED ||
+          unlikely(origin_level_view_height > 1u)) {
+         /* Promote images not compatible with 1D descriptors to 2D, expecting shaders to sample
+          * them at Y = 0.5.
+          * DB requires tiling, so 1D images with depth / stencil usage will be tiled, thus they
+          * have to be accessed as 2D.
+          */
+         if (hw_dimensionality == V_030000_SQ_TEX_DIM_1D) {
+            hw_dimensionality = V_030000_SQ_TEX_DIM_2D;
+         } else if (hw_dimensionality == V_030000_SQ_TEX_DIM_1D_ARRAY) {
+            hw_dimensionality = V_030000_SQ_TEX_DIM_2D_ARRAY;
          }
-         /* Promote images not compatible with 1D descriptors to 2D. */
-         FALLTHROUGH;
-      case V_030000_SQ_TEX_DIM_2D:
-      case V_030000_SQ_TEX_DIM_2D_ARRAY:
-         hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
-                                ? V_030000_SQ_TEX_DIM_2D_ARRAY
-                                : V_030000_SQ_TEX_DIM_2D;
-         break;
-      case V_030000_SQ_TEX_DIM_3D:
-         hw_dimensionality = V_030000_SQ_TEX_DIM_3D;
-         break;
-      case V_030000_SQ_TEX_DIM_CUBEMAP:
-         if (unlikely(origin_level_view_width != origin_level_view_height)) {
-            return false;
-         }
-         hw_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
-         break;
-      default:
-         assert(!"Unsupported image SRV descriptor dimensionality");
-         return false;
       }
    }
 
    uint32_t descriptor_width = origin_level_view_width;
    uint32_t descriptor_height = origin_level_view_height;
-   uint32_t descriptor_depth_or_array_layers = origin_level_depth_or_level_stride_array_layers;
+   uint32_t descriptor_depth_or_array_layers = image->vk.image_type == VK_IMAGE_TYPE_3D
+                                                  ? u_minify(image->vk.extent.depth, origin_level)
+                                                  : image->surface.level_stride_array_layers;
+   assert(
+      !((desired_dimensionality == V_030000_SQ_TEX_DIM_1D ||
+         desired_dimensionality == V_030000_SQ_TEX_DIM_2D ||
+         desired_dimensionality == V_030000_SQ_TEX_DIM_2D_MSAA) &&
+        (descriptor_depth_or_array_layers > 1u ||
+         descriptor_create_info->subresource_range.base_z_or_array_layer != 0u ||
+         descriptor_create_info->subresource_range.max_depth_or_layer_count > 1u)) &&
+      "For non-array 1D and 2D SRVs, hardware texture sampling disregards `BASE_ARRAY` and even "
+      "`TEX_DEPTH`. To use array texture functionality, the client API implementation must "
+      "explicitly specify an array dimensionality when creating an SRV.");
    if (origin_level != 0) {
       /* The base level and mips are stored differently - the hardware rounds the extents up to
        * powers of 2 in memory addressing for mips, but not for the base level.
@@ -1314,9 +1303,8 @@ terakan_image_create_srv_descriptor(
           */
          descriptor_height = origin_level_view_height << 1;
       }
-      if (hw_dimensionality == V_030000_SQ_TEX_DIM_3D &&
-          origin_level_depth_or_level_stride_array_layers > 1) {
-         descriptor_depth_or_array_layers = origin_level_depth_or_level_stride_array_layers << 1;
+      if (hw_dimensionality == V_030000_SQ_TEX_DIM_3D && descriptor_depth_or_array_layers > 1u) {
+         descriptor_depth_or_array_layers <<= 1;
       }
       if (descriptor_width <= 1 && descriptor_height <= 1 &&
           (hw_dimensionality != V_030000_SQ_TEX_DIM_3D || descriptor_depth_or_array_layers <= 1)) {
