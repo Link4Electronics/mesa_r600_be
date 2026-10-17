@@ -1160,6 +1160,7 @@ terakan_physical_device_init(struct terakan_physical_device * const device,
       .has_umad24 = true,
 
       .has_fused_comp_and_csel = true,
+      .has_icsel_eqz32 = true,
 
       .has_fsub = true,
       .has_isub = true,
