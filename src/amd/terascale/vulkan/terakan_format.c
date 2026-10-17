@@ -393,8 +393,12 @@ terakan_vk_GetPhysicalDeviceImageFormatProperties2(
    case VK_IMAGE_TYPE_2D:
       image_format_properties.maxExtent.height = TERAKAN_IMAGE_MAX_WIDTH_HEIGHT;
       image_format_properties.maxExtent.depth = 1;
+      /* For cube maps, SRV descriptors store the image layer count in cubes. */
       image_format_properties.maxArrayLayers =
-         is_target ? TERAKAN_IMAGE_MAX_TARGET_SLICES : TERAKAN_IMAGE_MAX_SLICES;
+         is_target ? TERAKAN_IMAGE_MAX_TARGET_SLICES
+                   : (pImageFormatInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+                         ? TERAKAN_IMAGE_MAX_SLICES / 6u * 6u
+                         : TERAKAN_IMAGE_MAX_SLICES);
       break;
    case VK_IMAGE_TYPE_3D:
       image_format_properties.maxExtent.height = TERAKAN_IMAGE_MAX_WIDTH_HEIGHT;

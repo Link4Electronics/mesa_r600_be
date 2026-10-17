@@ -619,8 +619,8 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
 /* On failure, the output is left in an undefined state. */
 static void
 terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_create_info,
+                                     uint32_t const level_stride_array_layers,
                                      enum terascale_format_index const aspect_format,
-                                     bool const cube_compatible,
                                      struct terakan_physical_device const * const physical_device,
                                      struct terakan_image_surface_tiling const tiling,
                                      uint8_t const base_level_array_mode,
@@ -669,22 +669,8 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    uint8_t level_array_mode = base_level_array_mode;
    bool alignments_are_for_1d_mips = false;
 
-   uint32_t aligned_array_layers = image_create_info->arrayLayers;
-   if (image_create_info->mipLevels > 1u) {
-      /* Pad the array layer count to match the hardware texture fetch mip stride calculations, but
-       * not for single-level images to avoid allocating excess memory.
-       */
-      if (cube_compatible) {
-         /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't
-          * require that the array layer count of a cube-compatible image is a multiple of 6, only
-          * that it's greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
-          */
-         aligned_array_layers =
-            6u * (aligned_array_layers / 6u + (unsigned)(aligned_array_layers % 6u != 0u));
-      }
-      /* TODO(Triang3l): Is this needed for all arrays or only for cubes? */
-      aligned_array_layers = util_next_power_of_two(aligned_array_layers);
-   }
+   uint32_t const level_stride_array_layers_power_of_two =
+      util_next_power_of_two(level_stride_array_layers);
 
    unsigned const mip_surface_power_of_two_axes =
       image_create_info->imageType == VK_IMAGE_TYPE_3D ? 3 : 2;
@@ -707,9 +693,31 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
       uint32_t level_extent_compute_pixels_expand_3x[] = {
          surfels_per_block * u_minify(image_create_info->extent.width, level_index),
          u_minify(image_create_info->extent.height, level_index),
+         /* For arrays, the texture fetch hardware rounds the total number of layers to a power of
+          * two when computing the level stride.
+          * To avoid allocating excess memory, not padding the array layer count to a power of two
+          * for the last level, which may be especially significant for single-level images. DRM
+          * Radeon 2.51.0 as of October 17, 2026 validates the BO size for non-3D SRVs based on
+          * `LAST_ARRAY` rather than `TEX_DEPTH`, and is not aware of the power of two rounding.
+          *
+          * This trimming is not done for the last mip of 3D images, as for them, DRM Radeon 2.51.0
+          * validates the BO size using the level depth that is rounded to a power of two for
+          * non-base mips.
+          *
+          * Note that the last level trimming also can be done for the padding of cube map face
+          * count to a multiple of 6 (if the application uses views with a base layer that's not a
+          * multiple of 6), but this is not done for safety against potential future kernel driver
+          * changes making the validation too restrictive - allocating memory for all
+          * `6 * (TEX_DEPTH + 1)` layers in case the validation starts using `TEX_DEPTH` rather than
+          * `LAST_ARRAY` even for the memory range of the last level, for instance. As of
+          * October 17, 2026, however, this padding may be trimmed away on DRM Radeon 2.51.0, but
+          * cube maps with a base layer that's not a multiple of 6 are expected to be rare anyway.
+          */
          image_create_info->imageType == VK_IMAGE_TYPE_3D
             ? u_minify(image_create_info->extent.depth, level_index)
-            : aligned_array_layers,
+            : (level_index + 1u < image_create_info->mipLevels
+                  ? level_stride_array_layers_power_of_two
+                  : level_stride_array_layers),
       };
       if (level_index != 0) {
          for (unsigned axis = 0; axis < mip_surface_power_of_two_axes; ++axis) {
@@ -843,6 +851,21 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
    surface_out->alignment_bytes_shr8 = 1;
    surface_out->size_bytes_shr8 = 0;
 
+   surface_out->level_stride_array_layers = image_create_info->arrayLayers;
+   if (cube_compatible) {
+      /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't require
+       * that the array layer count of a cube-compatible image is a multiple of 6, only that it's
+       * greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
+       *
+       * Expecting the driver not to expose support for more than `TERAKAN_IMAGE_MAX_SLICES / 6 * 6`
+       * layers for cube-compatible images, so the layer count can be specified in `TEX_DEPTH` for
+       * non-cube views of them.
+       */
+      surface_out->level_stride_array_layers =
+         6u * (surface_out->level_stride_array_layers / 6u +
+               (unsigned)(surface_out->level_stride_array_layers));
+   }
+
    VkImageAspectFlagBits const * const aspect_map_aspects =
       terakan_format_aspect_map_aspects[format_info->aspect_map];
 
@@ -871,9 +894,10 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
             image_create_info, format_info, aspect_index, physical_device, &aspect_tiling);
       }
       terakan_image_surface_aspect_compute(
-         image_create_info, format_info->aspect_formats[aspect_index].format, cube_compatible,
-         physical_device, aspect_tiling, aspect_array_mode, is_combined_depth_stencil_used_by_db,
-         surface_out->size_bytes_shr8, surface_aspect);
+         image_create_info, surface_out->level_stride_array_layers,
+         format_info->aspect_formats[aspect_index].format, physical_device, aspect_tiling,
+         aspect_array_mode, is_combined_depth_stencil_used_by_db, surface_out->size_bytes_shr8,
+         surface_aspect);
       surface_out->alignment_bytes_shr8 =
          MAX2(surface_aspect->alignment_bytes_shr8, surface_out->alignment_bytes_shr8);
       surface_out->size_bytes_shr8 =
@@ -1175,10 +1199,10 @@ terakan_image_create_srv_descriptor(
          (origin_level_view_height + ((1u << image_block_texels_log2[1]) - 1u)) >>
          image_block_texels_log2[1];
    }
-   uint32_t const origin_level_depth_or_surface_array_layers =
+   uint32_t const origin_level_depth_or_level_stride_array_layers =
       desired_dimensionality == V_030000_SQ_TEX_DIM_3D
          ? u_minify(image->vk.extent.depth, origin_level)
-         : surface_origin_level->aligned_extent_surfels[2];
+         : image->surface.level_stride_array_layers;
 
    uint32_t hw_dimensionality;
    bool const is_multisampled = desired_dimensionality == V_030000_SQ_TEX_DIM_2D_MSAA ||
@@ -1187,7 +1211,7 @@ terakan_image_create_srv_descriptor(
       if (image->vk.samples <= VK_SAMPLE_COUNT_1_BIT) {
          return false;
       }
-      hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
+      hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
                              ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
                              : V_030000_SQ_TEX_DIM_2D_MSAA;
    } else {
@@ -1199,7 +1223,7 @@ terakan_image_create_srv_descriptor(
       case V_030000_SQ_TEX_DIM_1D_ARRAY:
          if (surface_origin_level->array_mode <= V_028C70_ARRAY_LINEAR_ALIGNED &&
              likely(origin_level_view_height <= 1)) {
-            hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
+            hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
                                    ? V_030000_SQ_TEX_DIM_1D_ARRAY
                                    : V_030000_SQ_TEX_DIM_1D;
             break;
@@ -1208,7 +1232,7 @@ terakan_image_create_srv_descriptor(
          FALLTHROUGH;
       case V_030000_SQ_TEX_DIM_2D:
       case V_030000_SQ_TEX_DIM_2D_ARRAY:
-         hw_dimensionality = origin_level_depth_or_surface_array_layers > 1
+         hw_dimensionality = origin_level_depth_or_level_stride_array_layers > 1
                                 ? V_030000_SQ_TEX_DIM_2D_ARRAY
                                 : V_030000_SQ_TEX_DIM_2D;
          break;
@@ -1229,7 +1253,7 @@ terakan_image_create_srv_descriptor(
 
    uint32_t descriptor_width = origin_level_view_width;
    uint32_t descriptor_height = origin_level_view_height;
-   uint32_t descriptor_depth_or_array_layers = origin_level_depth_or_surface_array_layers;
+   uint32_t descriptor_depth_or_array_layers = origin_level_depth_or_level_stride_array_layers;
    if (origin_level != 0) {
       /* The base level and mips are stored differently - the hardware rounds the extents up to
        * powers of 2 in memory addressing for mips, but not for the base level.
@@ -1291,8 +1315,8 @@ terakan_image_create_srv_descriptor(
          descriptor_height = origin_level_view_height << 1;
       }
       if (hw_dimensionality == V_030000_SQ_TEX_DIM_3D &&
-          origin_level_depth_or_surface_array_layers > 1) {
-         descriptor_depth_or_array_layers = origin_level_depth_or_surface_array_layers << 1;
+          origin_level_depth_or_level_stride_array_layers > 1) {
+         descriptor_depth_or_array_layers = origin_level_depth_or_level_stride_array_layers << 1;
       }
       if (descriptor_width <= 1 && descriptor_height <= 1 &&
           (hw_dimensionality != V_030000_SQ_TEX_DIM_3D || descriptor_depth_or_array_layers <= 1)) {
@@ -1317,26 +1341,15 @@ terakan_image_create_srv_descriptor(
          }
       }
    }
-   uint32_t const descriptor_last_array_layer =
-      hw_dimensionality == V_030000_SQ_TEX_DIM_3D
-         ? descriptor_depth_or_array_layers - 1u
-         : descriptor_create_info->subresource_range.base_z_or_array_layer +
-              (descriptor_create_info->subresource_range.max_depth_or_layer_count - 1u);
    if (hw_dimensionality == V_030000_SQ_TEX_DIM_CUBEMAP) {
-      /* The hardware accepts the cube count, not the face count. */
-      descriptor_depth_or_array_layers /= 6u;
-      /* For single-level images, the surface face count may be not padded to a multiple of 6 to
-       * avoid allocating excess memory for cube maps whose base face is not a multiple of 6.
-       */
-      if (unlikely(descriptor_last_array_layer >= origin_level_depth_or_surface_array_layers)) {
-         /* #MemoryIntegrity: Prevent creating views of images with the face count not padded to a
-          * multiple of 6 (due to being either single-level or not created as cube-compatible) with
-          * an out-of-bounds face range.
+      /* The hardware accepts the cube count, not the face count, in `TEX_DEPTH`. */
+      if (unlikely(descriptor_depth_or_array_layers % 6u != 0u)) {
+         /* #MemoryIntegrity: Expecting that the layer count is padded to a multiple of 6, so it can
+          * be specified exactly without underestimating and especially without overestimating.
           */
          return false;
       }
-      descriptor_depth_or_array_layers =
-         MAX2(descriptor_depth_or_array_layers, descriptor_last_array_layer / 6u + 1u);
+      descriptor_depth_or_array_layers /= 6u;
    }
 
    /* For the fake base level when extracting a single mip, it's okay to keep using the pitch of the
@@ -1416,10 +1429,12 @@ terakan_image_create_srv_descriptor(
          S_030010_DST_SEL_Z(view_format.swizzle_b) | S_030010_DST_SEL_W(view_format.swizzle_a);
    }
    descriptor_out->srv[5] =
-      S_030014_BASE_ARRAY(hw_dimensionality == V_030000_SQ_TEX_DIM_3D
-                             ? 0u
-                             : descriptor_create_info->subresource_range.base_z_or_array_layer) |
-      S_030014_LAST_ARRAY(descriptor_last_array_layer);
+      hw_dimensionality == V_030000_SQ_TEX_DIM_3D
+         ? S_030014_LAST_ARRAY(descriptor_depth_or_array_layers - 1)
+         : S_030014_BASE_ARRAY(descriptor_create_info->subresource_range.base_z_or_array_layer) |
+              S_030014_LAST_ARRAY(
+                 descriptor_create_info->subresource_range.base_z_or_array_layer +
+                 (descriptor_create_info->subresource_range.max_depth_or_layer_count - 1));
    /* TODO(Triang3l): `MIN_LOD` for `VK_EXT_image_view_min_lod` (research the base level and out of
     * bounds behavior).
     */

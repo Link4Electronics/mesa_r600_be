@@ -124,6 +124,11 @@ struct terakan_image_surface {
    uint32_t alignment_bytes_shr8;
    uint32_t size_bytes_shr8;
 
+   /* Padded array layer count that must be used when constructing SRV descriptors for non-3D
+    * images.
+    */
+   uint32_t level_stride_array_layers;
+
    /* If the image has a combined depth and stencil format and has DB usage enabled, DB register
     * fields shared between depth and stencil are the same for the two aspects.
     */
