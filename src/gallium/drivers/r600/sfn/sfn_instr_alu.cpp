@@ -1877,6 +1877,8 @@ AluInstr::from_nir(nir_alu_instr *alu, Shader& shader)
       return emit_alu_op2_int(*alu, op2_and_int, shader);
    case nir_op_ibfe:
       return emit_alu_op3(*alu, op3_bfe_int, shader);
+   case nir_op_icsel_eqz:
+      return emit_alu_op3(*alu, op3_cnde_int, shader, {0, 1, 2});
    case nir_op_i32csel_ge:
       return emit_alu_op3(*alu, op3_cndge_int, shader, {0, 1, 2});
    case nir_op_i32csel_gt:
