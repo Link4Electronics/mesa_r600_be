@@ -695,6 +695,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
          u_minify(image_create_info->extent.height, level_index),
          /* For arrays, the texture fetch hardware rounds the total number of layers to a power of
           * two when computing the level stride.
+          *
           * To avoid allocating excess memory, not padding the array layer count to a power of two
           * for the last level, which may be especially significant for single-level images. DRM
           * Radeon 2.51.0 as of October 17, 2026 validates the BO size for non-3D SRVs based on
@@ -712,6 +713,14 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
           * `LAST_ARRAY` even for the memory range of the last level, for instance. As of
           * October 17, 2026, however, this padding may be trimmed away on DRM Radeon 2.51.0, but
           * cube maps with a base layer that's not a multiple of 6 are expected to be rare anyway.
+          *
+          * Ideally, regardless of the dimensionality, the kernel driver should validate whether
+          * each level is within the BO according to the memory extent of the texels actually
+          * addressable via the descriptor (thus avoiding as much padding as reasonably possible,
+          * including rounding the slice count to a power of two for both arrays and 3D mips, and
+          * the slices beyond `LAST_ARRAY` for both arrays and cube maps), but advance the offset to
+          * the next level based on padded strides. However, any potential changes need to have edge
+          * cases thoroughly tested on the hardware.
           */
          image_create_info->imageType == VK_IMAGE_TYPE_3D
             ? u_minify(image_create_info->extent.depth, level_index)
