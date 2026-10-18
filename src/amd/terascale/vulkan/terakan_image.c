@@ -672,8 +672,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    uint32_t const level_stride_array_layers_power_of_two =
       util_next_power_of_two(level_stride_array_layers);
 
-   unsigned const mip_surface_power_of_two_axes =
-      image_create_info->imageType == VK_IMAGE_TYPE_3D ? 3 : 2;
+   unsigned const minified_axis_count = image_create_info->imageType == VK_IMAGE_TYPE_3D ? 3 : 2;
 
    assert(image_create_info->mipLevels <= ARRAY_SIZE(surface_aspect_out->levels));
    for (uint32_t level_index = 0; level_index < image_create_info->mipLevels; ++level_index) {
@@ -729,7 +728,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
                   : level_stride_array_layers),
       };
       if (level_index != 0) {
-         for (unsigned axis = 0; axis < mip_surface_power_of_two_axes; ++axis) {
+         for (unsigned axis = 0; axis < minified_axis_count; ++axis) {
             level_extent_compute_pixels_expand_3x[axis] =
                util_next_power_of_two(level_extent_compute_pixels_expand_3x[axis]);
          }
