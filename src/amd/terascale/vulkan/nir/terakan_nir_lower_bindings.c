@@ -978,28 +978,21 @@ terakan_nir_image_uav_coord(nir_builder * const builder, nir_def * const image_c
    /* Buffers need separate handling due to the UAV alignment offset. */
    assert(dimensionality != GLSL_SAMPLER_DIM_BUF);
 
-   unsigned uav_coord_num_components = 2;
-   nir_def * uav_coord_components[3] = {
-      nir_channel(builder, image_coord, 0),
-      /* 1D images may be promoted to 2D if they're tiled (such as if they're used by DB), so always
-       * specify Y = 0 for them.
-       */
-      dimensionality == GLSL_SAMPLER_DIM_1D ? nir_imm_zero(builder, 1, 32)
-                                            : nir_channel(builder, image_coord, 1),
-   };
-
-   /* The hardware accepts the array layer in Z for both 1D and 2D/3D. It's relevant only if
-    * `RESOURCE_TYPE` is `TEXTURE#DARRAY` or `TEXTURE3D`. UAV instructions don't accept a coordinate
-    * swizzle, so don't initialize the array layer if it's not needed to avoid emitting an ALU
-    * instruction for it.
+   /* 1D images may be promoted to 2D if they're tiled, such as if they're used by DB, so always
+    * specify Y = 0 for them.
+    *
+    * The hardware accepts the array layer in Z for both 1D and 2D/3D, but array views may be bound
+    * to non-array bindings, as that's required for UAVs with a nonzero base array layer, and also
+    * for `VK_IMAGE_CREATE_ALIAS_SINGLE_LAYER_DESCRIPTOR_BIT_KHR`, so set Z to 0 when not used by
+    * the binding dimensionality.
     */
-   if (dimensionality == GLSL_SAMPLER_DIM_3D || is_array) {
-      uav_coord_num_components = 3;
-      uav_coord_components[2] =
-         nir_channel(builder, image_coord, dimensionality == GLSL_SAMPLER_DIM_1D ? 1 : 2);
-   }
-
-   return nir_vec(builder, uav_coord_components, uav_coord_num_components);
+   return nir_vec3(
+      builder, nir_channel(builder, image_coord, 0),
+      dimensionality != GLSL_SAMPLER_DIM_1D ? nir_channel(builder, image_coord, 1)
+                                            : nir_imm_zero(builder, 1, 32),
+      dimensionality == GLSL_SAMPLER_DIM_3D || is_array
+         ? nir_channel(builder, image_coord, dimensionality == GLSL_SAMPLER_DIM_1D ? 1 : 2)
+         : nir_imm_zero(builder, 1, 32));
 }
 
 static bool
