@@ -1482,6 +1482,15 @@ terakan_image_create_color_descriptor(
    struct terakan_color_descriptor * const descriptor_out,
    struct terakan_color_meta_descriptor * const meta_descriptor_out_opt)
 {
+   assert(
+      !((desired_info_resource_type == V_028C70_TEXTURE1D ||
+         desired_info_resource_type == V_028C70_TEXTURE2D) &&
+        (descriptor_create_info->subresource_range.base_z_or_array_layer != 0u ||
+         descriptor_create_info->subresource_range.max_depth_or_layer_count > 1u)) &&
+      "For non-array 1D and 2D UAVs, the hardware disregards `SLICE_START`. To use array UAV "
+      "functionality, the client API implementation must explicitly specify an array resource type "
+      "when creating a color descriptor.");
+
    assert(descriptor_create_info->image_aspect_index < TERAKAN_FORMAT_MAX_ASPECTS);
 
    struct terascale_format_info const view_format = descriptor_create_info->view_format;

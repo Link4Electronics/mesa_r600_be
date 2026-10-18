@@ -273,6 +273,10 @@ bool terakan_image_create_srv_descriptor(
  *
  * For transfer implementation purposes, cross-aspect reinterpretation is allowed.
  *
+ * Non-array 1D and 2D UAVs may be created only for the first slice, as the hardware disregards
+ * `SLICE_START` for them. For 3D UAVs, the Z range is respected, however, according to testing on
+ * Barts, Turks and Devastator.
+ *
  * `terakan_image_descriptor_subresource_range_sanitize` must be done before calling.
  */
 uint32_t terakan_image_create_color_descriptor(
