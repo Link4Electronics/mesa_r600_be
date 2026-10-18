@@ -669,11 +669,6 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    uint8_t level_array_mode = base_level_array_mode;
    bool alignments_are_for_1d_mips = false;
 
-   uint32_t const level_stride_array_layers_power_of_two =
-      util_next_power_of_two(level_stride_array_layers);
-
-   unsigned const minified_axis_count = image_create_info->imageType == VK_IMAGE_TYPE_3D ? 3 : 2;
-
    assert(image_create_info->mipLevels <= ARRAY_SIZE(surface_aspect_out->levels));
    for (uint32_t level_index = 0; level_index < image_create_info->mipLevels; ++level_index) {
       struct terakan_image_surface_level * const level = &surface_aspect_out->levels[level_index];
@@ -689,46 +684,31 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
        *     power-of-two for mipmaps), which results in the original pitch."
        */
 
+      /* Note that padding of the last level to power of two slices, and similarly of the layer
+       * count of cube-compatible 2D array images (the maximum `LAST_ARRAY + 1`) to multiples of 6
+       * for cube map SRV `TEX_DEPTH` (which is specified in cubes), should likely be unnecessary
+       * from the hardware access point of view, and in theory could be skipped to allocate slightly
+       * smaller amounts of memory, but it's still done here to rely less on the precision of extent
+       * estimation in submission validation in the kernel driver.
+       *
+       * DRM Radeon 2.51.0, in particular, as of October 17, 2026, expects memory to be allocated
+       * for the minified image depth rounded to a power of two for non-base mips of 3D SRVs, so the
+       * padding can't be trimmed for them. However, it's completely unaware of the power of two
+       * rounding done for the array layer count by the texture sampling hardware for non-base mips,
+       * and of `TEX_DEPTH` for arrays in general (incorrectly using `LAST_ARRAY` for level stride
+       * calculations instead, rather than `LAST_ARRAY` for the level memory amount requirement and
+       * `TEX_DEPTH` for the offset), but this may be changed at any point, and it's not known how
+       * precise the calculations will be in future kernel driver versions.
+       */
       uint32_t level_extent_compute_pixels_expand_3x[] = {
          surfels_per_block * u_minify(image_create_info->extent.width, level_index),
          u_minify(image_create_info->extent.height, level_index),
-         /* For arrays, the texture fetch hardware rounds the total number of layers to a power of
-          * two when computing the level stride.
-          *
-          * To avoid allocating excess memory, not padding the array layer count to a power of two
-          * for the last level, which may be especially significant for single-level images. DRM
-          * Radeon 2.51.0 as of October 17, 2026 validates the BO size for non-3D SRVs based on
-          * `LAST_ARRAY` rather than `TEX_DEPTH`, and is not aware of the power of two rounding.
-          *
-          * This trimming is not done for the last mip of 3D images, as for them, DRM Radeon 2.51.0
-          * validates the BO size using the level depth that is rounded to a power of two for
-          * non-base mips.
-          *
-          * Note that the last level trimming also can be done for the padding of cube map face
-          * count to a multiple of 6 (if the application uses views with a base layer that's not a
-          * multiple of 6), but this is not done for safety against potential future kernel driver
-          * changes making the validation too restrictive - allocating memory for all
-          * `6 * (TEX_DEPTH + 1)` layers in case the validation starts using `TEX_DEPTH` rather than
-          * `LAST_ARRAY` even for the memory range of the last level, for instance. As of
-          * October 17, 2026, however, this padding may be trimmed away on DRM Radeon 2.51.0, but
-          * cube maps with a base layer that's not a multiple of 6 are expected to be rare anyway.
-          *
-          * Ideally, regardless of the dimensionality, the kernel driver should validate whether
-          * each level is within the BO according to the memory extent of the texels actually
-          * addressable via the descriptor (thus avoiding as much padding as reasonably possible,
-          * including rounding the slice count to a power of two for both arrays and 3D mips, and
-          * the slices beyond `LAST_ARRAY` for both arrays and cube maps), but advance the offset to
-          * the next level based on padded strides. However, any potential changes need to have edge
-          * cases thoroughly tested on the hardware.
-          */
          image_create_info->imageType == VK_IMAGE_TYPE_3D
             ? u_minify(image_create_info->extent.depth, level_index)
-            : (level_index + 1u < image_create_info->mipLevels
-                  ? level_stride_array_layers_power_of_two
-                  : level_stride_array_layers),
+            : level_stride_array_layers,
       };
       if (level_index != 0) {
-         for (unsigned axis = 0; axis < minified_axis_count; ++axis) {
+         for (unsigned axis = 0; axis < 3; ++axis) {
             level_extent_compute_pixels_expand_3x[axis] =
                util_next_power_of_two(level_extent_compute_pixels_expand_3x[axis]);
          }
