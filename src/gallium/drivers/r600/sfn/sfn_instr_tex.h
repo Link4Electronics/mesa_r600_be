@@ -178,6 +178,14 @@ private:
     * an array image view.
     */
    static bool emit_tex_sample(nir_tex_instr *tex, Shader& shader);
+   /* Emits the hardware instruction for `nir_texop_txf` for non-buffer textures.
+    *
+    * Supports constant offsets, though they're insufficient for
+    * `dEQP-VK.glsl.texture_functions.texelfetchoffset.*`.
+    *
+    * Coordinate components not explicitly provided will be zero.
+    */
+   static bool emit_tex_txf(nir_tex_instr *tex, Shader& shader);
    static bool emit_tex_txs(nir_tex_instr *tex,
                             Inputs& src,
                             RegisterVec4::Swizzle dest_swz,

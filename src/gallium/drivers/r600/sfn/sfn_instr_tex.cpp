@@ -395,6 +395,8 @@ TexInstr::from_nir(nir_tex_instr *tex, Shader& shader)
       case nir_texop_txl:
       case nir_texop_txd:
          return emit_tex_sample(tex, shader);
+      case nir_texop_txf:
+         return emit_tex_txf(tex, shader);
       case nir_texop_txs:
          return emit_tex_txs(tex, src, {0, 1, 2, 3}, shader);
       case nir_texop_lod:
@@ -753,6 +755,74 @@ TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
          irt->add_required_instr(shader.last_txd());
       }
       shader.set_last_txd(irt);
+   }
+
+   shader.emit_instruction(irt);
+   return true;
+}
+
+bool
+TexInstr::emit_tex_txf(nir_tex_instr *tex, Shader& shader)
+{
+   assert(tex->sampler_dim != GLSL_SAMPLER_DIM_BUF);
+
+   auto& vf = shader.value_factory();
+
+   const auto dst = vf.dest_vec4(tex->def, pin_group);
+
+   const int texture_offset_index =
+      nir_tex_instr_src_index(tex, nir_tex_src_texture_offset);
+
+   const int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   assert(coord_index >= 0);
+   nir_src& coord_src = tex->src[coord_index].src;
+
+   std::array<PVirtualValue, 4> hw_coord_components{};
+
+   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
+        ++component_index) {
+      hw_coord_components[component_index] = vf.src(coord_src, component_index);
+   }
+   if (tex->is_array && tex->sampler_dim == GLSL_SAMPLER_DIM_1D) {
+      /* The array index is always in Z. */
+      hw_coord_components[2] = hw_coord_components[1];
+      hw_coord_components[1] = nullptr;
+   }
+
+   const int lod_index = nir_tex_instr_src_index(tex, nir_tex_src_lod);
+   if (lod_index >= 0) {
+      hw_coord_components[3] = vf.src(tex->src[lod_index].src, 0);
+   }
+
+   RegisterVec4::Swizzle hw_coord_swizzle{4, 4, 4, 4};
+   for (uint8_t component_index = 0; component_index < 4; ++component_index) {
+      if (hw_coord_components[component_index]) {
+         hw_coord_swizzle[component_index] = component_index;
+      }
+   }
+   const auto hw_coord = shader.value_factory().temp_vec4(pin_group, hw_coord_swizzle);
+   for (uint8_t component_index = 0; component_index < 4; ++component_index) {
+      if (hw_coord_components[component_index]) {
+         shader.emit_instruction(new AluInstr(op1_mov,
+                                              hw_coord[component_index],
+                                              hw_coord_components[component_index],
+                                              AluInstr::write));
+      }
+   }
+
+   const auto irt =
+      new TexInstr(ld,
+                   dst,
+                   RegisterVec4::s_num_components_swizzles[tex->def.num_components],
+                   hw_coord,
+                   tex->texture_index + shader.binding_layout().texture_resource_offset,
+                   texture_offset_index >= 0
+                      ? vf.src(tex->src[texture_offset_index].src, 0)->as_register()
+                      : nullptr);
+
+   const int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
+   if (offset_index >= 0) {
+      irt->set_coord_offsets(&tex->src[offset_index].src);
    }
 
    shader.emit_instruction(irt);
