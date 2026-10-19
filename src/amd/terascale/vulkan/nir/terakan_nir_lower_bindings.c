@@ -1003,7 +1003,8 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
       tex->sampler_dim == GLSL_SAMPLER_DIM_BUF ? state->get_binding_functions->uniform_texel_buffer
                                                : state->get_binding_functions->sampled_image;
 
-   if (tex->op == nir_texop_txs || tex->op == nir_texop_query_levels ||
+   if ((tex->sampler_dim == GLSL_SAMPLER_DIM_BUF && tex->op == nir_texop_txf) ||
+       tex->op == nir_texop_txs || tex->op == nir_texop_query_levels ||
        tex->op == nir_texop_texture_samples) {
       /* Samplerless texture operations lowered to other NIR instructions. */
 
@@ -1048,7 +1049,19 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
          !tex->skip_helpers && builder->shader->info.stage == MESA_SHADER_FRAGMENT;
 
       if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
-         if (likely(tex->op == nir_texop_txs)) {
+         switch (tex->op) {
+         case nir_texop_txf:
+            BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
+            nir_def_replace(
+               &tex->def,
+               nir_load_buffer_resource_r600(
+                  builder, tex->def.num_components, 32, hw_binding_array_index,
+                  nir_get_tex_src(tex, nir_tex_src_coord),
+                  .access = ACCESS_CAN_REORDER | (include_helpers ? ACCESS_INCLUDE_HELPERS : 0),
+                  .binding = first_srv_index));
+            return true;
+
+         case nir_texop_txs:
             if (state->use_get_buffer_resinfo) {
                BITSET_SET_RANGE(state->sqk_usage_accum->srvs, first_srv_index, last_srv_index);
                nir_def_replace(&tex->def, nir_buffer_resource_info_r600(
@@ -1062,6 +1075,9 @@ terakan_nir_lower_bindings_instr_tex(nir_builder * const builder, nir_tex_instr 
                                   include_helpers, state));
             }
             return true;
+
+         default:
+            break;
          }
 
          assert(!"Queries other than size ones are not supported for uniform texel buffers");
