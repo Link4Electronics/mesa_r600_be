@@ -690,8 +690,7 @@ TexInstr::emit_tex_sample(nir_tex_instr *tex, Shader& shader)
       }
    }
    const auto hw_coord = shader.value_factory().temp_vec4(pin_group, hw_coord_swizzle);
-   for (uint8_t component_index = 0; component_index < coord_src.ssa->num_components;
-        ++component_index) {
+   for (uint8_t component_index = 0; component_index < 4; ++component_index) {
       if (hw_coord_components[component_index]) {
          shader.emit_instruction(new AluInstr(op1_mov,
                                               hw_coord[component_index],
