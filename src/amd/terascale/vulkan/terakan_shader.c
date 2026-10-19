@@ -295,6 +295,7 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
       NIR_PASS(_, nir, terascale_nir_lower_txb_to_txd);
    }
    static nir_lower_tex_options const lower_tex_options = {
+      .lower_txf_offset = true,
       .lower_invalid_implicit_lod = true,
       .optimize_txd = true,
    };
