@@ -508,3 +508,12 @@ terakan_vk_GetPhysicalDeviceImageFormatProperties2(
 
    return VK_SUCCESS;
 }
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_GetPhysicalDeviceSparseImageFormatProperties2(
+   UNUSED VkPhysicalDevice const physicalDevice,
+   UNUSED VkPhysicalDeviceSparseImageFormatInfo2 const * const pFormatInfo,
+   uint32_t * const pPropertyCount, UNUSED VkSparseImageFormatProperties2 * const pProperties)
+{
+   *pPropertyCount = 0;
+}
