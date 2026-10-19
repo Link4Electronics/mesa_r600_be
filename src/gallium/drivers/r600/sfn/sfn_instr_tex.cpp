@@ -391,6 +391,10 @@ TexInstr::from_nir(nir_tex_instr *tex, Shader& shader)
       }
    } else {
       switch (tex->op) {
+      case nir_texop_tex:
+      case nir_texop_txl:
+      case nir_texop_txd:
+         return emit_tex_sample(tex, shader);
       case nir_texop_txs:
          return emit_tex_txs(tex, src, {0, 1, 2, 3}, shader);
       case nir_texop_lod:
@@ -400,7 +404,7 @@ TexInstr::from_nir(nir_tex_instr *tex, Shader& shader)
       case nir_texop_texture_samples:
          return emit_tex_texture_samples(tex, src, shader);
       default:
-         return emit_tex_sample(tex, shader);
+         return false;
       }
    }
    return true;
