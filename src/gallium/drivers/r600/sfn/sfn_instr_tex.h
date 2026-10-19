@@ -159,6 +159,24 @@ private:
       -> RegisterVec4;
 
    static bool emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader);
+   /* For `nir_texop_tex`, `nir_texop_txl`, `nir_texop_txd`, emits one hardware texture
+    * sampling instruction with the arguments passed directly from the NIR sources
+    * without emitting additional math, optionally with:
+    * - An explicit LOD or explicit gradients (variable floating-point LOD bias not
+    *   supported by the hardware and must be lowered to gradient exponent biasing prior
+    *   to calling, constant fixed-point LOD bias currently not exposed);
+    * - Depth comparison;
+    * - Constant offsets.
+    *
+    * The array layer will be zero if not explicitly provided.
+    *
+    * For sampling with both depth comparison and explicit LOD, there's no source
+    * component in the hardware instruction for the array layer index, so the explicit LOD
+    * must be lowered for this combination to work.
+    */
+   /* TODO(Triang3l): Check how sampling with comparison behaves with multiple layers in
+    * an array image view.
+    */
    static bool emit_tex_sample(nir_tex_instr *tex, Shader& shader);
    static bool emit_tex_txs(nir_tex_instr *tex,
                             Inputs& src,
