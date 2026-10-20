@@ -261,23 +261,22 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
             interpolator_count = MAX2(input.lds_pos + 1, interpolator_count);
             shader->static_state.stage.ps.spi_ps_input_cntl[input.lds_pos] =
                S_028644_SEMANTIC(input.spi_sid) |
-               S_028644_FLAT_SHADE(input.interpolate == TGSI_INTERPOLATE_CONSTANT) |
+               S_028644_FLAT_SHADE(input.interpolate == INTERP_MODE_FLAT) |
                S_028644_PT_SPRITE_TEX(input.varying_slot == VARYING_SLOT_PNTC);
-            bool const interpolator_is_linear = input.interpolate == TGSI_INTERPOLATE_LINEAR;
-            if (interpolator_is_linear || input.interpolate == TGSI_INTERPOLATE_PERSPECTIVE ||
-                input.interpolate == TGSI_INTERPOLATE_COLOR) {
+            bool const interpolator_is_linear = input.interpolate == INTERP_MODE_NOPERSPECTIVE;
+            if (interpolator_is_linear || input.interpolate == INTERP_MODE_SMOOTH) {
                switch (input.interpolate_location) {
-               case TGSI_INTERPOLATE_LOC_CENTER:
+               case R600_INTERP_LOC_CENTER:
                   shader->static_state.stage.ps.spi_baryc_cntl |= interpolator_is_linear
                                                                      ? S_0286E0_LINEAR_CENTER_ENA(1)
                                                                      : S_0286E0_PERSP_CENTER_ENA(1);
                   break;
-               case TGSI_INTERPOLATE_LOC_CENTROID:
+               case R600_INTERP_LOC_CENTROID:
                   shader->static_state.stage.ps.spi_baryc_cntl |=
                      interpolator_is_linear ? S_0286E0_LINEAR_CENTROID_ENA(1)
                                             : S_0286E0_PERSP_CENTROID_ENA(1);
                   break;
-               case TGSI_INTERPOLATE_LOC_SAMPLE:
+               case R600_INTERP_LOC_SAMPLE:
                   shader->static_state.stage.ps.spi_baryc_cntl |= interpolator_is_linear
                                                                      ? S_0286E0_LINEAR_SAMPLE_ENA(1)
                                                                      : S_0286E0_PERSP_SAMPLE_ENA(1);
@@ -306,9 +305,9 @@ terakan_shader_impl_compile(terakan_shader_impl * const shader, terakan_device *
          shader->static_state.stage.ps.spi_ps_in_control[0] |=
             S_0286CC_POSITION_ENA(1) |
             S_0286CC_POSITION_CENTROID(position_input->interpolate_location ==
-                                       TGSI_INTERPOLATE_LOC_CENTROID) |
+                                       R600_INTERP_LOC_CENTROID) |
             S_0286CC_POSITION_SAMPLE(position_input->interpolate_location ==
-                                     TGSI_INTERPOLATE_LOC_SAMPLE) |
+                                     R600_INTERP_LOC_SAMPLE) |
             S_0286CC_POSITION_ADDR(position_input->gpr);
       }
       shader->static_state.stage.ps.spi_ps_in_control[1] = 0;
