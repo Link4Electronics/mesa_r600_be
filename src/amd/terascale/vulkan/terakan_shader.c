@@ -348,10 +348,10 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
    return nir;
 }
 
-static int
+static unsigned
 terakan_nir_type_size_io_vec4(glsl_type const * const type, UNUSED bool const bindless)
 {
-   return (int)glsl_count_attribute_slots(type, false);
+   return glsl_count_attribute_slots(type, false);
 }
 
 static void
