@@ -1103,9 +1103,6 @@ terakan_physical_device_init(struct terakan_physical_device * const device,
       .lower_ifind_msb = true,
       .lower_ufind_msb = true,
 
-      .lower_uadd_carry = true,
-      .lower_usub_borrow = true,
-
       .lower_ineg = true,
 
       .lower_fisnormal = true,
