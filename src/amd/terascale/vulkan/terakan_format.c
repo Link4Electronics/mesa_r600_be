@@ -486,8 +486,8 @@ terakan_vk_GetPhysicalDeviceImageFormatProperties2(
 
    pImageFormatProperties->imageFormatProperties = image_format_properties;
 
-   vk_foreach_struct (ext, pImageFormatProperties->pNext) {
-      switch (ext->sType) {
+   vk_foreach_struct (sType, ext, pImageFormatProperties->pNext) {
+      switch (sType) {
       case VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES: {
          /* From the VkPhysicalDeviceExternalImageFormatInfo specification:
           *

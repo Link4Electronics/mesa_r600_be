@@ -930,8 +930,8 @@ terakan_vk_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
    pMemoryRequirements->memoryRequirements.memoryTypeBits =
       ((uint32_t)1 << physical_device->memory_properties.memoryTypeCount) - 1;
 
-   vk_foreach_struct (ext, pMemoryRequirements->pNext) {
-      switch (ext->sType) {
+   vk_foreach_struct (sType, ext, pMemoryRequirements->pNext) {
+      switch (sType) {
       case VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS: {
          VkMemoryDedicatedRequirements * const dedicated_requirements =
             (VkMemoryDedicatedRequirements *)ext;
@@ -979,8 +979,8 @@ terakan_vk_GetImageMemoryRequirements2(VkDevice const deviceHandle,
    pMemoryRequirements->memoryRequirements.memoryTypeBits =
       ((uint32_t)1 << physical_device->memory_properties.memoryTypeCount) - 1;
 
-   vk_foreach_struct (ext, pMemoryRequirements->pNext) {
-      switch (ext->sType) {
+   vk_foreach_struct (sType, ext, pMemoryRequirements->pNext) {
+      switch (sType) {
       case VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS: {
          VkMemoryDedicatedRequirements * const dedicated_requirements =
             (VkMemoryDedicatedRequirements *)ext;
