@@ -1808,5 +1808,6 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
 
 fail_image:
    vk_image_finish(&image->vk);
+   vk_free2(&device->vk.alloc, pAllocator, image);
    return result;
 }
