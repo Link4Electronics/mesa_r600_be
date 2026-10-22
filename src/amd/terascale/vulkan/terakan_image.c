@@ -616,17 +616,44 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
    return array_mode;
 }
 
+static uint16_t
+terakan_image_level_stride_array_layers(uint16_t const array_layers, bool const cube_compatible)
+{
+   uint16_t level_stride_array_layers = array_layers;
+   if (cube_compatible) {
+      /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't require
+       * that the array layer count of a cube-compatible image is a multiple of 6, only that it's
+       * greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
+       *
+       * Expecting the driver not to expose support for more than `TERAKAN_IMAGE_MAX_SLICES / 6 * 6`
+       * layers for cube-compatible images, so the layer count can be specified in `TEX_DEPTH` for
+       * non-cube views of them.
+       */
+      level_stride_array_layers = (uint16_t)6 * (level_stride_array_layers / 6u +
+                                                 (unsigned)(level_stride_array_layers % 6u != 0u));
+   }
+   return level_stride_array_layers;
+}
+
+struct terakan_image_surface_compute_image_info {
+   struct terakan_image_extent extent;
+   uint16_t level_stride_array_layers;
+
+   bool is_combined_depth_stencil;
+   bool is_used_by_db;
+
+   bool is_used_by_scanout;
+};
+
 /* On failure, the output is left in an undefined state. */
 static void
-terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_create_info,
-                                     uint32_t const level_stride_array_layers,
-                                     enum terascale_format_index const aspect_format,
-                                     struct terakan_physical_device const * const physical_device,
-                                     struct terakan_image_surface_tiling const tiling,
-                                     uint8_t const base_level_array_mode,
-                                     bool const is_combined_depth_stencil_used_by_db,
-                                     uint32_t const offset_in_memory_lower_bound_bytes_shr8,
-                                     struct terakan_image_surface_aspect * const surface_aspect_out)
+terakan_image_surface_aspect_compute(
+   struct terakan_image_surface_compute_image_info const * const image_info,
+   enum terascale_format_index const aspect_format,
+   struct terakan_physical_device const * const physical_device,
+   struct terakan_image_surface_tiling const tiling, uint8_t const base_level_array_mode,
+   uint32_t const offset_in_memory_lower_bound_bytes_shr8,
+   struct terakan_image_surface_aspect * const surface_aspect_out)
 {
    unsigned const bytes_per_block = terascale_format_bytes_per_block[aspect_format];
    assert(bytes_per_block != 0);
@@ -645,13 +672,13 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    case V_028C70_ARRAY_1D_TILED_THIN1:
       level_alignments = terakan_image_alignments_1d_thin(
          physical_device->tiling_info.pipe_interleave_bytes_log2, util_logbase2(bytes_per_block),
-         is_combined_depth_stencil_used_by_db);
+         image_info->is_combined_depth_stencil && image_info->is_used_by_db);
       break;
    case V_028C70_ARRAY_2D_TILED_THIN1:
       level_alignments = terakan_image_alignments_2d_thin(
          &physical_device->tiling_info,
          terakan_image_macro_tile_bytes_log2(util_logbase2(bytes_per_block),
-                                             util_logbase2((uint32_t)image_create_info->samples),
+                                             image_info->extent.samples_log2,
                                              6 + tiling.attrib_tile_split),
          tiling.attrib_bank_width, tiling.attrib_bank_height, tiling.attrib_macro_tile_aspect);
       break;
@@ -669,8 +696,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    uint8_t level_array_mode = base_level_array_mode;
    bool alignments_are_for_1d_mips = false;
 
-   assert(image_create_info->mipLevels <= ARRAY_SIZE(surface_aspect_out->levels));
-   for (uint32_t level_index = 0; level_index < image_create_info->mipLevels; ++level_index) {
+   for (uint16_t level_index = 0; level_index < image_info->extent.levels; ++level_index) {
       struct terakan_image_surface_level * const level = &surface_aspect_out->levels[level_index];
 
       /* Aspect offset in memory will be added later. */
@@ -684,7 +710,10 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
        *     power-of-two for mipmaps), which results in the original pitch."
        */
 
-      /* Note that padding of the last level to power of two slices, and similarly of the layer
+      /* Using 32 bits because 16 isn't enough for power of two rounding of the width of 3x-expanded
+       * format mips.
+       *
+       * Note that padding of the last level to power of two slices, and similarly of the layer
        * count of cube-compatible 2D array images (the maximum `LAST_ARRAY + 1`) to multiples of 6
        * for cube map SRV `TEX_DEPTH` (which is specified in cubes), should likely be unnecessary
        * from the hardware access point of view, and in theory could be skipped to allocate slightly
@@ -701,11 +730,10 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
        * precise the calculations will be in future kernel driver versions.
        */
       uint32_t level_extent_compute_pixels_expand_3x[] = {
-         surfels_per_block * u_minify(image_create_info->extent.width, level_index),
-         u_minify(image_create_info->extent.height, level_index),
-         image_create_info->imageType == VK_IMAGE_TYPE_3D
-            ? u_minify(image_create_info->extent.depth, level_index)
-            : level_stride_array_layers,
+         surfels_per_block * (uint32_t)u_minify(image_info->extent.width, level_index),
+         u_minify(image_info->extent.height, level_index),
+         image_info->extent.is_3d ? u_minify(image_info->extent.slices, level_index)
+                                  : image_info->level_stride_array_layers,
       };
       if (level_index != 0) {
          for (unsigned axis = 0; axis < 3; ++axis) {
@@ -789,9 +817,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
                   expand_3x_pitch_alignment_surfels - expand_3x_pitch_misalignment_surfels;
             }
          } else {
-            struct wsi_image_create_info const * const wsi_info =
-               vk_find_struct_const(image_create_info->pNext, WSI_IMAGE_CREATE_INFO_MESA);
-            if (wsi_info != NULL && wsi_info->scanout) {
+            if (image_info->is_used_by_scanout) {
                assert(surfels_per_block == 1);
                assert(block_height == 1);
                assert(block_width == 1);
@@ -801,9 +827,9 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
          }
       }
 
-      uint64_t const level_slice_size_bytes = bytes_per_surfel * image_create_info->samples *
-                                              (uint64_t)level->aligned_extent_surfels[0] *
-                                              level->aligned_extent_surfels[1];
+      uint64_t const level_slice_size_bytes =
+         (bytes_per_surfel << image_info->extent.samples_log2) *
+         (uint64_t)level->aligned_extent_surfels[0] * level->aligned_extent_surfels[1];
       assert(!(level_slice_size_bytes & 0xFF));
       level->slice_size_bytes_shr8 = (uint32_t)(level_slice_size_bytes >> 8);
 
@@ -815,7 +841,7 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
       ALIGN_POT(offset_in_memory_lower_bound_bytes_shr8, surface_aspect_out->alignment_bytes_shr8);
    surface_aspect_out->offset_in_memory_bytes_shr8 = aspect_offset_in_memory_bytes_shr8;
 
-   for (uint32_t level_index = 0; level_index < image_create_info->mipLevels; ++level_index) {
+   for (uint16_t level_index = 0; level_index < image_info->extent.levels; ++level_index) {
       surface_aspect_out->levels[level_index].offset_in_memory_bytes_shr8 +=
          aspect_offset_in_memory_bytes_shr8;
    }
@@ -823,14 +849,30 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
    surface_aspect_out->size_bytes_shr8 = level_offset_in_aspect_bytes_shr8;
 }
 
-/* format_info must be the result of terakan_format_info_get for image_create_info->format.
+static struct terakan_image_extent
+terakan_vk_image_extent_from_create_info(VkImageCreateInfo const * const image_create_info)
+{
+   bool const is_3d = image_create_info->imageType == VK_IMAGE_TYPE_3D;
+   return (struct terakan_image_extent){
+      .width = (uint16_t)image_create_info->extent.width,
+      .height = (uint16_t)image_create_info->extent.height,
+      .slices =
+         (uint16_t)(is_3d ? image_create_info->extent.depth : image_create_info->arrayLayers),
+      .levels = (uint8_t)image_create_info->mipLevels,
+      .is_3d = is_3d,
+      .samples_log2 =
+         (uint8_t)terakan_image_vk_sample_count_to_hw_log2(image_create_info->samples, false),
+   };
+}
+
+/* `format_info` must be the result of `terakan_format_info_get` for `image_create_info->format`.
  * On failure, the output is left in an undefined state.
  */
 static void
-terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
-                              struct terakan_format_info const * const format_info,
-                              struct terakan_physical_device const * const physical_device,
-                              struct terakan_image_surface * const surface_out)
+terakan_vk_image_surface_compute(VkImageCreateInfo const * const image_create_info,
+                                 struct terakan_format_info const * const format_info,
+                                 struct terakan_physical_device const * const physical_device,
+                                 struct terakan_image_surface * const surface_out)
 {
    /* Simplify handling of missing aspects. */
    memset(surface_out, 0, sizeof(*surface_out));
@@ -838,27 +880,27 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
    surface_out->alignment_bytes_shr8 = 1;
    surface_out->size_bytes_shr8 = 0;
 
-   surface_out->level_stride_array_layers = image_create_info->arrayLayers;
-   if (image_create_info->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) {
-      /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't require
-       * that the array layer count of a cube-compatible image is a multiple of 6, only that it's
-       * greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
-       *
-       * Expecting the driver not to expose support for more than `TERAKAN_IMAGE_MAX_SLICES / 6 * 6`
-       * layers for cube-compatible images, so the layer count can be specified in `TEX_DEPTH` for
-       * non-cube views of them.
-       */
-      surface_out->level_stride_array_layers =
-         6u * (surface_out->level_stride_array_layers / 6u +
-               (unsigned)(surface_out->level_stride_array_layers % 6u != 0u));
-   }
+   surface_out->level_stride_array_layers = terakan_image_level_stride_array_layers(
+      image_create_info->arrayLayers,
+      (image_create_info->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0);
 
    VkImageAspectFlagBits const * const aspect_map_aspects =
       terakan_format_aspect_map_aspects[format_info->aspect_map];
 
-   bool const is_combined_depth_stencil_used_by_db =
-      format_info->aspect_map == TERAKAN_FORMAT_ASPECT_MAP_0_DEPTH_1_STENCIL &&
-      (image_create_info->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+   struct wsi_image_create_info const * const wsi_info =
+      vk_find_struct_const(image_create_info->pNext, WSI_IMAGE_CREATE_INFO_MESA);
+
+   struct terakan_image_surface_compute_image_info const surface_image_info = {
+      .extent = terakan_vk_image_extent_from_create_info(image_create_info),
+      .level_stride_array_layers = surface_out->level_stride_array_layers,
+
+      .is_combined_depth_stencil =
+         format_info->aspect_map == TERAKAN_FORMAT_ASPECT_MAP_0_DEPTH_1_STENCIL,
+      .is_used_by_db =
+         (image_create_info->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0,
+
+      .is_used_by_scanout = wsi_info != NULL && wsi_info->scanout,
+   };
 
    for (unsigned aspect_index = 0; aspect_index < TERAKAN_FORMAT_MAX_ASPECTS; ++aspect_index) {
       VkImageAspectFlagBits const aspect = aspect_map_aspects[aspect_index];
@@ -869,7 +911,8 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
          &surface_out->aspects[aspect_index];
       struct terakan_image_surface_tiling aspect_tiling;
       uint8_t aspect_array_mode;
-      if (is_combined_depth_stencil_used_by_db && aspect_index == 1) {
+      if (surface_image_info.is_combined_depth_stencil && surface_image_info.is_used_by_db &&
+          aspect_index == 1) {
          /* Depth and stencil have common registers for most of the surface parameters except for
           * the tile split, though tile split is computed the same by
           * terakan_image_surface_tiling_compute.
@@ -881,10 +924,8 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
             image_create_info, format_info, aspect_index, physical_device, &aspect_tiling);
       }
       terakan_image_surface_aspect_compute(
-         image_create_info, surface_out->level_stride_array_layers,
-         format_info->aspect_formats[aspect_index].format, physical_device, aspect_tiling,
-         aspect_array_mode, is_combined_depth_stencil_used_by_db, surface_out->size_bytes_shr8,
-         surface_aspect);
+         &surface_image_info, format_info->aspect_formats[aspect_index].format, physical_device,
+         aspect_tiling, aspect_array_mode, surface_out->size_bytes_shr8, surface_aspect);
       surface_out->alignment_bytes_shr8 =
          MAX2(surface_aspect->alignment_bytes_shr8, surface_out->alignment_bytes_shr8);
       surface_out->size_bytes_shr8 =
@@ -911,7 +952,7 @@ terakan_vk_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
    struct terakan_format_info format_info;
    if (likely(terakan_format_info_get(pInfo->pCreateInfo->format, &format_info))) {
       struct terakan_image_surface surface;
-      terakan_image_surface_compute(pInfo->pCreateInfo, &format_info, physical_device, &surface);
+      terakan_vk_image_surface_compute(pInfo->pCreateInfo, &format_info, physical_device, &surface);
       pMemoryRequirements->memoryRequirements.size = (VkDeviceSize)surface.size_bytes_shr8 << 8;
       pMemoryRequirements->memoryRequirements.alignment = (VkDeviceSize)surface.alignment_bytes_shr8
                                                           << 8;
@@ -1772,14 +1813,6 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
    struct terakan_physical_device * const physical_device = terakan_device_physical_device(device);
 
-   int const samples_log2 = terakan_image_vk_sample_count_to_hw_log2(pCreateInfo->samples, false);
-   /* #MemoryIntegrity. */
-   if (unlikely(samples_log2 < 0)) {
-      return vk_errorf(device, VK_ERROR_VALIDATION_FAILED_EXT,
-                       "Image sample count %" PRIu32 " is invalid or not supported",
-                       pCreateInfo->samples);
-   }
-
    /* #MemoryIntegrity. */
    VkPhysicalDeviceImageFormatInfo2 const image_format_info = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
@@ -1812,7 +1845,8 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
                                 pCreateInfo->extent.depth)) ||
           pCreateInfo->arrayLayers == 0u ||
           pCreateInfo->arrayLayers > image_format_properties.imageFormatProperties.maxArrayLayers ||
-          !(pCreateInfo->samples & image_format_properties.imageFormatProperties.sampleCounts))) {
+          !(pCreateInfo->samples & image_format_properties.imageFormatProperties.sampleCounts) ||
+          terakan_image_vk_sample_count_to_hw_log2(pCreateInfo->samples, false) < 0)) {
       return vk_errorf(device, VK_ERROR_VALIDATION_FAILED_EXT,
                        "Image create info is invalid or describes an unsupported image");
    }
@@ -1832,17 +1866,10 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
       goto fail_image;
    }
 
-   bool const is_3d = image->vk.image_type == VK_IMAGE_TYPE_3D;
-   image->extent = (struct terakan_image_extent){
-      .width = (uint16_t)pCreateInfo->extent.width,
-      .height = (uint16_t)pCreateInfo->extent.height,
-      .slices = (uint16_t)(is_3d ? pCreateInfo->extent.depth : pCreateInfo->arrayLayers),
-      .is_3d = is_3d,
-      .samples_log2 = (uint8_t)samples_log2,
-   };
+   image->extent = terakan_vk_image_extent_from_create_info(pCreateInfo);
 
-   terakan_image_surface_compute(pCreateInfo, &image->format_info, physical_device,
-                                 &image->surface);
+   terakan_vk_image_surface_compute(pCreateInfo, &image->format_info, physical_device,
+                                    &image->surface);
 
    image->bo = NULL;
    image->va = 0;

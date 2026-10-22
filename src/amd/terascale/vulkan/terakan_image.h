@@ -65,6 +65,7 @@ struct terakan_image_extent {
    uint16_t width;
    uint16_t height;
    uint16_t slices;
+   uint8_t levels;
    /* Whether this is a 3D image, for which the slice count is minified. */
    uint8_t is_3d : 1;
    uint8_t samples_log2 : 2;
@@ -90,8 +91,11 @@ terakan_image_vk_sample_count_to_hw_log2(VkSampleCountFlagBits const sample_coun
 struct terakan_image_surface_level {
    uint32_t offset_in_memory_bytes_shr8;
    uint32_t slice_size_bytes_shr8;
-   /* [2] is depth for 3D, array layers otherwise. May be padded as necessary along any axes. */
-   uint16_t aligned_extent_surfels[3];
+   /* [2] is depth for 3D, array layers otherwise. May be padded as necessary along any axes.
+    * Using 32 bits because 16 isn't enough for power of two rounding of the width of 3x-expanded
+    * format mips.
+    */
+   uint32_t aligned_extent_surfels[3];
    /* 2D is degraded to 1D for small mips. */
    uint8_t array_mode;
 };
