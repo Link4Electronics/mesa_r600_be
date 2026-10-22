@@ -520,11 +520,11 @@ terakan_meta_copy_buffer_image_translate_region_image(
     * height).
     */
 
-   uint32_t const subresource_width_texels = u_minify(
-      image->vk.extent.width,
+   uint16_t const subresource_width_texels = (uint16_t)u_minify(
+      image->extent.width,
       region_image_out->image_descriptor_create_info.subresource_range.base_mip_level);
-   uint32_t const subresource_height_texels = u_minify(
-      image->vk.extent.height,
+   uint16_t const subresource_height_texels = (uint16_t)u_minify(
+      image->extent.height,
       region_image_out->image_descriptor_create_info.subresource_range.base_mip_level);
    if (unlikely((uint32_t)region->imageOffset.x >= subresource_width_texels ||
                 (uint32_t)region->imageOffset.y >= subresource_height_texels)) {
@@ -535,12 +535,12 @@ terakan_meta_copy_buffer_image_translate_region_image(
       [image->format_info.aspect_formats[aspect_index].format];
    unsigned const block_mask_x = (1u << block_texels_log2[0]) - 1u;
    unsigned const block_mask_y = (1u << block_texels_log2[1]) - 1u;
-   uint32_t const subresource_width_blocks =
+   uint16_t const subresource_width_blocks =
       (subresource_width_texels >> block_texels_log2[0]) +
-      (uint32_t)((subresource_width_texels & block_mask_x) != 0);
-   uint32_t const subresource_height_blocks =
+      (uint16_t)((subresource_width_texels & block_mask_x) != 0);
+   uint16_t const subresource_height_blocks =
       (subresource_height_texels >> block_texels_log2[1]) +
-      (uint32_t)((subresource_height_texels & block_mask_y) != 0);
+      (uint16_t)((subresource_height_texels & block_mask_y) != 0);
 
    /* The `offset` must be block-aligned, but `offset + extent` is limited to the extent of the
     * subresource, which is not block-aligned, so round the extent (which is also used as the buffer

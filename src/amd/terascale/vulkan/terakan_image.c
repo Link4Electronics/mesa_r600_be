@@ -1015,8 +1015,8 @@ terakan_vk_GetImageSubresourceLayout(UNUSED VkDevice const device, VkImage const
                      slice_size * pSubresource->arrayLayer;
 
    pLayout->size = slice_size;
-   if (image->vk.image_type == VK_IMAGE_TYPE_3D) {
-      pLayout->size *= u_minify(image->vk.extent.depth, pSubresource->mipLevel);
+   if (image->extent.is_3d) {
+      pLayout->size *= u_minify(image->extent.slices, pSubresource->mipLevel);
    }
 
    pLayout->rowPitch = (surface_aspect->bytes_per_block /
@@ -1052,14 +1052,16 @@ terakan_image_descriptor_subresource_range_sanitize(
        subresource_range->base_mip_level >= image->vk.mip_levels) {
       return false;
    }
-   uint32_t const level_layer_count =
-      terakan_image_depth_or_array_layers(image, subresource_range->base_mip_level);
-   if (subresource_range->base_z_or_array_layer >= level_layer_count) {
+   uint16_t const base_mip_level_layer_count =
+      image->extent.is_3d
+         ? (uint16_t)u_minify(image->extent.slices, subresource_range->base_mip_level)
+         : image->extent.slices;
+   if (subresource_range->base_z_or_array_layer >= base_mip_level_layer_count) {
       return false;
    }
-   uint32_t descriptor_layer_count =
-      MIN2(subresource_range->max_depth_or_layer_count,
-           level_layer_count - subresource_range->base_z_or_array_layer);
+   uint16_t descriptor_layer_count =
+      (uint16_t)MIN2(subresource_range->max_depth_or_layer_count,
+                     base_mip_level_layer_count - subresource_range->base_z_or_array_layer);
    if (is_cube_view) {
       descriptor_layer_count = descriptor_layer_count / 6u * 6u;
    }
@@ -1148,28 +1150,22 @@ terakan_image_create_srv_descriptor(
 
    /* Handle the dimensionality. */
 
-   /* Minification differs for arrays (layer count isn't minified) and 3D (depth is minified). */
-   if (desired_dimensionality == V_030000_SQ_TEX_DIM_3D) {
-      if (image->vk.array_layers > 1) {
-         /* 3D views aren't compatible with 1D or 2D textures in Vulkan at all, so the behavior for
-          * 3D views of array textures doesn't matter for Vulkan image views.
-          */
-         extract_single_level = true;
-      }
-   } else {
-      if (image->vk.extent.depth > 1) {
-         /* In Vulkan, restricting the view to a single level for non-3D views of 3D images
-          * (particularly, only 2D and 3D views are compatible with them) is possible due to
-          * VUID-VkImageViewCreateInfo-image-04970:
-          *     "If `image` was created with `VK_IMAGE_TYPE_3D` and `viewType` is
-          *     `VK_IMAGE_VIEW_TYPE_2D` or `VK_IMAGE_VIEW_TYPE_2D_ARRAY` then
-          *     `subresourceRange.levelCount` must be 1"
-          *
-          * This case also occurs in transfer implementations in the driver, which access only one
-          * level.
-          */
-         extract_single_level = true;
-      }
+   /* Minification differs for arrays (layer count isn't minified) and 3D (depth is minified).
+    *
+    * In Vulkan, restricting the view to a single level for non-3D views of 3D images (particularly,
+    * only 2D and 3D views are compatible with them) is possible due to
+    * VUID-VkImageViewCreateInfo-image-04970:
+    *     "If `image` was created with `VK_IMAGE_TYPE_3D` and `viewType` is `VK_IMAGE_VIEW_TYPE_2D`
+    *     or `VK_IMAGE_VIEW_TYPE_2D_ARRAY` then `subresourceRange.levelCount` must be 1"
+    * 3D images may also be viewed as 2D arrays in transfer implementations in the driver, which
+    * access only one level.
+    *
+    * 3D views aren't compatible with 1D or 2D textures in Vulkan at all, so the behavior for 3D
+    * views of array textures doesn't matter for Vulkan image views.
+    */
+   if (image->extent.slices > 1u &&
+       image->extent.is_3d != (desired_dimensionality == V_030000_SQ_TEX_DIM_3D)) {
+      extract_single_level = true;
    }
 
    uint32_t const origin_level =
@@ -1177,14 +1173,14 @@ terakan_image_create_srv_descriptor(
    struct terakan_image_surface_level const * const surface_origin_level =
       &surface_aspect->levels[origin_level];
 
-   uint32_t origin_level_view_width = u_minify(image->vk.extent.width, origin_level);
-   uint32_t origin_level_view_height = u_minify(image->vk.extent.height, origin_level);
+   uint16_t origin_level_view_width = (uint16_t)u_minify(image->extent.width, origin_level);
+   uint16_t origin_level_view_height = (uint16_t)u_minify(image->extent.height, origin_level);
    if (is_size_compatible_uncompressed_view) {
       origin_level_view_width =
-         (origin_level_view_width + ((1u << image_block_texels_log2[0]) - 1u)) >>
+         (origin_level_view_width + (((uint16_t)1 << image_block_texels_log2[0]) - (uint16_t)1)) >>
          image_block_texels_log2[0];
       origin_level_view_height =
-         (origin_level_view_height + ((1u << image_block_texels_log2[1]) - 1u)) >>
+         (origin_level_view_height + (((uint16_t)1 << image_block_texels_log2[1]) - (uint16_t)1)) >>
          image_block_texels_log2[1];
    }
 
@@ -1192,12 +1188,12 @@ terakan_image_create_srv_descriptor(
    bool const is_multisampled = desired_dimensionality == V_030000_SQ_TEX_DIM_2D_MSAA ||
                                 desired_dimensionality == V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA;
    if (is_multisampled) {
-      if (image->vk.samples <= VK_SAMPLE_COUNT_1_BIT) {
+      if (image->extent.samples_log2 == 0u) {
          /* #MemoryIntegrity. */
          return false;
       }
    } else {
-      if (image->vk.samples > VK_SAMPLE_COUNT_1_BIT) {
+      if (image->extent.samples_log2 != 0u) {
          /* #MemoryIntegrity. */
          return false;
       }
@@ -1218,8 +1214,8 @@ terakan_image_create_srv_descriptor(
 
    uint32_t descriptor_width = origin_level_view_width;
    uint32_t descriptor_height = origin_level_view_height;
-   uint32_t descriptor_depth_or_array_layers = image->vk.image_type == VK_IMAGE_TYPE_3D
-                                                  ? u_minify(image->vk.extent.depth, origin_level)
+   uint32_t descriptor_depth_or_array_layers = image->extent.is_3d
+                                                  ? u_minify(image->extent.slices, origin_level)
                                                   : image->surface.level_stride_array_layers;
    assert(
       !((desired_dimensionality == V_030000_SQ_TEX_DIM_1D ||
@@ -1427,12 +1423,11 @@ terakan_image_create_srv_descriptor(
    if (is_multisampled) {
       /* TODO(Triang3l): FMask (address in `MIP_ADDRESS`, `FMASK_BANK_HEIGHT`). */
       descriptor_out->srv[3] = descriptor_out->srv[2];
-      unsigned const samples_log2 = util_logbase2((uint32_t)image->vk.samples);
       if (physical_device->chip_info.is_r9xx) {
-         descriptor_out->srv[4] |= S_030010_LOG2_NUM_FRAGMENTS(samples_log2);
+         descriptor_out->srv[4] |= S_030010_LOG2_NUM_FRAGMENTS(image->extent.samples_log2);
       }
       /* `LAST_LEVEL` is used for the sample count instead. */
-      descriptor_out->srv[5] |= S_030014_LAST_LEVEL(samples_log2);
+      descriptor_out->srv[5] |= S_030014_LAST_LEVEL(image->extent.samples_log2);
    } else {
       if (extract_single_level) {
          descriptor_out->srv[3] = image_va_shr8 + surface_origin_level->offset_in_memory_bytes_shr8;
@@ -1532,15 +1527,15 @@ terakan_image_create_color_descriptor(
    uint8_t const * const image_block_texels_log2 = terascale_format_block_texels_log2
       [image->format_info.aspect_formats[descriptor_create_info->image_aspect_index].format];
    uint32_t const descriptor_height_minus_1 =
-      DIV_ROUND_UP(u_minify(image->vk.extent.height,
-                            descriptor_create_info->subresource_range.base_mip_level),
-                   1u << image_block_texels_log2[1]) -
+      DIV_ROUND_UP(
+         u_minify(image->extent.height, descriptor_create_info->subresource_range.base_mip_level),
+         1u << image_block_texels_log2[1]) -
       1;
    descriptor_out->dim =
       S_028C78_WIDTH_MAX(
-         DIV_ROUND_UP(u_minify(image->vk.extent.width,
-                               descriptor_create_info->subresource_range.base_mip_level),
-                      1u << image_block_texels_log2[0]) -
+         DIV_ROUND_UP(
+            u_minify(image->extent.width, descriptor_create_info->subresource_range.base_mip_level),
+            1u << image_block_texels_log2[0]) -
          1) |
       S_028C78_HEIGHT_MAX(descriptor_height_minus_1);
 
@@ -1612,7 +1607,6 @@ terakan_image_create_color_descriptor(
       descriptor_out->info |= S_028C70_BLEND_CLAMP(blend_clamp);
    }
 
-   unsigned const samples_log2 = util_logbase2((uint32_t)image->vk.samples);
    descriptor_out->attrib =
       S_028C74_NON_DISP_TILING_ORDER(array_mode_is_linear ||
                                      surface_aspect->tiling.tc_non_display) |
@@ -1622,7 +1616,8 @@ terakan_image_create_color_descriptor(
       S_028C74_BANK_HEIGHT(surface_aspect->tiling.attrib_bank_height) |
       S_028C74_MACRO_TILE_ASPECT(surface_aspect->tiling.attrib_macro_tile_aspect) |
       S_028C74_FMASK_BANK_HEIGHT(surface_aspect->tiling.attrib_bank_height) |
-      S_028C74_NUM_SAMPLES(samples_log2) | S_028C74_NUM_FRAGMENTS(samples_log2);
+      S_028C74_NUM_SAMPLES(image->extent.samples_log2) |
+      S_028C74_NUM_FRAGMENTS(image->extent.samples_log2);
    /* `FORCE_DST_ALPHA_1` or the equivalent `CB_BLEND_CONTROL` adjustment is not needed as Vulkan
     * doesn't have formats with a void alpha channel or with less than 4 channels that would use a
     * 4-channel one in the hardware.
@@ -1709,8 +1704,7 @@ terakan_image_create_depth_stencil_descriptor(
 
    /* `NUM_SAMPLES` is needed by the driver logic regardless of the architecture generation. */
    descriptor_out->z_info =
-      S_028040_FORMAT(view_depth_format) |
-      S_028040_NUM_SAMPLES(util_logbase2((uint32_t)image->vk.samples)) |
+      S_028040_FORMAT(view_depth_format) | S_028040_NUM_SAMPLES(image->extent.samples_log2) |
       S_028040_ARRAY_MODE(surface_main_aspect_level->array_mode) |
       S_028040_NUM_BANKS(
          container_of(image->vk.base.device->physical, struct terakan_physical_device const, vk)
@@ -1780,6 +1774,52 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
    VkResult result;
 
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
+   struct terakan_physical_device * const physical_device = terakan_device_physical_device(device);
+
+   int const samples_log2 = terakan_image_vk_sample_count_to_hw_log2(pCreateInfo->samples, false);
+   /* #MemoryIntegrity. */
+   if (unlikely(samples_log2 < 0)) {
+      return vk_errorf(device, VK_ERROR_VALIDATION_FAILED_EXT,
+                       "Image sample count %" PRIu32 " is invalid or not supported",
+                       pCreateInfo->samples);
+   }
+
+   /* #MemoryIntegrity. */
+   VkPhysicalDeviceImageFormatInfo2 const image_format_info = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+      .format = pCreateInfo->format,
+      .type = pCreateInfo->imageType,
+      .tiling = pCreateInfo->tiling,
+      .usage = pCreateInfo->usage,
+      .flags = pCreateInfo->flags,
+   };
+   VkImageFormatProperties2 image_format_properties;
+   image_format_properties.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+   image_format_properties.pNext = NULL;
+   if (unlikely(
+          terakan_vk_GetPhysicalDeviceImageFormatProperties2(
+             terakan_physical_device_to_handle(physical_device), &image_format_info,
+             &image_format_properties) != VK_SUCCESS ||
+          pCreateInfo->extent.width == 0u ||
+          pCreateInfo->extent.width >
+             image_format_properties.imageFormatProperties.maxExtent.width ||
+          pCreateInfo->extent.height == 0u ||
+          pCreateInfo->extent.height >
+             image_format_properties.imageFormatProperties.maxExtent.height ||
+          pCreateInfo->extent.depth == 0u ||
+          pCreateInfo->extent.depth >
+             image_format_properties.imageFormatProperties.maxExtent.depth ||
+          pCreateInfo->mipLevels == 0u ||
+          pCreateInfo->mipLevels > image_format_properties.imageFormatProperties.maxMipLevels ||
+          pCreateInfo->mipLevels >
+             util_last_bit(MAX3(pCreateInfo->extent.width, pCreateInfo->extent.height,
+                                pCreateInfo->extent.depth)) ||
+          pCreateInfo->arrayLayers == 0u ||
+          pCreateInfo->arrayLayers > image_format_properties.imageFormatProperties.maxArrayLayers ||
+          !(pCreateInfo->samples & image_format_properties.imageFormatProperties.sampleCounts))) {
+      return vk_errorf(device, VK_ERROR_VALIDATION_FAILED_EXT,
+                       "Image create info is invalid or describes an unsupported image");
+   }
 
    struct terakan_image * const image =
       vk_alloc2(&device->vk.alloc, pAllocator, sizeof(struct terakan_image),
@@ -1796,9 +1836,18 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
       goto fail_image;
    }
 
+   bool const is_3d = image->vk.image_type == VK_IMAGE_TYPE_3D;
+   image->extent = (struct terakan_image_extent){
+      .width = (uint16_t)pCreateInfo->extent.width,
+      .height = (uint16_t)pCreateInfo->extent.height,
+      .slices = (uint16_t)(is_3d ? pCreateInfo->extent.depth : pCreateInfo->arrayLayers),
+      .is_3d = is_3d,
+      .samples_log2 = (uint8_t)samples_log2,
+   };
+
    terakan_image_surface_compute(pCreateInfo, &image->format_info,
                                  (pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0,
-                                 terakan_device_physical_device(device), &image->surface);
+                                 physical_device, &image->surface);
 
    image->bo = NULL;
    image->va = 0;

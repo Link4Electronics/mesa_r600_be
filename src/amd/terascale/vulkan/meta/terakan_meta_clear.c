@@ -458,9 +458,8 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
             range_subresource_range.base_mip_level + level_base_relative_index;
          if (image_is_3d) {
             image_descriptor_create_info.subresource_range.base_z_or_array_layer = 0;
-            image_descriptor_create_info.subresource_range.max_depth_or_layer_count =
-               u_minify(image->vk.extent.depth,
-                        image_descriptor_create_info.subresource_range.base_mip_level);
+            image_descriptor_create_info.subresource_range.max_depth_or_layer_count = u_minify(
+               image->extent.slices, image_descriptor_create_info.subresource_range.base_mip_level);
          } else {
             image_descriptor_create_info.subresource_range.base_z_or_array_layer =
                range_subresource_range.base_z_or_array_layer;

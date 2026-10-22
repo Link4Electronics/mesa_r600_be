@@ -137,15 +137,14 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
          pCreateInfo->subresourceRange.layerCount;
       FALLTHROUGH;
    case VK_IMAGE_VIEW_TYPE_2D:
-      srv_dimensionality = image->vk.samples > VK_SAMPLE_COUNT_1_BIT
-                              ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
-                              : V_030000_SQ_TEX_DIM_2D_ARRAY;
+      srv_dimensionality = image->extent.samples_log2 != 0u ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
+                                                            : V_030000_SQ_TEX_DIM_2D_ARRAY;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
       break;
    case VK_IMAGE_VIEW_TYPE_3D:
       descriptor_create_info.subresource_range.base_z_or_array_layer = 0;
       descriptor_create_info.subresource_range.max_depth_or_layer_count =
-         u_minify(image->vk.extent.depth, pCreateInfo->subresourceRange.baseMipLevel);
+         u_minify(image->extent.slices, pCreateInfo->subresourceRange.baseMipLevel);
       srv_dimensionality = V_030000_SQ_TEX_DIM_3D;
       color_resource_type = V_028C70_TEXTURE3D;
       break;

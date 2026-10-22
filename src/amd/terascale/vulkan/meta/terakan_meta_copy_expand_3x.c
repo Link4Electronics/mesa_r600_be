@@ -682,14 +682,14 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
        * adjustment, so reject the region if its offset is negative (the conversion to `uint32_t`
        * will make it always exceed the width or height).
        */
-      uint32_t const src_subresource_width =
-         u_minify(src_image->vk.extent.width, src_subresource_range.base_mip_level);
-      uint32_t const src_subresource_height =
-         u_minify(src_image->vk.extent.height, src_subresource_range.base_mip_level);
-      uint32_t const dst_subresource_width =
-         u_minify(dst_image->vk.extent.width, dst_subresource_range.base_mip_level);
-      uint32_t const dst_subresource_height =
-         u_minify(dst_image->vk.extent.height, dst_subresource_range.base_mip_level);
+      uint16_t const src_subresource_width =
+         (uint16_t)u_minify(src_image->extent.width, src_subresource_range.base_mip_level);
+      uint16_t const src_subresource_height =
+         (uint16_t)u_minify(src_image->extent.height, src_subresource_range.base_mip_level);
+      uint16_t const dst_subresource_width =
+         (uint16_t)u_minify(dst_image->extent.width, dst_subresource_range.base_mip_level);
+      uint16_t const dst_subresource_height =
+         (uint16_t)u_minify(dst_image->extent.height, dst_subresource_range.base_mip_level);
       if (unlikely((uint32_t)region->srcOffset.x >= src_subresource_width ||
                    (uint32_t)region->srcOffset.y >= src_subresource_height ||
                    (uint32_t)region->dstOffset.x >= dst_subresource_width ||

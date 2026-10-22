@@ -541,11 +541,12 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
                },
          },
          (struct terakan_screen_rect){
-            .bounds = {
-               [1] = {u_minify(dst_image->vk.extent.width,
-                               dst_descriptor_create_info.subresource_range.base_mip_level),
-                      u_minify(dst_image->vk.extent.height,
-                               dst_descriptor_create_info.subresource_range.base_mip_level)}}});
+            .bounds = {[1] = {(uint16_t)u_minify(
+                                 dst_image->extent.width,
+                                 dst_descriptor_create_info.subresource_range.base_mip_level),
+                              (uint16_t)u_minify(
+                                 dst_image->extent.height,
+                                 dst_descriptor_create_info.subresource_range.base_mip_level)}}});
 
       constants[TERAKAN_META_BLIT_CONST_X_SCALE] =
          (float)(region->srcOffsets[1].x - region->srcOffsets[0].x) /

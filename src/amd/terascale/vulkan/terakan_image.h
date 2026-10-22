@@ -61,20 +61,30 @@ struct terakan_screen_rect terakan_vk_rect_to_screen_rect(VkRect2D rect,
 #define TERAKAN_IMAGE_MAX_TARGET_SLICES_LOG2 11
 #define TERAKAN_IMAGE_MAX_TARGET_SLICES      (1 << TERAKAN_IMAGE_MAX_TARGET_SLICES_LOG2)
 
+struct terakan_image_extent {
+   uint16_t width;
+   uint16_t height;
+   uint16_t slices;
+   /* Whether this is a 3D image, for which the slice count is minified. */
+   uint8_t is_3d : 1;
+   uint8_t samples_log2 : 2;
+};
+
 /* Returns -1 for an invalid sample count. */
 static inline int
 terakan_image_vk_sample_count_to_hw_log2(VkSampleCountFlagBits const sample_count,
                                          bool const allow_16_samples)
 {
-   int const sample_count_log2 = ffs((uint32_t)sample_count) - 1;
+   int const samples_log2 = ffs((uint32_t)sample_count) - 1;
    /* #MemoryIntegrity: Don't allow too large sample counts because they're used in hardware
     * fixed-function state registers and in addressing in various places on both the GPU and the
-    * CPU.
+    * CPU, and also don't allow non-power-of-two sample counts.
     */
-   if (unlikely(sample_count_log2 < 0 || sample_count_log2 > (allow_16_samples ? 4 : 3))) {
+   if (unlikely(samples_log2 < 0 || samples_log2 > (allow_16_samples ? 4 : 3) ||
+                sample_count != BITFIELD_BIT(samples_log2))) {
       return -1;
    }
-   return sample_count_log2;
+   return samples_log2;
 }
 
 struct terakan_image_surface_level {
@@ -153,6 +163,8 @@ struct terakan_image {
    /* Derived from the format, but needed in many places, so stored. */
    struct terakan_format_info format_info;
 
+   struct terakan_image_extent extent;
+
    struct terakan_image_surface surface;
 
    struct terakan_bo const * bo;
@@ -160,16 +172,6 @@ struct terakan_image {
 };
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(terakan_image, vk.base, VkImage, VK_OBJECT_TYPE_IMAGE)
-
-static inline uint32_t
-terakan_image_depth_or_array_layers(struct terakan_image const * const image,
-                                    uint32_t const mip_level)
-{
-   if (image->vk.image_type == VK_IMAGE_TYPE_3D) {
-      return u_minify(image->vk.extent.depth, mip_level);
-   }
-   return image->vk.array_layers;
-}
 
 static inline bool
 terakan_image_is_big_endian(UNUSED struct terakan_image const * const image)
