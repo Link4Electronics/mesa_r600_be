@@ -850,7 +850,7 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
        */
       surface_out->level_stride_array_layers =
          6u * (surface_out->level_stride_array_layers / 6u +
-               (unsigned)(surface_out->level_stride_array_layers));
+               (unsigned)(surface_out->level_stride_array_layers % 6u != 0u));
    }
 
    VkImageAspectFlagBits const * const aspect_map_aspects =
