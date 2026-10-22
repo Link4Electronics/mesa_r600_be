@@ -829,7 +829,6 @@ terakan_image_surface_aspect_compute(VkImageCreateInfo const * const image_creat
 static void
 terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
                               struct terakan_format_info const * const format_info,
-                              bool const cube_compatible,
                               struct terakan_physical_device const * const physical_device,
                               struct terakan_image_surface * const surface_out)
 {
@@ -840,7 +839,7 @@ terakan_image_surface_compute(VkImageCreateInfo const * const image_create_info,
    surface_out->size_bytes_shr8 = 0;
 
    surface_out->level_stride_array_layers = image_create_info->arrayLayers;
-   if (cube_compatible) {
+   if (image_create_info->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) {
       /* Cube map SRV descriptors have `TEX_DEPTH` in cubes, not faces, but Vulkan doesn't require
        * that the array layer count of a cube-compatible image is a multiple of 6, only that it's
        * greater than or equal to 6 (VUID-VkImageCreateInfo-flags-08866).
@@ -912,10 +911,7 @@ terakan_vk_GetDeviceImageMemoryRequirements(VkDevice const deviceHandle,
    struct terakan_format_info format_info;
    if (likely(terakan_format_info_get(pInfo->pCreateInfo->format, &format_info))) {
       struct terakan_image_surface surface;
-      terakan_image_surface_compute(
-         pInfo->pCreateInfo, &format_info,
-         (pInfo->pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0, physical_device,
-         &surface);
+      terakan_image_surface_compute(pInfo->pCreateInfo, &format_info, physical_device, &surface);
       pMemoryRequirements->memoryRequirements.size = (VkDeviceSize)surface.size_bytes_shr8 << 8;
       pMemoryRequirements->memoryRequirements.alignment = (VkDeviceSize)surface.alignment_bytes_shr8
                                                           << 8;
@@ -1845,9 +1841,8 @@ terakan_vk_CreateImage(VkDevice const deviceHandle, VkImageCreateInfo const * co
       .samples_log2 = (uint8_t)samples_log2,
    };
 
-   terakan_image_surface_compute(pCreateInfo, &image->format_info,
-                                 (pCreateInfo->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0,
-                                 physical_device, &image->surface);
+   terakan_image_surface_compute(pCreateInfo, &image->format_info, physical_device,
+                                 &image->surface);
 
    image->bo = NULL;
    image->va = 0;
