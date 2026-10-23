@@ -324,7 +324,7 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
 
          do {
             struct terakan_color_descriptor dst_descriptor;
-            uint32_t const dst_descriptor_slices = terakan_image_create_color_descriptor(
+            uint16_t const dst_descriptor_slices = terakan_image_create_color_descriptor(
                &dst_descriptor_create_info, V_028C70_TEXTURE2DARRAY, &dst_descriptor, NULL);
             if (unlikely(dst_descriptor_slices == 0)) {
                break;
@@ -351,8 +351,8 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
             dst_descriptor_create_info.subresource_range.max_depth_or_layer_count -=
                dst_descriptor_slices;
             src_descriptor.srv[5] = (src_descriptor.srv[5] & C_030014_BASE_ARRAY) |
-                                    S_030014_BASE_ARRAY(G_030014_BASE_ARRAY(src_descriptor.srv[5] +
-                                                                            dst_descriptor_slices));
+                                    S_030014_BASE_ARRAY(G_030014_BASE_ARRAY(src_descriptor.srv[5]) +
+                                                        dst_descriptor_slices);
          } while (dst_descriptor_create_info.subresource_range.max_depth_or_layer_count != 0);
       }
    }

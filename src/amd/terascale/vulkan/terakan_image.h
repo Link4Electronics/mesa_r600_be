@@ -194,18 +194,18 @@ terakan_image_is_big_endian(UNUSED struct terakan_image const * const image)
 }
 
 struct terakan_image_descriptor_subresource_range {
-   uint32_t base_mip_level;
+   uint8_t base_mip_level;
    /* Before sanitization, the upper bound of the mip level range can exceed the mip level count, in
     * which case it will be silently clamped by sanitization. This, in particular, allows for
     * simpler handling of `VK_REMAINING_MIP_LEVELS`.
     */
-   uint32_t max_level_count;
-   uint32_t base_z_or_array_layer;
+   uint8_t max_level_count;
+   uint16_t base_z_or_array_layer;
    /* Before sanitization, the upper bound of the layer range can exceed the mip level layer count,
     * in which case it will be silently clamped by sanitization. This, in particular, allows for
     * simpler handling of `VK_REMAINING_ARRAY_LAYERS`.
     */
-   uint32_t max_depth_or_layer_count;
+   uint16_t max_depth_or_layer_count;
 };
 
 /* Normalizes the subresource range, so that the ranges are clamped (including handling
@@ -285,7 +285,7 @@ bool terakan_image_create_srv_descriptor(
  *
  * `terakan_image_descriptor_subresource_range_sanitize` must be done before calling.
  */
-uint32_t terakan_image_create_color_descriptor(
+uint16_t terakan_image_create_color_descriptor(
    struct terakan_image_descriptor_create_info const * descriptor_create_info,
    uint32_t desired_info_resource_type, struct terakan_color_descriptor * descriptor_out,
    struct terakan_color_meta_descriptor * meta_descriptor_out_opt);

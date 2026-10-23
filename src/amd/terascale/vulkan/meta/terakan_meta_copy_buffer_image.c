@@ -671,7 +671,7 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
          }
 
          struct terakan_color_descriptor image_descriptor;
-         uint32_t const image_descriptor_slices = terakan_image_create_color_descriptor(
+         uint16_t const image_descriptor_slices = terakan_image_create_color_descriptor(
             &region_image.image_descriptor_create_info, V_028C70_TEXTURE2DARRAY, &image_descriptor,
             NULL);
          if (unlikely(image_descriptor_slices == 0)) {

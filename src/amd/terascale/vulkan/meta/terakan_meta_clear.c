@@ -444,7 +444,7 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
          continue;
       }
 
-      for (uint32_t level_base_relative_index = 0;
+      for (uint8_t level_base_relative_index = 0;
            level_base_relative_index < range_subresource_range.max_level_count;
            ++level_base_relative_index) {
          image_descriptor_create_info.subresource_range.base_mip_level =
@@ -462,7 +462,7 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
 
          do {
             struct terakan_color_descriptor image_descriptor;
-            uint32_t const image_descriptor_slices = terakan_image_create_color_descriptor(
+            uint16_t const image_descriptor_slices = terakan_image_create_color_descriptor(
                &image_descriptor_create_info, V_028C70_TEXTURE2DARRAY, &image_descriptor, NULL);
             if (unlikely(image_descriptor_slices == 0)) {
                break;
@@ -478,8 +478,8 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
             terakan_meta_draw_rect(
                command_writer,
                (struct terakan_screen_rect){
-                  .bounds = {[1] = {G_028C78_WIDTH_MAX(image_descriptor.dim) + 1,
-                                    G_028C78_HEIGHT_MAX(image_descriptor.dim) + 1}}},
+                  .bounds = {[1] = {(uint16_t)(G_028C78_WIDTH_MAX(image_descriptor.dim) + 1u),
+                                    (uint16_t)(G_028C78_HEIGHT_MAX(image_descriptor.dim) + 1u)}}},
                image_descriptor_slices);
 
             image_descriptor_create_info.subresource_range.base_z_or_array_layer +=

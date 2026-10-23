@@ -614,7 +614,7 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
 
          do {
             struct terakan_color_descriptor dst_descriptor;
-            uint32_t const dst_descriptor_slices = terakan_image_create_color_descriptor(
+            uint16_t const dst_descriptor_slices = terakan_image_create_color_descriptor(
                &dst_descriptor_create_info, V_028C70_TEXTURE2DARRAY, &dst_descriptor, NULL);
             if (unlikely(dst_descriptor_slices == 0)) {
                break;

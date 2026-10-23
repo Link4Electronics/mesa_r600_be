@@ -1205,8 +1205,8 @@ terakan_image_create_srv_descriptor(
       extract_single_level = true;
    }
 
-   uint32_t const origin_level =
-      extract_single_level ? descriptor_create_info->subresource_range.base_mip_level : 0;
+   uint16_t const origin_level =
+      extract_single_level ? descriptor_create_info->subresource_range.base_mip_level : (uint16_t)0;
    struct terakan_image_surface_level const * const surface_origin_level =
       &surface_aspect->levels[origin_level];
 
@@ -1480,14 +1480,14 @@ terakan_image_create_srv_descriptor(
             S_030010_BASE_LEVEL(descriptor_create_info->subresource_range.base_mip_level);
          descriptor_out->srv[5] |=
             S_030014_LAST_LEVEL(descriptor_create_info->subresource_range.base_mip_level +
-                                (descriptor_create_info->subresource_range.max_level_count - 1));
+                                (descriptor_create_info->subresource_range.max_level_count - 1u));
       }
       descriptor_out->srv[6] |= S_030018_MAX_ANISO_RATIO(4);
    }
    return true;
 }
 
-uint32_t
+uint16_t
 terakan_image_create_color_descriptor(
    struct terakan_image_descriptor_create_info const * const descriptor_create_info,
    uint32_t const desired_info_resource_type,
@@ -1533,15 +1533,15 @@ terakan_image_create_color_descriptor(
     * Restrict the descriptor to the range of `TERAKAN_IMAGE_MAX_TARGET_SLICES` slices that includes
     * `base_z_or_array_layer`.
     */
-   uint32_t const base_slice_start =
+   uint16_t const base_slice_start =
       descriptor_create_info->subresource_range.base_z_or_array_layer &
-      ~(uint32_t)(TERAKAN_IMAGE_MAX_TARGET_SLICES - 1);
-   uint32_t const view_slice_start =
+      ~(uint16_t)(TERAKAN_IMAGE_MAX_TARGET_SLICES - 1u);
+   uint16_t const view_slice_start =
       descriptor_create_info->subresource_range.base_z_or_array_layer - base_slice_start;
-   uint32_t const view_slice_end =
+   uint16_t const view_slice_end =
       MIN2(descriptor_create_info->subresource_range.base_z_or_array_layer +
               descriptor_create_info->subresource_range.max_depth_or_layer_count - base_slice_start,
-           TERAKAN_IMAGE_MAX_TARGET_SLICES);
+           (uint16_t)TERAKAN_IMAGE_MAX_TARGET_SLICES);
 
    /* Fill the descriptor. Must not return 0 from now on. */
 
@@ -1556,24 +1556,24 @@ terakan_image_create_color_descriptor(
                               1);
 
    descriptor_out->view =
-      S_028C6C_SLICE_START(view_slice_start) | S_028C6C_SLICE_MAX(view_slice_end - 1);
+      S_028C6C_SLICE_START(view_slice_start) | S_028C6C_SLICE_MAX(view_slice_end - 1u);
 
    bool const array_mode_is_linear = surface_level->array_mode <= V_028C70_ARRAY_LINEAR_ALIGNED;
 
    /* Allowing uncompressed views of compressed and subsampled images. */
    uint8_t const * const image_block_texels_log2 = terascale_format_block_texels_log2
       [image->format_info.aspect_formats[descriptor_create_info->image_aspect_index].format];
-   uint32_t const descriptor_height_minus_1 =
+   unsigned const descriptor_height_minus_1 =
       DIV_ROUND_UP(
          u_minify(image->extent.height, descriptor_create_info->subresource_range.base_mip_level),
          1u << image_block_texels_log2[1]) -
-      1;
+      1u;
    descriptor_out->dim =
       S_028C78_WIDTH_MAX(
          DIV_ROUND_UP(
             u_minify(image->extent.width, descriptor_create_info->subresource_range.base_mip_level),
             1u << image_block_texels_log2[0]) -
-         1) |
+         1u) |
       S_028C78_HEIGHT_MAX(descriptor_height_minus_1);
 
    struct terakan_physical_device const * const physical_device =
@@ -1730,8 +1730,8 @@ terakan_image_create_depth_stencil_descriptor(
 
    /* Fill the descriptor. Must not return false from now on. */
 
-   uint32_t const slice_max =
-      subresource_range->base_z_or_array_layer + (subresource_range->max_depth_or_layer_count - 1);
+   uint16_t const slice_max = subresource_range->base_z_or_array_layer +
+                              (subresource_range->max_depth_or_layer_count - (uint16_t)1);
    /* Not expecting DB-compatible images with more than `TERAKAN_IMAGE_MAX_TARGET_SLICES` slices to
     * be created.
     */
