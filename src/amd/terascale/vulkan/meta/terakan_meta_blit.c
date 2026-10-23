@@ -517,9 +517,9 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
             .max_depth_or_layer_count = UINT32_MAX,
          };
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-                      dst_image, &dst_subresource_range, false) ||
+                      dst_image->extent, &dst_subresource_range, false) ||
                    !terakan_image_descriptor_subresource_range_sanitize(
-                      src_image, &src_descriptor_create_info.subresource_range, false))) {
+                      src_image->extent, &src_descriptor_create_info.subresource_range, false))) {
          continue;
       }
 

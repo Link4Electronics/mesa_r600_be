@@ -1080,19 +1080,19 @@ terakan_vk_BindImageMemory2(UNUSED VkDevice const device, uint32_t const bindInf
 
 bool
 terakan_image_descriptor_subresource_range_sanitize(
-   struct terakan_image const * const image,
+   struct terakan_image_extent const image_extent,
    struct terakan_image_descriptor_subresource_range * const subresource_range,
    bool const is_cube_view)
 {
    /* Validate, without modifying the create info structure. */
    if (subresource_range->max_level_count == 0 ||
-       subresource_range->base_mip_level >= image->extent.levels) {
+       subresource_range->base_mip_level >= image_extent.levels) {
       return false;
    }
    uint16_t const base_mip_level_layer_count =
-      image->extent.is_3d
-         ? (uint16_t)u_minify(image->extent.slices, subresource_range->base_mip_level)
-         : image->extent.slices;
+      image_extent.is_3d
+         ? (uint16_t)u_minify(image_extent.slices, subresource_range->base_mip_level)
+         : image_extent.slices;
    if (subresource_range->base_z_or_array_layer >= base_mip_level_layer_count) {
       return false;
    }
@@ -1108,7 +1108,7 @@ terakan_image_descriptor_subresource_range_sanitize(
 
    /* Normalize. */
    subresource_range->max_level_count = MIN2(
-      subresource_range->max_level_count, image->extent.levels - subresource_range->base_mip_level);
+      subresource_range->max_level_count, image_extent.levels - subresource_range->base_mip_level);
    subresource_range->max_depth_or_layer_count = descriptor_layer_count;
    return true;
 }

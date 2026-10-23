@@ -657,7 +657,7 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
          src_subresource_range.max_depth_or_layer_count = region->srcSubresource.layerCount;
       }
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-             src_image, &src_subresource_range, false))) {
+             src_image->extent, &src_subresource_range, false))) {
          continue;
       }
 
@@ -670,7 +670,7 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
          dst_subresource_range.max_depth_or_layer_count = region->dstSubresource.layerCount;
       }
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-             dst_image, &dst_subresource_range, false))) {
+             dst_image->extent, &dst_subresource_range, false))) {
          continue;
       }
 

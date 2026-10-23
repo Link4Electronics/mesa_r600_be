@@ -447,7 +447,7 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
          range_subresource_range.max_depth_or_layer_count = range->layerCount;
       }
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-             image, &range_subresource_range, false))) {
+             image->extent, &range_subresource_range, false))) {
          continue;
       }
 

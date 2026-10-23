@@ -506,8 +506,8 @@ terakan_meta_copy_buffer_image_translate_region_image(
          },
       };
    if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-                    image, &region_image_out->image_descriptor_create_info.subresource_range,
-                    false))) {
+                    image->extent,
+                    &region_image_out->image_descriptor_create_info.subresource_range, false))) {
       return false;
    }
 

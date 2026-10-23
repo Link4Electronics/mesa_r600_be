@@ -216,7 +216,7 @@ struct terakan_image_descriptor_subresource_range {
  * If false is returned, the subresource range is unchanged.
  */
 bool terakan_image_descriptor_subresource_range_sanitize(
-   struct terakan_image const * image,
+   struct terakan_image_extent image_extent,
    struct terakan_image_descriptor_subresource_range * subresource_range, bool is_cube_view);
 
 /* Before creating descriptors, the subresource range in the create info must be sanitized and

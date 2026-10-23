@@ -311,10 +311,11 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
          dst_descriptor_create_info.subresource_range.max_depth_or_layer_count =
             src_descriptor_create_info.subresource_range.max_depth_or_layer_count;
 
-         if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-                         dst_image, &dst_descriptor_create_info.subresource_range, false) ||
-                      !terakan_image_descriptor_subresource_range_sanitize(
-                         src_image, &src_descriptor_create_info.subresource_range, false))) {
+         if (unlikely(
+                !terakan_image_descriptor_subresource_range_sanitize(
+                   dst_image->extent, &dst_descriptor_create_info.subresource_range, false) ||
+                !terakan_image_descriptor_subresource_range_sanitize(
+                   src_image->extent, &src_descriptor_create_info.subresource_range, false))) {
             continue;
          }
          /* To avoid sanitizing the subresource range at every slice subrange iteration for

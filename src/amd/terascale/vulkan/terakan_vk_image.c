@@ -165,7 +165,7 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
 
    /* TODO(Triang3l): Verify sanitization for cubemaps. */
    if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
-          image, &descriptor_create_info.subresource_range,
+          image->extent, &descriptor_create_info.subresource_range,
           srv_dimensionality == V_030000_SQ_TEX_DIM_CUBEMAP))) {
       image_view->srv = (struct terakan_srv_descriptor){};
       image_view->color = (struct terakan_color_descriptor){};
