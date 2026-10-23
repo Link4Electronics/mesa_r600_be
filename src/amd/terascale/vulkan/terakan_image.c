@@ -293,32 +293,40 @@ terakan_image_alignments_2d_thin(
 #define TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS                                               \
    (1 << TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS_LOG2)
 
+struct terakan_image_surface_compute_image_info {
+   struct terakan_image_extent extent;
+   uint16_t level_stride_array_layers;
+
+   bool is_combined_depth_stencil;
+   bool is_used_by_db;
+
+   bool is_used_by_scanout;
+};
+
 /* `format_info` must be the result of `terakan_format_info_get` for `image_create_info->format`.
  * Returns the preferred base level array mode, though it may need to be degraded from 2D to 1D
  * afterwards.
  */
+/* TODO(Triang3l): Rewrite the comment after removing Vulkan-specific code. */
 static uint8_t
-terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_create_info,
-                                     struct terakan_format_info const * const format_info,
-                                     unsigned const aspect_index,
-                                     struct terakan_physical_device const * const physical_device,
-                                     struct terakan_image_surface_tiling * const tiling_out)
+terakan_image_surface_tiling_compute(
+   bool const linear_required,
+   struct terakan_image_surface_compute_image_info const * const image_info, bool const image_is_1d,
+   struct terakan_format_info const * const format_info, unsigned const aspect_index,
+   bool const texture_fetch_optimal, struct terakan_physical_device const * const physical_device,
+   struct terakan_image_surface_tiling * const tiling_out)
 {
-   bool const used_by_db =
-      (image_create_info->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
-
    uint8_t array_mode;
    enum terascale_format_index const aspect_data_format =
       format_info->aspect_formats[aspect_index].format;
-   if (image_create_info->tiling == VK_IMAGE_TILING_LINEAR ||
-       (TERASCALE_FORMATS_LINEAR_ONLY & BITFIELD64_BIT(aspect_data_format))) {
+   if (linear_required || (TERASCALE_FORMATS_LINEAR_ONLY & BITFIELD64_BIT(aspect_data_format))) {
       array_mode = V_028C70_ARRAY_LINEAR_ALIGNED;
    } else {
       array_mode = V_028C70_ARRAY_2D_TILED_THIN1;
       /* Multisampled images must be 2D-tiled.
        * Depth / stencil attachments must be tiled.
        */
-      if (!used_by_db && image_create_info->samples <= VK_SAMPLE_COUNT_1_BIT &&
+      if (!image_info->is_used_by_db && image_info->extent.samples_log2 == 0u &&
           !(TERASCALE_FORMATS_TILED_ONLY_R8XX & BITFIELD64_BIT(aspect_data_format))) {
          /* Handle common candidates for the linear mode.
           *
@@ -331,7 +339,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
           * optimization for a height of 1 completely, so not doing this optimization for non-1D
           * images here either.
           */
-         if (image_create_info->imageType == VK_IMAGE_TYPE_1D) {
+         if (image_is_1d) {
             array_mode = V_028C70_ARRAY_LINEAR_ALIGNED;
          }
       }
@@ -347,7 +355,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       /* TODO(Triang3l): Debug flag for disabling 2D tiling. */
 
       bool const is_combined_depth_stencil_used_by_db =
-         used_by_db && format_info->aspect_map == TERAKAN_FORMAT_ASPECT_MAP_0_DEPTH_1_STENCIL;
+         image_info->is_used_by_db && image_info->is_combined_depth_stencil;
 
       /* Depth and stencil surfaces since they share bank size and macro-tile aspect ratio, make
        * sure they're calculated the same for both aspects (specifically, calculate them for depth,
@@ -363,17 +371,17 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       /* Tile split. */
 
       unsigned tile_split_bytes_log2;
-      unsigned const samples_log2 = util_logbase2((uint32_t)image_create_info->samples);
-      if (used_by_db) {
+      if (image_info->is_used_by_db) {
          /* For compressed depth, this formula is recommended, for uncompressed, the chip's row size
           * is.
           */
-         tile_split_bytes_log2 = 6 + (samples_log2 - (unsigned)(samples_log2 >= 2));
+         tile_split_bytes_log2 = 6u + (image_info->extent.samples_log2 -
+                                       (unsigned)(image_info->extent.samples_log2 >= 2u));
       } else {
-         if (samples_log2 != 0) {
-            tile_split_bytes_log2 =
-               6 + bytes_per_block_for_tiling_log2 + util_logbase2_ceil(samples_log2);
-            tile_split_bytes_log2 = MAX2(tile_split_bytes_log2, 8);
+         if (image_info->extent.samples_log2 != 0u) {
+            tile_split_bytes_log2 = 6u + bytes_per_block_for_tiling_log2 +
+                                    util_logbase2_ceil(image_info->extent.samples_log2);
+            tile_split_bytes_log2 = MAX2(tile_split_bytes_log2, 8u);
             /* For multisampled images, the calculated tile split may exceed the row size. */
             tile_split_bytes_log2 =
                MIN2(tile_split_bytes_log2, physical_device->tiling_info.row_bytes_log2);
@@ -387,18 +395,18 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       unsigned bank_extent_log2[] = {0, 0};
 
       unsigned const tile_bytes_log2 = terakan_image_macro_tile_bytes_log2(
-         bytes_per_block_for_tiling_log2, samples_log2, tile_split_bytes_log2);
+         bytes_per_block_for_tiling_log2, image_info->extent.samples_log2, tile_split_bytes_log2);
       /* For calculating alignments required by combined depth and stencil surfaces since they share
        * bank size and macro-tile aspect ratio, assuming that the tile split is computed the same
        * for depth and stencil.
        */
-      unsigned const stencil_tile_bytes_log2 =
-         terakan_image_macro_tile_bytes_log2(1, samples_log2, tile_split_bytes_log2);
+      unsigned const stencil_tile_bytes_log2 = terakan_image_macro_tile_bytes_log2(
+         1, image_info->extent.samples_log2, tile_split_bytes_log2);
 
-      if (used_by_db) {
+      if (image_info->is_used_by_db) {
          /* According to the R800 AddrLib, test shows simple sample has best performance with 2x4.
           */
-         if (samples_log2 != 0) {
+         if (image_info->extent.samples_log2 != 0) {
             if (is_combined_depth_stencil_used_by_db) {
                /* To take into account that stencil might require a higher bank height alignment. */
                int const scale_factor_log2 =
@@ -502,10 +510,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       /* R800 AddrLib recommends not to perform optimization for space, including adjusting the
        * macro-tile aspect ratio, for swapchain images.
        */
-      struct wsi_image_create_info const * const wsi_info =
-         vk_find_struct_const(image_create_info->pNext, WSI_IMAGE_CREATE_INFO_MESA);
-      bool const wsi_scanout = wsi_info != NULL && wsi_info->scanout;
-      bool const optimize_for_space = !wsi_scanout;
+      bool const optimize_for_space = !image_info->is_used_by_scanout;
       uint8_t const * const block_texels_log2 =
          terascale_format_block_texels_log2[aspect_data_format];
       /* TODO(Triang3l): Investigate how compatible everything involving this size is with
@@ -513,9 +518,9 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
        * greater than that of another buffer or image created with a greater or equal size".
        */
       uint32_t const width_blocks =
-         DIV_ROUND_UP(image_create_info->extent.width, 1u << block_texels_log2[0]);
+         DIV_ROUND_UP(image_info->extent.width, 1u << block_texels_log2[0]);
       uint32_t const height_blocks =
-         DIV_ROUND_UP(image_create_info->extent.height, 1u << block_texels_log2[1]);
+         DIV_ROUND_UP(image_info->extent.height, 1u << block_texels_log2[1]);
       if (optimize_for_space) {
          uint32_t width_alignment =
             (uint32_t)8 << (physical_device->tiling_info.pipes_log2 + bank_extent_log2[0]);
@@ -545,16 +550,14 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
        * AddrLib.
        */
 
-      if (!used_by_db) {
+      if (!image_info->is_used_by_db) {
          /* In R800 AddrLib, one case is for `flags.texture` (conceptually likely meaning optimal
           * for random access), another is for `flags.color`, though for multisampled images, R800
           * AddrLib sets `texture` to 0 and `color` to 1 during tile split computation to "avoid
           * different tile_split" - "reported by DXX who is doing an MSAA color buffer to MSAA
           * texture memcpy".
           */
-         if ((image_create_info->usage &
-              (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT)) &&
-             samples_log2 == 0) {
+         if (texture_fetch_optimal && image_info->extent.samples_log2 == 0u) {
             if (bank_extent_log2[1] >= 2) {
                macro_tile_aspect_ratio_log2 = 1;
             }
@@ -568,7 +571,7 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       macro_tile_aspect_ratio_log2 =
          MIN2(physical_device->tiling_info.banks_log2, macro_tile_aspect_ratio_log2);
 
-      if (samples_log2 == 0) {
+      if (image_info->extent.samples_log2 == 0u) {
          unsigned const macro_tile_aspect_ratio_alignment_log2 =
             terakan_image_macro_tile_aspect_ratio_single_sample_alignment_log2(
                &physical_device->tiling_info, attrib_alignment_tile_bytes_log2,
@@ -580,11 +583,11 @@ terakan_image_surface_tiling_compute(VkImageCreateInfo const * const image_creat
       /* Try to degrade to 1D (AddrLib `DegradeTo1D`) to save space. Multisampled images must be
        * 2D-tiled, however. AddrLib also doesn't perform this optimization for swapchain images.
        */
-      if (optimize_for_space && samples_log2 == 0) {
+      if (optimize_for_space && image_info->extent.samples_log2 == 0u) {
          struct terakan_image_alignments macro_tiled_alignments = terakan_image_alignments_2d_thin(
             &physical_device->tiling_info, tile_bytes_log2, bank_extent_log2[0],
             bank_extent_log2[1], macro_tile_aspect_ratio_log2);
-         if (wsi_scanout) {
+         if (image_info->is_used_by_scanout) {
             macro_tiled_alignments.pitch_surfels = MAX2(
                macro_tiled_alignments.pitch_surfels, TERAKAN_IMAGE_SCANOUT_PITCH_ALIGNMENT_PIXELS);
          }
@@ -634,16 +637,6 @@ terakan_image_level_stride_array_layers(uint16_t const array_layers, bool const 
    }
    return level_stride_array_layers;
 }
-
-struct terakan_image_surface_compute_image_info {
-   struct terakan_image_extent extent;
-   uint16_t level_stride_array_layers;
-
-   bool is_combined_depth_stencil;
-   bool is_used_by_db;
-
-   bool is_used_by_scanout;
-};
 
 /* On failure, the output is left in an undefined state. */
 static void
@@ -921,7 +914,11 @@ terakan_vk_image_surface_compute(VkImageCreateInfo const * const image_create_in
          aspect_array_mode = surface_out->aspects[0].levels[0].array_mode;
       } else {
          aspect_array_mode = terakan_image_surface_tiling_compute(
-            image_create_info, format_info, aspect_index, physical_device, &aspect_tiling);
+            image_create_info->tiling == VK_IMAGE_TILING_LINEAR, &surface_image_info,
+            image_create_info->imageType == VK_IMAGE_TYPE_1D, format_info, aspect_index,
+            (image_create_info->usage &
+             (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT)) != 0,
+            physical_device, &aspect_tiling);
       }
       terakan_image_surface_aspect_compute(
          &surface_image_info, format_info->aspect_formats[aspect_index].format, physical_device,
