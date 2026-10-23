@@ -1086,7 +1086,7 @@ terakan_image_descriptor_subresource_range_sanitize(
 {
    /* Validate, without modifying the create info structure. */
    if (subresource_range->max_level_count == 0 ||
-       subresource_range->base_mip_level >= image->vk.mip_levels) {
+       subresource_range->base_mip_level >= image->extent.levels) {
       return false;
    }
    uint16_t const base_mip_level_layer_count =
@@ -1108,7 +1108,7 @@ terakan_image_descriptor_subresource_range_sanitize(
 
    /* Normalize. */
    subresource_range->max_level_count = MIN2(
-      subresource_range->max_level_count, image->vk.mip_levels - subresource_range->base_mip_level);
+      subresource_range->max_level_count, image->extent.levels - subresource_range->base_mip_level);
    subresource_range->max_depth_or_layer_count = descriptor_layer_count;
    return true;
 }
@@ -1475,7 +1475,7 @@ terakan_image_create_srv_descriptor(
       } else {
          descriptor_out->srv[3] =
             image_va_shr8 +
-            surface_aspect->levels[MIN2(image->vk.mip_levels - 1u, 1u)].offset_in_memory_bytes_shr8;
+            surface_aspect->levels[MIN2(image->extent.levels - 1u, 1u)].offset_in_memory_bytes_shr8;
          descriptor_out->srv[4] |=
             S_030010_BASE_LEVEL(descriptor_create_info->subresource_range.base_mip_level);
          descriptor_out->srv[5] |=
