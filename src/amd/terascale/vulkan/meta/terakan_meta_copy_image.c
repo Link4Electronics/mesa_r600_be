@@ -23,8 +23,8 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_image.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -287,30 +287,18 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
                [src_image->format_info.aspect_formats[src_descriptor_create_info.image_aspect_index]
                    .format]);
 
-         dst_descriptor_create_info.subresource_range.base_mip_level =
-            region->dstSubresource.mipLevel;
-         dst_descriptor_create_info.subresource_range.max_level_count = 1;
-         src_descriptor_create_info.subresource_range.base_mip_level =
-            region->srcSubresource.mipLevel;
-         src_descriptor_create_info.subresource_range.max_level_count = 1;
-
-         if (src_image->vk.image_type == VK_IMAGE_TYPE_3D) {
-            src_descriptor_create_info.subresource_range.base_z_or_array_layer =
-               (uint32_t)region->srcOffset.z;
-            src_descriptor_create_info.subresource_range.max_depth_or_layer_count =
-               region->extent.depth;
-         } else {
-            src_descriptor_create_info.subresource_range.base_z_or_array_layer =
-               region->srcSubresource.baseArrayLayer;
-            src_descriptor_create_info.subresource_range.max_depth_or_layer_count =
-               region->srcSubresource.layerCount;
-         }
-         dst_descriptor_create_info.subresource_range.base_z_or_array_layer =
-            dst_image->vk.image_type == VK_IMAGE_TYPE_3D ? (uint32_t)region->dstOffset.z
-                                                         : region->dstSubresource.baseArrayLayer;
-         dst_descriptor_create_info.subresource_range.max_depth_or_layer_count =
-            src_descriptor_create_info.subresource_range.max_depth_or_layer_count;
-
+         src_descriptor_create_info.subresource_range =
+            terakan_vk_image_descriptor_subresource_range(
+               region->srcSubresource.mipLevel, 1,
+               src_image->extent.is_3d ? (uint32_t)region->srcOffset.z
+                                       : region->srcSubresource.baseArrayLayer,
+               src_image->extent.is_3d ? region->extent.depth : region->srcSubresource.layerCount);
+         dst_descriptor_create_info.subresource_range =
+            terakan_vk_image_descriptor_subresource_range(
+               region->dstSubresource.mipLevel, 1,
+               dst_image->extent.is_3d ? (uint32_t)region->dstOffset.z
+                                       : region->dstSubresource.baseArrayLayer,
+               src_descriptor_create_info.subresource_range.max_depth_or_layer_count);
          if (unlikely(
                 !terakan_image_descriptor_subresource_range_sanitize(
                    dst_image->extent, &dst_descriptor_create_info.subresource_range, false) ||

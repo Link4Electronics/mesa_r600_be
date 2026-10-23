@@ -23,8 +23,8 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_image.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 
 #include "util/bitscan.h"
 #include "util/macros.h"
@@ -501,21 +501,16 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
        */
 
       bool const dst_reverse_z = dst_3d && region->dstOffsets[0].z > region->dstOffsets[1].z;
-      struct terakan_image_descriptor_subresource_range dst_subresource_range = {
-         .base_mip_level = region->dstSubresource.mipLevel,
-         .max_level_count = 1,
-         .base_z_or_array_layer = dst_3d ? (uint32_t)region->dstOffsets[dst_reverse_z].z
-                                         : region->dstSubresource.baseArrayLayer,
-         .max_depth_or_layer_count = dst_3d ? (uint32_t)(region->dstOffsets[!dst_reverse_z].z -
-                                                         region->dstOffsets[dst_reverse_z].z)
-                                            : region->dstSubresource.layerCount,
-      };
-      src_descriptor_create_info.subresource_range =
-         (struct terakan_image_descriptor_subresource_range){
-            .base_mip_level = region->srcSubresource.mipLevel,
-            .max_level_count = 1,
-            .max_depth_or_layer_count = UINT32_MAX,
-         };
+      struct terakan_image_descriptor_subresource_range dst_subresource_range =
+         terakan_vk_image_descriptor_subresource_range(
+            region->dstSubresource.mipLevel, 1,
+            dst_3d ? (uint32_t)region->dstOffsets[dst_reverse_z].z
+                   : region->dstSubresource.baseArrayLayer,
+            dst_3d ? (uint32_t)(region->dstOffsets[!dst_reverse_z].z -
+                                region->dstOffsets[dst_reverse_z].z)
+                   : region->dstSubresource.layerCount);
+      src_descriptor_create_info.subresource_range = terakan_vk_image_descriptor_subresource_range(
+         region->srcSubresource.mipLevel, 1, 0, VK_REMAINING_ARRAY_LAYERS);
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
                       dst_image->extent, &dst_subresource_range, false) ||
                    !terakan_image_descriptor_subresource_range_sanitize(

@@ -23,9 +23,9 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_image.h"
 #include "terakan_physical_device.h"
 #include "terakan_vk_buffer.h"
+#include "terakan_vk_image.h"
 
 #include "util/macros.h"
 
@@ -628,9 +628,6 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
    }
    uint8_t const src_bytes_per_surfel = src_surface_aspect->bytes_per_block / 3u;
 
-   struct terakan_image_descriptor_subresource_range src_subresource_range = {.max_level_count = 1};
-   struct terakan_image_descriptor_subresource_range dst_subresource_range = {.max_level_count = 1};
-
    /* The source descriptor base is the rectangle origin. */
    struct terakan_srv_descriptor src_descriptor =
       terakan_meta_transfer_expand_3x_srv(src_bytes_per_surfel);
@@ -648,27 +645,23 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
 
       /* Sanitize and handle `VK_REMAINING_*`. */
 
-      src_subresource_range.base_mip_level = region->srcSubresource.mipLevel;
-      if (src_image->vk.image_type == VK_IMAGE_TYPE_3D) {
-         src_subresource_range.base_z_or_array_layer = (uint32_t)region->srcOffset.z;
-         src_subresource_range.max_depth_or_layer_count = region->extent.depth;
-      } else {
-         src_subresource_range.base_z_or_array_layer = region->srcSubresource.baseArrayLayer;
-         src_subresource_range.max_depth_or_layer_count = region->srcSubresource.layerCount;
-      }
+      struct terakan_image_descriptor_subresource_range src_subresource_range =
+         terakan_vk_image_descriptor_subresource_range(
+            region->srcSubresource.mipLevel, 1,
+            src_image->extent.is_3d ? (uint32_t)region->srcOffset.z
+                                    : region->srcSubresource.baseArrayLayer,
+            src_image->extent.is_3d ? region->extent.depth : region->srcSubresource.layerCount);
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
              src_image->extent, &src_subresource_range, false))) {
          continue;
       }
 
-      dst_subresource_range.base_mip_level = region->dstSubresource.mipLevel;
-      if (dst_image->vk.image_type == VK_IMAGE_TYPE_3D) {
-         dst_subresource_range.base_z_or_array_layer = (uint32_t)region->dstOffset.z;
-         dst_subresource_range.max_depth_or_layer_count = region->extent.depth;
-      } else {
-         dst_subresource_range.base_z_or_array_layer = region->dstSubresource.baseArrayLayer;
-         dst_subresource_range.max_depth_or_layer_count = region->dstSubresource.layerCount;
-      }
+      struct terakan_image_descriptor_subresource_range dst_subresource_range =
+         terakan_vk_image_descriptor_subresource_range(
+            region->dstSubresource.mipLevel, 1,
+            dst_image->extent.is_3d ? (uint32_t)region->dstOffset.z
+                                    : region->dstSubresource.baseArrayLayer,
+            dst_image->extent.is_3d ? region->extent.depth : region->dstSubresource.layerCount);
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
              dst_image->extent, &dst_subresource_range, false))) {
          continue;

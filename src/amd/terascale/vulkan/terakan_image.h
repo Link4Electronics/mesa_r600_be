@@ -195,15 +195,15 @@ terakan_image_is_big_endian(UNUSED struct terakan_image const * const image)
 
 struct terakan_image_descriptor_subresource_range {
    uint32_t base_mip_level;
-   /* Before sanitization, the upper bound of the mip level range can exceed the mip level count
-    * (including being `UINT32_MAX`, which is `VK_REMAINING_MIP_LEVELS`), in which case it will be
-    * silently clamped by sanitization.
+   /* Before sanitization, the upper bound of the mip level range can exceed the mip level count, in
+    * which case it will be silently clamped by sanitization. This, in particular, allows for
+    * simpler handling of `VK_REMAINING_MIP_LEVELS`.
     */
    uint32_t max_level_count;
    uint32_t base_z_or_array_layer;
-   /* Before sanitization, the upper bound of the layer range can exceed the mip level layer count
-    * (including being `UINT32_MAX`, which is `VK_REMAINING_ARRAY_LAYERS`), in which case it will be
-    * silently clamped by sanitization.
+   /* Before sanitization, the upper bound of the layer range can exceed the mip level layer count,
+    * in which case it will be silently clamped by sanitization. This, in particular, allows for
+    * simpler handling of `VK_REMAINING_ARRAY_LAYERS`.
     */
    uint32_t max_depth_or_layer_count;
 };

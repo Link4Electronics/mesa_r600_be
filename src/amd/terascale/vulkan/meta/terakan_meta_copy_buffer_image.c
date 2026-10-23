@@ -23,10 +23,10 @@
 
 #include "terakan_meta_impl.h"
 
-#include "terakan_image.h"
 #include "terakan_physical_device.h"
 #include "terakan_vk_buffer.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 
 #include "util/macros.h"
 #include "vk_format.h"
@@ -485,7 +485,6 @@ terakan_meta_copy_buffer_image_translate_region_image(
 
    unsigned const aspect_index = terakan_format_aspect_index(
       image->format_info.aspect_map, region->imageSubresource.aspectMask, 0);
-   bool const image_is_3d = image->vk.image_type == VK_IMAGE_TYPE_3D;
    region_image_out->image_descriptor_create_info =
       (struct terakan_image_descriptor_create_info){
          .image = image,
@@ -493,17 +492,14 @@ terakan_meta_copy_buffer_image_translate_region_image(
             terascale_format_bytes_per_block[image->format_info.aspect_formats[aspect_index]
                                                                    .format]),
          .image_aspect_index = aspect_index,
-         .subresource_range = {
-            .base_mip_level = region->imageSubresource.mipLevel,
-            .max_level_count = 1,
-            /* #MemoryIntegrity: If the Z offset is negative (invalid usage), the subresource range
-             * sanitization will fail as it will always exceed the depth as `uint32_t`.
-             */
-            .base_z_or_array_layer = image_is_3d ? (uint32_t)region->imageOffset.z
-                                                 : region->imageSubresource.baseArrayLayer,
-            .max_depth_or_layer_count = image_is_3d ? region->imageExtent.depth
-                                                    : region->imageSubresource.layerCount,
-         },
+         /* #MemoryIntegrity: If the Z offset is negative (invalid usage), the subresource range
+          * sanitization will fail as it will always exceed the depth as `uint32_t`.
+          */
+         .subresource_range = terakan_vk_image_descriptor_subresource_range(
+            region->imageSubresource.mipLevel, 1,
+            image->extent.is_3d ? (uint32_t)region->imageOffset.z
+                                : region->imageSubresource.baseArrayLayer,
+            image->extent.is_3d ? region->imageExtent.depth : region->imageSubresource.layerCount),
       };
    if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
                     image->extent,

@@ -84,13 +84,9 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
 
    struct terakan_image_descriptor_create_info descriptor_create_info = {
       .image = image,
-      .subresource_range =
-         {
-            .base_mip_level = pCreateInfo->subresourceRange.baseMipLevel,
-            .max_level_count = pCreateInfo->subresourceRange.levelCount,
-            .base_z_or_array_layer = pCreateInfo->subresourceRange.baseArrayLayer,
-            .max_depth_or_layer_count = 1,
-         },
+      .subresource_range = terakan_vk_image_descriptor_subresource_range(
+         pCreateInfo->subresourceRange.baseMipLevel, pCreateInfo->subresourceRange.levelCount,
+         pCreateInfo->subresourceRange.baseArrayLayer, pCreateInfo->subresourceRange.layerCount),
    };
 
    /* Using a view with both depth and stencil aspects for sampled or storage image descriptors is
@@ -124,19 +120,17 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
    uint32_t srv_dimensionality = V_030000_SQ_TEX_DIM_2D_ARRAY;
    uint32_t color_resource_type = V_028C70_TEXTURE2DARRAY;
    switch (pCreateInfo->viewType) {
-   case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
-      descriptor_create_info.subresource_range.max_depth_or_layer_count =
-         pCreateInfo->subresourceRange.layerCount;
-      FALLTHROUGH;
    case VK_IMAGE_VIEW_TYPE_1D:
+      descriptor_create_info.subresource_range.max_depth_or_layer_count = 1;
+      FALLTHROUGH;
+   case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
       srv_dimensionality = V_030000_SQ_TEX_DIM_1D_ARRAY;
       color_resource_type = V_028C70_TEXTURE1DARRAY;
       break;
-   case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
-      descriptor_create_info.subresource_range.max_depth_or_layer_count =
-         pCreateInfo->subresourceRange.layerCount;
-      FALLTHROUGH;
    case VK_IMAGE_VIEW_TYPE_2D:
+      descriptor_create_info.subresource_range.max_depth_or_layer_count = 1;
+      FALLTHROUGH;
+   case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
       srv_dimensionality = image->extent.samples_log2 != 0u ? V_030000_SQ_TEX_DIM_2D_ARRAY_MSAA
                                                             : V_030000_SQ_TEX_DIM_2D_ARRAY;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
@@ -150,12 +144,8 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
       break;
    case VK_IMAGE_VIEW_TYPE_CUBE:
       descriptor_create_info.subresource_range.max_depth_or_layer_count = 6;
-      srv_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
-      color_resource_type = V_028C70_TEXTURE2DARRAY;
-      break;
+      FALLTHROUGH;
    case VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
-      descriptor_create_info.subresource_range.max_depth_or_layer_count =
-         pCreateInfo->subresourceRange.layerCount;
       srv_dimensionality = V_030000_SQ_TEX_DIM_CUBEMAP;
       color_resource_type = V_028C70_TEXTURE2DARRAY;
       break;

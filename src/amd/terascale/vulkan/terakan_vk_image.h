@@ -28,11 +28,43 @@
 #include "terakan_descriptor.h"
 #include "terakan_image.h"
 
+#include "util/macros.h"
 #include "vk_image.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Should be used instead of filling `terakan_image_descriptor_subresource_range` directly to avoid
+ * integer overflow for #MemoryIntegrity, as `terakan_image_descriptor_subresource_range` may have
+ * different widths of the fields.
+ *
+ * `max_level_count` can be `VK_REMAINING_MIP_LEVELS`.
+ * `max_depth_or_layer_count` can be `VK_REMAINING_ARRAY_LAYERS`.
+ */
+static inline struct terakan_image_descriptor_subresource_range
+terakan_vk_image_descriptor_subresource_range(uint32_t const base_mip_level,
+                                              uint32_t const max_level_count,
+                                              uint32_t const base_z_or_array_layer,
+                                              uint32_t const max_depth_or_layer_count)
+{
+   /* `VK_REMAINING_MIP_LEVELS` and `VK_REMAINING_ARRAY_LAYERS` are `UINT32_MAX`, and thus are just
+    * handled as maximum values that are never smaller than the actual respective counts in the
+    * image.
+    *
+    * Clamping the bases to the exclusive upper bounds, so out-of-bounds bases fail sanitization.
+    */
+   return (struct terakan_image_descriptor_subresource_range){
+      .base_mip_level =
+         (uint8_t)MIN2(base_mip_level, (uint32_t)(TERAKAN_IMAGE_MAX_WIDTH_HEIGHT_LOG2 + 1u)),
+      .max_level_count =
+         (uint8_t)MIN2(max_level_count, (uint32_t)(TERAKAN_IMAGE_MAX_WIDTH_HEIGHT_LOG2 + 1u)),
+      .base_z_or_array_layer =
+         (uint16_t)MIN2(base_z_or_array_layer, (uint32_t)TERAKAN_IMAGE_MAX_SLICES),
+      .max_depth_or_layer_count =
+         (uint16_t)MIN2(max_depth_or_layer_count, (uint32_t)TERAKAN_IMAGE_MAX_SLICES),
+   };
+}
 
 struct terakan_vk_image_view {
    struct vk_image_view vk;

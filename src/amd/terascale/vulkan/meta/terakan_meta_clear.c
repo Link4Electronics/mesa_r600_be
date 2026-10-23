@@ -25,8 +25,8 @@
 
 #include "terakan_command_buffer.h"
 #include "terakan_device.h"
-#include "terakan_image.h"
 #include "terakan_vk_entrypoints.h"
+#include "terakan_vk_image.h"
 #include "terakan_vk_state.h"
 
 #include "util/macros.h"
@@ -426,26 +426,19 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
                    TERAKAN_KCACHE_HW_LINE_BYTES),
       constants_bo, constants_va_lines);
 
-   bool const image_is_3d = image->vk.image_type == VK_IMAGE_TYPE_3D;
-
    for (uint32_t range_index = 0; range_index < rangeCount; ++range_index) {
       VkImageSubresourceRange const * const range = &pRanges[range_index];
 
       /* Perform `VK_REMAINING_*` handling and sanitization for the mip range, and for the array
-       * layer range for non-3D images.
+       * layer range for non-3D images. For 3D, the slice count will be set later for the actual mip
+       * level - for now, initializing the range to the first slice, so slice range sanitization
+       * always passes.
        */
-      struct terakan_image_descriptor_subresource_range range_subresource_range = {
-         .base_mip_level = range->baseMipLevel,
-         .max_level_count = range->levelCount,
-         /* Initialize to only the first slice for the slice range sanitization to pass if it's not
-          * needed yet.
-          */
-         .max_depth_or_layer_count = 1,
-      };
-      if (!image_is_3d) {
-         range_subresource_range.base_z_or_array_layer = range->baseArrayLayer;
-         range_subresource_range.max_depth_or_layer_count = range->layerCount;
-      }
+      struct terakan_image_descriptor_subresource_range range_subresource_range =
+         terakan_vk_image_descriptor_subresource_range(
+            range->baseMipLevel, range->levelCount,
+            image->extent.is_3d ? 0u : range->baseArrayLayer,
+            image->extent.is_3d ? 1u : range->layerCount);
       if (unlikely(!terakan_image_descriptor_subresource_range_sanitize(
              image->extent, &range_subresource_range, false))) {
          continue;
@@ -456,7 +449,7 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
            ++level_base_relative_index) {
          image_descriptor_create_info.subresource_range.base_mip_level =
             range_subresource_range.base_mip_level + level_base_relative_index;
-         if (image_is_3d) {
+         if (image->extent.is_3d) {
             image_descriptor_create_info.subresource_range.base_z_or_array_layer = 0;
             image_descriptor_create_info.subresource_range.max_depth_or_layer_count = u_minify(
                image->extent.slices, image_descriptor_create_info.subresource_range.base_mip_level);
