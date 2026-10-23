@@ -303,8 +303,7 @@ uint16_t terakan_image_create_color_descriptor(
  */
 bool terakan_image_create_depth_stencil_descriptor(
    struct terakan_image const * image, enum terascale_r8xx_depth_format view_depth_format,
-   bool view_may_have_stencil,
-   struct terakan_image_descriptor_subresource_range const * subresource_range,
+   bool view_may_have_stencil, struct terakan_image_descriptor_subresource_range subresource_range,
    struct terakan_depth_stencil_descriptor * descriptor_out);
 
 #ifdef __cplusplus

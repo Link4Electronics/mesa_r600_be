@@ -1673,7 +1673,7 @@ bool
 terakan_image_create_depth_stencil_descriptor(
    struct terakan_image const * const image, enum terascale_r8xx_depth_format view_depth_format,
    bool view_may_have_stencil,
-   struct terakan_image_descriptor_subresource_range const * const subresource_range,
+   struct terakan_image_descriptor_subresource_range const subresource_range,
    struct terakan_depth_stencil_descriptor * const descriptor_out)
 {
    /* DB has certain requirements for images beyond those of TC and CB, don't create depth / stencil
@@ -1724,20 +1724,20 @@ terakan_image_create_depth_stencil_descriptor(
    struct terakan_image_surface_aspect const * const surface_main_aspect =
       view_depth_format != TERASCALE_R8XX_DEPTH_FORMAT_INVALID ? surface_depth : surface_stencil;
    struct terakan_image_surface_level const * const surface_main_aspect_level =
-      &surface_main_aspect->levels[subresource_range->base_mip_level];
+      &surface_main_aspect->levels[subresource_range.base_mip_level];
 
    uint32_t const image_va_shr8 = (uint32_t)(image->va >> 8);
 
    /* Fill the descriptor. Must not return false from now on. */
 
-   uint16_t const slice_max = subresource_range->base_z_or_array_layer +
-                              (subresource_range->max_depth_or_layer_count - (uint16_t)1);
+   uint16_t const slice_max = subresource_range.base_z_or_array_layer +
+                              (subresource_range.max_depth_or_layer_count - (uint16_t)1);
    /* Not expecting DB-compatible images with more than `TERAKAN_IMAGE_MAX_TARGET_SLICES` slices to
     * be created.
     */
    assert(slice_max < TERAKAN_IMAGE_MAX_TARGET_SLICES);
-   descriptor_out->view = S_028008_SLICE_START(subresource_range->base_z_or_array_layer) |
-                          S_028008_SLICE_MAX(slice_max);
+   descriptor_out->view =
+      S_028008_SLICE_START(subresource_range.base_z_or_array_layer) | S_028008_SLICE_MAX(slice_max);
 
    /* `NUM_SAMPLES` is needed by the driver logic regardless of the architecture generation. */
    descriptor_out->z_info =

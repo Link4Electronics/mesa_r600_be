@@ -181,7 +181,7 @@ terakan_vk_CreateImageView(VkDevice const deviceHandle,
       if (!terascale_get_r8xx_depth_stencil_format(vk_format_to_pipe_format(pCreateInfo->format),
                                                    &view_depth_format, &view_has_stencil) ||
           !terakan_image_create_depth_stencil_descriptor(image, view_depth_format, view_has_stencil,
-                                                         &descriptor_create_info.subresource_range,
+                                                         descriptor_create_info.subresource_range,
                                                          &image_view->depth_stencil)) {
          image_view->depth_stencil = (struct terakan_depth_stencil_descriptor){};
       }
