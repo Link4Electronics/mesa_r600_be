@@ -297,7 +297,10 @@ struct terakan_image_surface_compute_image_info {
    struct terakan_image_extent extent;
    uint16_t level_stride_array_layers;
 
-   bool is_combined_depth_stencil;
+   /* Bytes per sample for the depth aspect of a combined depth / stencil image.
+    * 0 if not a combined depth / stencil image.
+    */
+   uint8_t combined_depth_bytes_per_sample;
    bool is_used_by_db;
 
    bool is_used_by_scanout;
@@ -355,15 +358,16 @@ terakan_image_surface_tiling_compute(
       /* TODO(Triang3l): Debug flag for disabling 2D tiling. */
 
       bool const is_combined_depth_stencil_used_by_db =
-         image_info->is_used_by_db && image_info->is_combined_depth_stencil;
+         image_info->combined_depth_bytes_per_sample != 0u && image_info->is_used_by_db;
 
       /* Depth and stencil surfaces since they share bank size and macro-tile aspect ratio, make
        * sure they're calculated the same for both aspects (specifically, calculate them for depth,
        * and reuse for stencil).
        */
-      unsigned const bytes_per_block_for_tiling = terascale_format_bytes_per_block
-         [format_info->aspect_formats[is_combined_depth_stencil_used_by_db ? 0 : aspect_index]
-             .format];
+      unsigned const bytes_per_block_for_tiling =
+         is_combined_depth_stencil_used_by_db
+            ? image_info->combined_depth_bytes_per_sample
+            : terascale_format_bytes_per_block[format_info->aspect_formats[aspect_index].format];
       /* Assume that images with non-power-of-two numbers of bytes per block are linear. */
       assert(IS_POT(bytes_per_block_for_tiling));
       unsigned const bytes_per_block_for_tiling_log2 = util_logbase2(bytes_per_block_for_tiling);
@@ -665,7 +669,7 @@ terakan_image_surface_aspect_compute(
    case V_028C70_ARRAY_1D_TILED_THIN1:
       level_alignments = terakan_image_alignments_1d_thin(
          physical_device->tiling_info.pipe_interleave_bytes_log2, util_logbase2(bytes_per_block),
-         image_info->is_combined_depth_stencil && image_info->is_used_by_db);
+         image_info->combined_depth_bytes_per_sample != 0u && image_info->is_used_by_db);
       break;
    case V_028C70_ARRAY_2D_TILED_THIN1:
       level_alignments = terakan_image_alignments_2d_thin(
@@ -887,8 +891,10 @@ terakan_vk_image_surface_compute(VkImageCreateInfo const * const image_create_in
       .extent = terakan_vk_image_extent_from_create_info(image_create_info),
       .level_stride_array_layers = surface_out->level_stride_array_layers,
 
-      .is_combined_depth_stencil =
-         format_info->aspect_map == TERAKAN_FORMAT_ASPECT_MAP_0_DEPTH_1_STENCIL,
+      .combined_depth_bytes_per_sample =
+         format_info->aspect_map == TERAKAN_FORMAT_ASPECT_MAP_0_DEPTH_1_STENCIL
+            ? terascale_format_bytes_per_block[format_info->aspect_formats[0].format]
+            : 0u,
       .is_used_by_db =
          (image_create_info->usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0,
 
@@ -904,8 +910,8 @@ terakan_vk_image_surface_compute(VkImageCreateInfo const * const image_create_in
          &surface_out->aspects[aspect_index];
       struct terakan_image_surface_tiling aspect_tiling;
       uint8_t aspect_array_mode;
-      if (surface_image_info.is_combined_depth_stencil && surface_image_info.is_used_by_db &&
-          aspect_index == 1) {
+      if (surface_image_info.combined_depth_bytes_per_sample != 0u &&
+          surface_image_info.is_used_by_db && aspect_index == 1) {
          /* Depth and stencil have common registers for most of the surface parameters except for
           * the tile split, though tile split is computed the same by
           * terakan_image_surface_tiling_compute.
