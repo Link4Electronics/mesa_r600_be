@@ -226,7 +226,8 @@ terakan_image_alignments_linear(unsigned const pipe_interleave_bytes_log2,
  * there's only one `DB_DEPTH_SIZE::PITCH_TILE_MAX` for both depth and stencil.
  *
  * For the base level, this can be worked around by overaligning the depth surface in combined depth
- * and stencil images - this is handled here when `is_combined_depth_stencil_base_level` is true.
+ * and stencil images - this is handled here when `is_combined_depth_stencil_base_level_used_by_db`
+ * is true.
  *
  * This can't be done for mips, however, as TC computes their pitch implicitly from the width.
  * Neither can 2D tiling be forced for mips, because TC automatically degrades small mips to 1D
