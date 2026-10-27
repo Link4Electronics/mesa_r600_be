@@ -1628,7 +1628,14 @@ void r600_destroy_surface_custom(struct pipe_surface *surface)
 
 unsigned r600_translate_colorswap(enum pipe_format format, bool do_endian_swap)
 {
-	const struct util_format_description *desc = util_format_description(format);
+	struct util_format_description le_desc;
+	const struct util_format_description *orig = util_format_description(format);
+	const struct util_format_description *desc = r600_packed_le_view(orig, &le_desc);
+
+	/* The little-endian view of a packed format is the one the hardware
+	 * sees after the swap, so the big-endian cases below do not apply. */
+	if (desc != orig)
+		do_endian_swap = false;
 
 #define HAS_SWIZZLE(chan,swz) (desc->swizzle[chan] == PIPE_SWIZZLE_##swz)
 

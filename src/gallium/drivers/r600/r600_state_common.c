@@ -3259,6 +3259,50 @@ unsigned r600_get_swizzle_combined(const unsigned char *swizzle_format,
 }
 
 /* texture format translate */
+/*
+ * On a big-endian host Mesa describes the packed formats whose channels
+ * are not whole bytes (565, 4444, 5551, 2101010) with the channel order
+ * and swizzle reversed, first channel in the top bits. The hardware reads
+ * the word after the 8IN16/8IN32 swap as a little-endian word, so it
+ * needs the little-endian description: its format is chosen from the
+ * channels in order from the lowest bits, and its swizzle names them that
+ * way. Without it 5551 and 2101010 got the wrong hardware format and
+ * 4444, 565 and the rest the wrong swizzle (piglit teximage-colors).
+ * Formats of whole bytes (8888) are in memory order and stay as they are.
+ *
+ * Depth/stencil formats keep their fixed component roles on both
+ * endiannesses, so they are not reversed either.
+ */
+const struct util_format_description *
+r600_packed_le_view(const struct util_format_description *desc,
+		    struct util_format_description *copy)
+{
+	unsigned i, n = 0;
+	bool sub_byte = false;
+
+	if (!UTIL_ARCH_BIG_ENDIAN || desc->layout != UTIL_FORMAT_LAYOUT_PLAIN ||
+	    desc->colorspace == UTIL_FORMAT_COLORSPACE_ZS || desc->is_array ||
+	    (desc->block.bits != 16 && desc->block.bits != 32))
+		return desc;
+	for (i = 0; i < 4; i++) {
+		if (desc->channel[i].size) {
+			n++;
+			if (desc->channel[i].size % 8)
+				sub_byte = true;
+		}
+	}
+	if (!sub_byte || n < 2)
+		return desc;
+
+	*copy = *desc;
+	for (i = 0; i < n; i++)
+		copy->channel[i] = desc->channel[n - 1 - i];
+	for (i = 0; i < 4; i++)
+		if (desc->swizzle[i] < n)
+			copy->swizzle[i] = n - 1 - desc->swizzle[i];
+	return copy;
+}
+
 uint32_t r600_translate_texformat(struct pipe_screen *screen,
 				  enum pipe_format format,
 				  const unsigned char *swizzle_view,
@@ -3268,10 +3312,12 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 	struct r600_screen *rscreen = (struct r600_screen *)screen;
 	uint32_t result = 0, word4 = 0, yuv_format = 0;
 	const struct util_format_description *desc;
+	struct util_format_description le_desc;
 	bool uniform = true;
 	bool is_srgb_valid = false;
 	const unsigned char swizzle_xxxx[4] = {0, 0, 0, 0};
 	const unsigned char swizzle_yyyy[4] = {1, 1, 1, 1};
+	const unsigned char swizzle_xxxy[4] = {0, 0, 0, 1};
 	const unsigned char swizzle_zyx1[4] = {2, 1, 0, 5};
 	const unsigned char swizzle_zyxw[4] = {2, 1, 0, 3};
 
@@ -3296,7 +3342,7 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 	if (format == PIPE_FORMAT_R4A4_UNORM && do_endian_swap)
 		format = PIPE_FORMAT_A4R4_UNORM;
 
-	desc = util_format_description(format);
+	desc = r600_packed_le_view(util_format_description(format), &le_desc);
 
 	/* Depth and stencil swizzling is handled separately. */
 	if (desc->colorspace != UTIL_FORMAT_COLORSPACE_ZS) {
@@ -3306,39 +3352,13 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 		 * u_format.csv
 		 */
 		if (do_endian_swap) {
-			if (format == PIPE_FORMAT_B4G4R4A4_UNORM)
+			if (format == PIPE_FORMAT_L4A4_UNORM)
+				word4 |= r600_get_swizzle_combined(swizzle_xxxy, swizzle_view, false);
+			else if (format == PIPE_FORMAT_B4G4R4A4_UNORM)
 				word4 |= r600_get_swizzle_combined(swizzle_zyxw, swizzle_view, false);
 			else if (format == PIPE_FORMAT_B4G4R4X4_UNORM || format == PIPE_FORMAT_B5G6R5_UNORM)
 				word4 |= r600_get_swizzle_combined(swizzle_zyx1, swizzle_view, false);
-			else if (desc->layout == UTIL_FORMAT_LAYOUT_PLAIN && !desc->is_array && desc->nr_channels >= 2) {
-				unsigned char le_swizzle[4];
-				/* Derive LE swizzle from BE swizzle for packed bitmask formats.
-				 * The BE reversal (X<->W, Y<->Z for 4ch, X<->Z for 3ch, X<->Y for 2ch)
-				 * is its own inverse, so applying the same remap restores LE order.
-				 */
-				for (i = 0; i < 4; i++) {
-					switch (desc->swizzle[i]) {
-					case PIPE_SWIZZLE_X:
-						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_W :
-								(desc->nr_channels >= 3 ? PIPE_SWIZZLE_Z : PIPE_SWIZZLE_Y);
-						break;
-					case PIPE_SWIZZLE_Y:
-						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_Z :
-								(desc->nr_channels >= 3 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X);
-						break;
-					case PIPE_SWIZZLE_Z:
-						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_Y : PIPE_SWIZZLE_X;
-						break;
-					case PIPE_SWIZZLE_W:
-						le_swizzle[i] = desc->nr_channels >= 4 ? PIPE_SWIZZLE_X : PIPE_SWIZZLE_W;
-						break;
-					default:
-						le_swizzle[i] = desc->swizzle[i];
-						break;
-					}
-				}
-				word4 |= r600_get_swizzle_combined(le_swizzle, swizzle_view, false);
-			} else
+			else
 				word4 |= r600_get_swizzle_combined(desc->swizzle, swizzle_view, false);
 		} else {
 			word4 |= r600_get_swizzle_combined(desc->swizzle, swizzle_view, false);
@@ -3530,11 +3550,6 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 #define _HAS_SIZE(x,y,z,w) \
 	(desc->channel[0].size == (x) && desc->channel[1].size == (y) && \
          desc->channel[2].size == (z) && desc->channel[3].size == (w))
-#if UTIL_ARCH_BIG_ENDIAN
-#define _HAS_SIZE_BE(a,b,c,d) _HAS_SIZE(d,c,b,a)
-#else
-#define _HAS_SIZE_BE(a,b,c,d) _HAS_SIZE(a,b,c,d)
-#endif
 		if (desc->colorspace != UTIL_FORMAT_COLORSPACE_SRGB &&
 		    desc->channel[0].pure_integer)
 			word4 |= S_038010_NUM_FORMAT_ALL(V_038010_SQ_NUM_FORMAT_INT);
@@ -3546,18 +3561,17 @@ uint32_t r600_translate_texformat(struct pipe_screen *screen,
 			}
 			goto out_unknown;
 		case 4:
-			if (_HAS_SIZE_BE(5,5,5,1)) {
+			if (_HAS_SIZE(5,5,5,1)) {
 				result = FMT_1_5_5_5;
 				goto out_word4;
 			}
-			if (_HAS_SIZE_BE(10,10,10,2)) {
+			if (_HAS_SIZE(10,10,10,2)) {
 				result = FMT_2_10_10_10;
 				goto out_word4;
 			}
 			goto out_unknown;
 		}
 		goto out_unknown;
-#undef _HAS_SIZE_BE
 #undef _HAS_SIZE
 	}
 
@@ -3701,18 +3715,15 @@ out_unknown:
 uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format format,
 						bool do_endian_swap)
 {
-	const struct util_format_description *desc = util_format_description(format);
+	struct util_format_description le_desc;
+	const struct util_format_description *desc =
+		r600_packed_le_view(util_format_description(format), &le_desc);
 	int channel = util_format_get_first_non_void_channel(format);
 	bool is_float;
 
 #define HAS_SIZE(x,y,z,w) \
 	(desc->channel[0].size == (x) && desc->channel[1].size == (y) && \
          desc->channel[2].size == (z) && desc->channel[3].size == (w))
-#if UTIL_ARCH_BIG_ENDIAN
-#define HAS_SIZE_BE(a,b,c,d) HAS_SIZE(d,c,b,a)
-#else
-#define HAS_SIZE_BE(a,b,c,d) HAS_SIZE(a,b,c,d)
-#endif
 
 	if (format == PIPE_FORMAT_R11G11B10_FLOAT) /* isn't plain */
 		return V_0280A0_COLOR_10_11_11_FLOAT;
@@ -3798,9 +3809,9 @@ uint32_t r600_translate_colorformat(enum amd_gfx_level chip, enum pipe_format fo
 				else
 					return V_0280A0_COLOR_32_32_32_32;
 			}
-		} else if (HAS_SIZE_BE(5,5,5,1)) {
+		} else if (HAS_SIZE(5,5,5,1)) {
 			return V_0280A0_COLOR_1_5_5_5;
-		} else if (HAS_SIZE_BE(10,10,10,2)) {
+		} else if (HAS_SIZE(10,10,10,2)) {
 			return V_0280A0_COLOR_2_10_10_10;
 		}
 		break;
@@ -3828,6 +3839,7 @@ uint32_t r600_colorformat_endian_swap(uint32_t colorformat, bool do_endian_swap)
 
 		case V_0280A0_COLOR_5_6_5:
 		case V_0280A0_COLOR_1_5_5_5:
+		case V_0280A0_COLOR_5_5_5_1:
 		case V_0280A0_COLOR_4_4_4_4:
 		case V_0280A0_COLOR_16_FLOAT:
 		case V_0280A0_COLOR_16:
@@ -3844,15 +3856,17 @@ uint32_t r600_colorformat_endian_swap(uint32_t colorformat, bool do_endian_swap)
 
 		case V_0280A0_COLOR_10_11_11_FLOAT:
 		case V_0280A0_COLOR_2_10_10_10:
-		case V_0280A0_COLOR_16_16_FLOAT:
-		case V_0280A0_COLOR_16_16:
-			return (do_endian_swap ? ENDIAN_8IN16 : ENDIAN_NONE);
-
+		case V_0280A0_COLOR_10_10_10_2:
+		case FMT_5_9_9_9_SHAREDEXP:
 		case V_0280A0_COLOR_8_24:
 		case V_0280A0_COLOR_24_8:
 		case V_0280A0_COLOR_32:
 		case V_0280A0_COLOR_32_FLOAT:
 			return (do_endian_swap ? ENDIAN_8IN32 : ENDIAN_NONE);
+
+		case V_0280A0_COLOR_16_16_FLOAT:
+		case V_0280A0_COLOR_16_16:
+			return (do_endian_swap ? ENDIAN_8IN16 : ENDIAN_NONE);
 
 		/* 64-bit buffers. */
 		case V_0280A0_COLOR_16_16_16_16:

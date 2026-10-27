@@ -28,6 +28,7 @@
 #include "compiler/nir/nir.h"
 
 struct u_log_context;
+struct util_format_description;
 #define ATI_VENDOR_ID 0x1002
 
 #define R600_RESOURCE_FLAG_TRANSFER		(PIPE_RESOURCE_FLAG_DRV_PRIV << 0)
@@ -832,6 +833,9 @@ struct pipe_surface *r600_create_surface_custom(struct pipe_context *pipe,
 						const struct pipe_surface *templ);
 void r600_destroy_surface_custom(struct pipe_surface *);
 unsigned r600_translate_colorswap(enum pipe_format format, bool do_endian_swap);
+const struct util_format_description *
+r600_packed_le_view(const struct util_format_description *desc,
+		    struct util_format_description *copy);
 void r600_texture_alloc_cmask_separate(struct r600_common_screen *rscreen,
 					struct r600_texture *rtex);
 void r600_init_screen_texture_functions(struct r600_common_screen *rscreen);
