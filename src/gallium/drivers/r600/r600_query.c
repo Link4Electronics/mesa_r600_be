@@ -8,6 +8,7 @@
 #include "r600_pipe.h"
 #include "r600_cs.h"
 #include "util/u_memory.h"
+#include "util/u_math.h"
 #include "util/u_upload_mgr.h"
 #include "util/os_time.h"
 #include "nir/nir_builder.h"
@@ -503,6 +504,9 @@ static struct r600_resource *r600_new_query_buffer(struct r600_common_screen *rs
 	return buf;
 }
 
+/* The GPU writes the results as little-endian dwords. */
+static inline uint32_t r600_query_le32(uint32_t x);
+
 static bool r600_query_hw_prepare_buffer(struct r600_common_screen *rscreen,
 					 struct r600_query_hw *query,
 					 struct r600_resource *buffer)
@@ -529,8 +533,8 @@ static bool r600_query_hw_prepare_buffer(struct r600_common_screen *rscreen,
 		for (j = 0; j < num_results; j++) {
 			for (i = 0; i < max_rbs; i++) {
 				if (!(enabled_rb_mask & (1<<i))) {
-					results[(i * 4)+1] = 0x80000000;
-					results[(i * 4)+3] = 0x80000000;
+					results[(i * 4)+1] = r600_query_le32(0x80000000);
+					results[(i * 4)+3] = r600_query_le32(0x80000000);
 				}
 			}
 			results += 4 * max_rbs;
@@ -1138,16 +1142,21 @@ static void r600_get_hw_query_params(struct r600_common_context *rctx,
 	}
 }
 
+static inline uint32_t r600_query_le32(uint32_t x)
+{
+	return UTIL_ARCH_BIG_ENDIAN ? util_bswap32(x) : x;
+}
+
 static unsigned r600_query_read_result(void *map, unsigned start_index, unsigned end_index,
 				       bool test_status_bit)
 {
 	uint32_t *current_result = (uint32_t*)map;
 	uint64_t start, end;
 
-	start = (uint64_t)current_result[start_index] |
-		(uint64_t)current_result[start_index+1] << 32;
-	end = (uint64_t)current_result[end_index] |
-	      (uint64_t)current_result[end_index+1] << 32;
+	start = (uint64_t)r600_query_le32(current_result[start_index]) |
+		(uint64_t)r600_query_le32(current_result[start_index+1]) << 32;
+	end = (uint64_t)r600_query_le32(current_result[end_index]) |
+	      (uint64_t)r600_query_le32(current_result[end_index+1]) << 32;
 
 	if (!test_status_bit ||
 	    ((start & 0x8000000000000000UL) && (end & 0x8000000000000000UL))) {
@@ -1185,7 +1194,8 @@ static void r600_query_hw_add_result(struct r600_common_screen *rscreen,
 		result->u64 += r600_query_read_result(buffer, 0, 2, false);
 		break;
 	case PIPE_QUERY_TIMESTAMP:
-		result->u64 = *(uint64_t*)buffer;
+		result->u64 = (uint64_t)r600_query_le32(((uint32_t*)buffer)[0]) |
+			      (uint64_t)r600_query_le32(((uint32_t*)buffer)[1]) << 32;
 		break;
 	case PIPE_QUERY_PRIMITIVES_EMITTED:
 		/* SAMPLE_STREAMOUTSTATS stores this structure:

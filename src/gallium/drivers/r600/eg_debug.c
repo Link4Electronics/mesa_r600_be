@@ -318,7 +318,7 @@ static void eg_dump_last_ib(struct r600_context *rctx, FILE *f)
 						       PIPE_MAP_UNSYNCHRONIZED |
 						       PIPE_MAP_READ);
 		if (map)
-			last_trace_id = *map;
+			last_trace_id = util_le32_to_cpu(*map);
 	}
 
 	eg_parse_ib(f, rctx->last_gfx.ib, rctx->last_gfx.num_dw,

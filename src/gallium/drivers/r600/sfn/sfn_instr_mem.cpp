@@ -6,6 +6,7 @@
 
 #include "sfn_instr_mem.h"
 
+#include "../r600_formats.h"
 #include "nir_intrinsics.h"
 #include "nir_intrinsics_indices.h"
 #include "sfn_alu_defines.h"
@@ -660,6 +661,7 @@ RatInstr::emit_ssbo_load(nir_intrinsic_instr *intr, Shader& shader)
       dest, dest_swz[comp_idx], addr_temp, 0, res_id, res_offset, formats[comp_idx]);
    ir->set_fetch_flag(FetchInstr::use_tc);
    ir->set_num_format(vtx_nf_int);
+   ir->set_endian_swap((EVFetchEndianSwap)r600_endian_swap(32));
 
    shader.emit_instruction(ir);
    return true;

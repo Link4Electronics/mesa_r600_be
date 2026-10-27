@@ -66,6 +66,7 @@ public:
    void set_num_format(EVFetchNumFormat nf) { m_num_format = nf; }
    EVFetchNumFormat num_format() const { return m_num_format; }
    EVFetchEndianSwap endian_swap() const { return m_endian_swap; }
+   void set_endian_swap(EVFetchEndianSwap es) { m_endian_swap = es; }
 
    uint32_t mega_fetch_count() const { return m_mega_fetch_count; }
    uint32_t array_base() const { return m_array_base; }

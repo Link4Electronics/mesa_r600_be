@@ -4667,6 +4667,7 @@ static void evergreen_set_shader_buffers(struct pipe_context *ctx,
 		rview->cb_color_base = color.offset;
 		rview->cb_color_dim = color.dim;
 		rview->cb_color_info = color.info |
+			S_028C70_ENDIAN(r600_endian_swap(32)) |
 			S_028C70_RAT(1) |
 			S_028C70_RESOURCE_TYPE(res_type);
 		rview->cb_color_pitch = color.pitch;
