@@ -8,6 +8,37 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 - **Test target**: ppc64 BE (ELFv2, kernel 7.0.11, 64 KiB pages). User compiles and reports logs.
 - **Piglit**: Arch PowerPC piglit-git from https://github.com/Link4Electronics/archpower-packages/raw/refs/heads/main/extrappc/powerpc64/piglit-git-r12277.ea22807ea-1-powerpc64.pkg.tar.zst
 
+## Base: Mesa 26.2.3 rebase
+The BE work was rebased from the old base onto the `mesa-26.2.3` tag
+(`31e9a6b2e95e30d84bf3177d1f497d063e59b6b2`). Branch `rebase-26.2.3`;
+`main` / `origin/main` are untouched, backup is `backup/main-pre-rebase`.
+
+Two commits were dropped because upstream 26.2.3 already contains the fix:
+- nir_opt_varyings padding/`memcmp` fix.
+- nir test tolerance plus llvmpipe/Altivec/BE AoS fixes (algebraic relative
+  tolerance, Altivec `nearbyint`, `lp_test_arit` Altivec guard,
+  `lp_bld_format_aos` BE shift).
+
+Fixes adopted from [RadeonNI-OSX](https://github.com/kouta-kun/RadeonNI-OSX)
+(another r600 BE tree, Mesa 26.2.4, Power Mac G5 / Turks):
+- **0007** — query results are written by the GPU as LE dwords, so
+  `r600_query_read_result`, `PIPE_QUERY_TIMESTAMP` and the disabled-RB
+  `0x80000000` fillers go through `r600_query_le32()`.
+- **0018** — `eg_debug.c` reads the last trace counter with
+  `util_le32_to_cpu()`.
+- **0021** — SSBO loads get `r600_endian_swap(32)` on the fetch instruction
+  (`sfn_instr_fetch.h` grew a `set_endian_swap()` accessor).
+- **0006** — the packed-format handling was rewritten around a single
+  `r600_packed_le_view()` helper instead of the duplicated inverse-swizzle
+  code and `_HAS_SIZE_BE`/`HAS_SIZE_BE` macros. See "BE bitmask format
+  reversal" below.
+
+RadeonNI also confirms `caps->prefer_real_buffer_in_constbuf0 =
+!UTIL_ARCH_BIG_ENDIAN`, which this tree already had.
+
+Note: `README.md` + `thankyou.png` intentionally replace upstream
+`README.rst` (fork branding), not part of the BE fixes.
+
 ## Current Status
 
 ### Border color results
@@ -39,6 +70,16 @@ Fixing big-endian support in the r600 Gallium driver (R5 230 / Caicos, TeraScale
 - After GPU byte swap, channels are in LE bit order — BE swizzle is WRONG for r600 HW.
 - Fix: apply inverse reversal to restore LE order (X↔W, Y↔Z for 4ch; X↔Z for 3ch; X↔Y for 2ch).
 - Guards: `desc->layout == UTIL_FORMAT_LAYOUT_PLAIN` (non-bitmask formats like R11G11B10_FLOAT, compressed formats do NOT get BE reversal).
+- Implemented once, in `r600_packed_le_view()` (`r600_state_common.c`, declared in
+  `r600_pipe_common.h`): on BE it returns a stack copy of the description with
+  `channel[]` and `swizzle[]` reversed, and the untouched description otherwise.
+  It is used by `r600_translate_texformat`, `r600_translate_colorformat`,
+  `r600_translate_colorswap` and `r600_colorformat_endian_swap`, so all of them
+  see the LE channel order and `_HAS_SIZE()`/`HAS_SIZE()` no longer need a
+  `_BE` variant. It also bails out for `UTIL_FORMAT_COLORSPACE_ZS` (fixed
+  component roles on both endiannesses) and for block sizes other than 16/32
+  bits.
+
 
 ### Packed float/shared exponent
 - `R11G11B10_FLOAT` and `R9G9B9E5_FLOAT` pack functions use `util_cpu_to_le32()` — data is always LE in memory regardless of CPU endianness.
@@ -276,10 +317,21 @@ All NPOT compressed: **FAIL** (10 failures) — same as Round 22.
 57. **`r600_state.c:r600_emit_constant_buffers`** — Same fix for non-evergreen (r600 chip family).
 
 ## Relevant Files
-- `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard)
-- `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_texformat (R2: BE swizzle fix, L4A4)
-- `src/gallium/drivers/r600/r600_state_common.c`:r600_colorformat_endian_swap (R3: FMT_5_9_9_9 revert; R4/5: ENDIAN_8IN32)
-- `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_colorformat (R1: BE channel size checks)
+- `src/gallium/drivers/r600/r600_state_common.c`:r600_packed_le_view (26.2.3 rebase: single BE→LE description helper, RadeonNI 0006)
+- `src/gallium/drivers/r600/r600_pipe_common.h`:r600_packed_le_view declaration
+- `src/gallium/drivers/r600/r600_texture.c`:r600_translate_colorswap (R2: PLAIN guard; 26.2.3: uses r600_packed_le_view)
+- `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_texformat (R2: BE swizzle fix, L4A4; 26.2.3: r600_packed_le_view)
+- `src/gallium/drivers/r600/r600_state_common.c`:r600_colorformat_endian_swap (R3: FMT_5_9_9_9 revert; R4/5: ENDIAN_8IN32; 26.2.3: 10/11/11, 2/10/10/10, 10/10/10/2 + shared exp → ENDIAN_8IN32, 16/16 → ENDIAN_8IN16, added COLOR_5_5_5_1)
+- `src/gallium/drivers/r600/r600_state_common.c`:r600_translate_colorformat (R1: BE channel size checks; 26.2.3: r600_packed_le_view)
+- `src/gallium/drivers/r600/r600_query.c` (26.2.3: RadeonNI 0007, GPU writes query results as LE dwords)
+- `src/gallium/drivers/r600/eg_debug.c` (26.2.3: RadeonNI 0018, `util_le32_to_cpu` for trace counter)
+- `src/gallium/drivers/r600/sfn/sfn_instr_mem.cpp` (26.2.3: RadeonNI 0021, SSBO load endian swap)
+- `src/gallium/drivers/r600/sfn/sfn_instr_fetch.h` (`set_endian_swap()` accessor)
+- `src/gallium/drivers/r600/r600_buffer_common.c`:r600_buffer_subdata (R26: CB pre-swap to LE)
+- `src/gallium/drivers/r600/r600_state_common.c`:r600_set_constant_buffer (R24/R25: user-buffer pre-swap to LE)
+- `src/gallium/drivers/r600/r600_state.c`:r600_emit_constant_buffers (R26: ENDIAN_NONE on BE)
+- `src/gallium/drivers/r600/evergreen_state.c`:evergreen_emit_constant_buffers (R26: ENDIAN_NONE on BE)
+- `src/gallium/drivers/r600/evergreen_state.c`:evergreen_set_shader_buffers (26.2.3: `S_028C70_ENDIAN(r600_endian_swap(32))` for SSBO images)
 - `src/gallium/winsys/radeon/drm/radeon_surface.c`:surf_minify, eg_surf_minify (R23–R25: MODE_2D-pad reverted, MODE_1D demotion restored)
 - `src/gallium/drivers/r600/evergreen_state.c`:evergreen_convert_border_color (R2–R9: all border color fixes)
 - `src/gallium/drivers/r600/evergreen_state.c`:cayman_convert_border_color — NOT modified
