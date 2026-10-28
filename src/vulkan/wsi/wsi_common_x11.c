@@ -50,6 +50,7 @@
 #include "util/os_file.h"
 #include "util/os_time.h"
 #include "util/u_debug.h"
+#include "util/u_math.h"
 #include "util/u_thread.h"
 #include "util/xmlconfig.h"
 #include "util/timespec.h"
@@ -1329,6 +1330,46 @@ struct x11_swapchain {
 VK_DEFINE_NONDISP_HANDLE_CASTS(x11_swapchain, base.base, VkSwapchainKHR,
                                VK_OBJECT_TYPE_SWAPCHAIN_KHR)
 
+#if UTIL_ARCH_BIG_ENDIAN
+/* The X server interprets shared-memory pixels as 32-bit values in the host byte order. On a
+ * big-endian host, an 8-bit-per-channel TrueColor visual therefore expects the native
+ * X8R8G8B8/A8R8G8B8 layout, while VK_FORMAT_B8G8R8A8_* stores its bytes as B, G, R, A. Swap the
+ * bytes of each presented pixel so that the red, green and blue channels land in the bytes X
+ * expects. For 24-bit visuals the byte that receives the alpha channel is ignored.
+ */
+static void
+x11_sw_swap_present_pixels(struct x11_swapchain *chain, struct x11_image *image)
+{
+   VkFormat const format = chain->base.image_info.create.format;
+   if (format != VK_FORMAT_B8G8R8A8_UNORM && format != VK_FORMAT_B8G8R8A8_SRGB)
+      return;
+
+   uint8_t * const data = image->base.cpu_map;
+   if (data == NULL)
+      return;
+
+   size_t const row_pitch = image->base.row_pitches[0];
+   if (image->rectangle_count > 0) {
+      for (int rectangle_index = 0; rectangle_index < image->rectangle_count;
+           ++rectangle_index) {
+         xcb_rectangle_t const rectangle = image->rects[rectangle_index];
+         for (unsigned y = 0; y < rectangle.height; ++y) {
+            uint32_t *pixel = (uint32_t *)(data + (size_t)(rectangle.y + y) * row_pitch +
+                                           (size_t)rectangle.x * 4);
+            for (unsigned x = 0; x < rectangle.width; ++x)
+               pixel[x] = util_bswap32(pixel[x]);
+         }
+      }
+   } else {
+      for (unsigned y = 0; y < chain->extent.height; ++y) {
+         uint32_t *pixel = (uint32_t *)(data + (size_t)y * row_pitch);
+         for (unsigned x = 0; x < chain->extent.width; ++x)
+            pixel[x] = util_bswap32(pixel[x]);
+      }
+   }
+}
+#endif
+
 static bool x11_refresh_rate_estimate_is_stable(struct x11_swapchain *swapchain, uint64_t base_rate)
 {
    /* Only accept a refresh rate estimate if it's *very* stable.
@@ -1771,6 +1812,11 @@ x11_present_to_x11_dri3(struct x11_swapchain *chain, uint32_t image_index,
 
    assert(image_index < chain->base.image_count);
 
+#if UTIL_ARCH_BIG_ENDIAN
+   if (chain->base.wsi->sw)
+      x11_sw_swap_present_pixels(chain, image);
+#endif
+
    uint32_t options = XCB_PRESENT_OPTION_NONE;
 
    int64_t divisor = 0;
@@ -1868,6 +1914,10 @@ x11_present_to_x11_sw(struct x11_swapchain *chain, uint32_t image_index)
 {
    assert(!chain->base.image_info.explicit_sync);
    struct x11_image *image = &chain->images[image_index];
+
+#if UTIL_ARCH_BIG_ENDIAN
+   x11_sw_swap_present_pixels(chain, image);
+#endif
 
    /* Begin querying this before submitting the frame for improved async performance.
     * In this _sw() mode we're expecting network round-trip delay, not just UNIX socket delay. */
