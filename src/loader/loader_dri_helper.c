@@ -94,6 +94,15 @@ uint32_t
 loader_pipe_format_to_fourcc(enum pipe_format pipe)
 {
 #if UTIL_ARCH_BIG_ENDIAN
+   /* A DRM fourcc describes a native-endian pixel value.  On big-endian
+    * the 8888 aliases below therefore describe the byte layout the X
+    * server uses for its depth-24/32 visuals (X8R8G8B8/A8R8G8B8/
+    * X8B8G8R8/A8B8G8R8), while the concrete B8G8R8X8/B8G8R8A8/... formats
+    * have the opposite byte order in memory.  Keep the aliases mapped to
+    * the XRGB/ARGB/XBGR/ABGR fourccs so the X server and the driver agree
+    * on the buffer layout.  The sRGB fourccs have no byte-reversed
+    * variant, so they need the same treatment.
+    */
    switch (pipe) {
    case PIPE_FORMAT_BGRX8888_SRGB: return __DRI_IMAGE_FOURCC_SXRGB8888;
    case PIPE_FORMAT_BGRA8888_SRGB: return __DRI_IMAGE_FOURCC_SARGB8888;
