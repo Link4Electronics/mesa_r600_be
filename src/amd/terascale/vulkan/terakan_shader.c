@@ -40,6 +40,8 @@
 #include "spirv/nir_spirv.h"
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
+#include "util/u_math.h"
 #include "vk_nir.h"
 
 #include <assert.h>
@@ -152,9 +154,36 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
       .min_ssbo_alignment = sizeof(uint32_t),
    };
 
-   nir_shader * const nir =
-      vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint, specialization_info,
-                      &spirv_options, &physical_device->nir_options, false, NULL);
+   /* SPIR-V binary words are little-endian. On big-endian hosts, applications that load modules
+    * from files get byte-swapped words, while modules embedded as native `uint32_t` arrays are
+    * already in the right order. The magic number tells the two apart.
+    */
+   nir_shader *nir;
+#if UTIL_ARCH_BIG_ENDIAN
+   uint32_t const spirv_magic = 0x07230203u;
+   if (spirv_size_bytes >= sizeof(uint32_t) && spirv[0] == util_bswap32(spirv_magic)) {
+      uint32_t * const spirv_native = malloc(spirv_size_bytes);
+      if (unlikely(spirv_native == NULL)) {
+         return NULL;
+      }
+      size_t const spirv_dwords = spirv_size_bytes / sizeof(uint32_t);
+      for (size_t spirv_dword_index = 0; spirv_dword_index < spirv_dwords; ++spirv_dword_index) {
+         spirv_native[spirv_dword_index] = util_bswap32(spirv[spirv_dword_index]);
+      }
+      nir = vk_spirv_to_nir(&device->vk, spirv_native, spirv_size_bytes, stage, entrypoint,
+                            specialization_info, &spirv_options, &physical_device->nir_options,
+                            false, NULL);
+      free(spirv_native);
+   } else {
+      nir = vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint,
+                            specialization_info, &spirv_options, &physical_device->nir_options,
+                            false, NULL);
+   }
+#else
+   nir = vk_spirv_to_nir(&device->vk, spirv, spirv_size_bytes, stage, entrypoint,
+                         specialization_info, &spirv_options, &physical_device->nir_options, false,
+                         NULL);
+#endif
    if (unlikely(nir == NULL)) {
       return NULL;
    }

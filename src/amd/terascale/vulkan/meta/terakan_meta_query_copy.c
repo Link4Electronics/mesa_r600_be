@@ -2303,17 +2303,18 @@ terakan_vk_CmdCopyQueryPoolResults(VkCommandBuffer const commandBuffer, VkQueryP
             return;
          }
          constants[TERAKAN_META_QUERY_COPY_CONST_PARTIAL] =
-            (flags & VK_QUERY_RESULT_PARTIAL_BIT) ? UINT32_MAX : 0;
-         constants[TERAKAN_META_QUERY_COPY_CONST_DST_STRIDE] = dst_stride_dwords;
-         constants[TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET] =
+            util_cpu_to_le32((flags & VK_QUERY_RESULT_PARTIAL_BIT) ? UINT32_MAX : 0);
+         constants[TERAKAN_META_QUERY_COPY_CONST_DST_STRIDE] =
+            util_cpu_to_le32(dst_stride_dwords);
+         constants[TERAKAN_META_QUERY_COPY_CONST_DST_RESULT_END_OFFSET] = util_cpu_to_le32(
             constants_uav_alignment_offset_dwords +
-            (query_pool->copy_dst_result_size_counters << (unsigned)is_64_bit);
+            (query_pool->copy_dst_result_size_counters << (unsigned)is_64_bit));
          if (query_pool->vk.query_type == VK_QUERY_TYPE_PIPELINE_STATISTICS) {
             for (unsigned counter_index = 0;
                  counter_index < TERAKAN_QUERY_PIPELINESTAT_HW_COUNTER_COUNT; ++counter_index) {
                constants[TERAKAN_META_QUERY_COPY_CONSTS_PIPELINESTAT_DST_COUNTER_OFFSETS +
-                         counter_index] =
-                  (uint32_t)(int32_t)constants_dst_counter_offsets[counter_index];
+                         counter_index] = util_cpu_to_le32(
+                  (uint32_t)(int32_t)constants_dst_counter_offsets[counter_index]);
             }
          }
          terakan_meta_config_draw_set_kcache_push_constant_buffer_vs(

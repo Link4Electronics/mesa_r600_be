@@ -593,8 +593,9 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
       terakan_meta_config_draw_set_sq_pgm_vs(command_writer, TERAKAN_META_SHADER_CLEAR_DEPTH_VS);
       terakan_meta_config_draw_set_sq_pgm_ps(command_writer, TERAKAN_META_SHADER_DUMMY_OPAQUE_PS);
 
-      float const depth_clear_constants[TERAKAN_META_CLEAR_DEPTH_CONSTS_COUNT] = {
-         [TERAKAN_META_CLEAR_DEPTH_CONST_CLEAR_VALUE] = depth_stencil_clear_value.depth,
+      uint32_t const depth_clear_constants[TERAKAN_META_CLEAR_DEPTH_CONSTS_COUNT] = {
+         [TERAKAN_META_CLEAR_DEPTH_CONST_CLEAR_VALUE] =
+            util_cpu_to_le32(fui(depth_stencil_clear_value.depth)),
       };
       struct terakan_bo const * depth_clear_constants_bo;
       uint32_t depth_clear_constants_va_lines;
@@ -665,10 +666,14 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
 
          uint32_t const * const color_clear_value =
             color_clear_values[color_attachment_index].uint32;
-         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_R] = color_clear_value[0];
-         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_G] = color_clear_value[1];
-         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_B] = color_clear_value[2];
-         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_A] = color_clear_value[3];
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_R] =
+            util_cpu_to_le32(color_clear_value[0]);
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_G] =
+            util_cpu_to_le32(color_clear_value[1]);
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_B] =
+            util_cpu_to_le32(color_clear_value[2]);
+         color_clear_constants[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE_A] =
+            util_cpu_to_le32(color_clear_value[3]);
          terakan_meta_config_draw_update_kcache_push_constants(
             command_writer, &color_clear_constants_state, color_clear_constants, false, true);
 

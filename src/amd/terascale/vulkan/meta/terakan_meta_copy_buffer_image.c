@@ -29,6 +29,7 @@
 #include "terakan_vk_image.h"
 
 #include "util/macros.h"
+#include "util/u_endian.h"
 #include "vk_format.h"
 
 #include <assert.h>
@@ -654,13 +655,13 @@ terakan_vk_CmdCopyBufferToImage2(VkCommandBuffer const commandBuffer,
       uint64_t buffer_offset = region->bufferOffset;
 
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
-         region_image.rect_blocks.bounds[0][0];
+         util_cpu_to_le32(region_image.rect_blocks.bounds[0][0]);
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
-         region_image.rect_blocks.bounds[0][1];
+         util_cpu_to_le32(region_image.rect_blocks.bounds[0][1]);
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
-         region_image.buffer_y_pitch_blocks;
+         util_cpu_to_le32(region_image.buffer_y_pitch_blocks);
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
-         (uint32_t)region_image.buffer_z_pitch_blocks;
+         util_cpu_to_le32((uint32_t)region_image.buffer_z_pitch_blocks);
       terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
 
@@ -821,14 +822,14 @@ terakan_vk_CmdCopyImageToBuffer2(VkCommandBuffer const commandBuffer,
                                        image->bo, &image_descriptor);
 
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_X_MINUS_BUFFER_OFFSET] =
-         (uint32_t)((int32_t)region_image.rect_blocks.bounds[0][0] -
-                    (int32_t)buffer_uav_alignment_offset_blocks);
+         util_cpu_to_le32((uint32_t)((int32_t)region_image.rect_blocks.bounds[0][0] -
+                                     (int32_t)buffer_uav_alignment_offset_blocks));
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_IMAGE_OFFSET_Y] =
-         (uint32_t)region_image.rect_blocks.bounds[0][1];
+         util_cpu_to_le32(region_image.rect_blocks.bounds[0][1]);
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Y_PITCH] =
-         region_image.buffer_y_pitch_blocks;
+         util_cpu_to_le32(region_image.buffer_y_pitch_blocks);
       constants[TERAKAN_META_COPY_BUFFER_IMAGE_CONST_BUFFER_Z_PITCH] =
-         (uint32_t)region_image.buffer_z_pitch_blocks;
+         util_cpu_to_le32((uint32_t)region_image.buffer_z_pitch_blocks);
       terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
 

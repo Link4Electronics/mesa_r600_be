@@ -28,6 +28,7 @@
 #include "terakan_vk_image.h"
 
 #include "util/macros.h"
+#include "util/u_endian.h"
 
 #include <assert.h>
 
@@ -435,12 +436,13 @@ terakan_meta_copy_expand_3x_buffer_to_image(
       uint64_t const buffer_z_pitch_bytes = bytes_per_block * region_image.buffer_z_pitch_blocks;
       uint64_t buffer_offset = region->bufferOffset;
 
-      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] = (uint32_t)buffer_y_pitch_surfels;
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
+         util_cpu_to_le32((uint32_t)buffer_y_pitch_surfels);
       constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
-         surface_level->aligned_extent_surfels[0];
-      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
+         util_cpu_to_le32(surface_level->aligned_extent_surfels[0]);
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] = util_cpu_to_le32(
          3u * region_image.rect_blocks.bounds[0][0] +
-         surface_level->aligned_extent_surfels[0] * (uint32_t)region_image.rect_blocks.bounds[0][1];
+         surface_level->aligned_extent_surfels[0] * (uint32_t)region_image.rect_blocks.bounds[0][1]);
       terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
 
@@ -550,8 +552,9 @@ terakan_meta_copy_expand_3x_image_to_buffer(
                                 image_y_pitch_bytes * (region_extent_rect.bounds[1][1] - 1u);
 
       constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
-         surface_level->aligned_extent_surfels[0];
-      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] = (uint32_t)buffer_y_pitch_surfels;
+         util_cpu_to_le32(surface_level->aligned_extent_surfels[0]);
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
+         util_cpu_to_le32((uint32_t)buffer_y_pitch_surfels);
 
       for (uint32_t subresource_range_slice = 0;
            subresource_range_slice <
@@ -594,7 +597,7 @@ terakan_meta_copy_expand_3x_image_to_buffer(
                                           image->bo, &image_descriptor);
 
          constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
-            buffer_uav_alignment_offset_surfels;
+            util_cpu_to_le32(buffer_uav_alignment_offset_surfels);
          terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                                constants, false, true);
 
@@ -732,12 +735,12 @@ terakan_meta_copy_expand_3x_image(struct terakan_gfx_command_writer * const comm
                            1u;
 
       constants[TERAKAN_META_COPY_EXPAND_3X_CONST_SRC_PITCH] =
-         src_surface_level->aligned_extent_surfels[0];
+         util_cpu_to_le32(src_surface_level->aligned_extent_surfels[0]);
       constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_PITCH] =
-         dst_surface_level->aligned_extent_surfels[0];
-      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] =
+         util_cpu_to_le32(dst_surface_level->aligned_extent_surfels[0]);
+      constants[TERAKAN_META_COPY_EXPAND_3X_CONST_DST_OFFSET] = util_cpu_to_le32(
          3u * (uint32_t)region->dstOffset.x +
-         dst_surface_level->aligned_extent_surfels[0] * (uint32_t)region->dstOffset.y;
+         dst_surface_level->aligned_extent_surfels[0] * (uint32_t)region->dstOffset.y);
       terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
 

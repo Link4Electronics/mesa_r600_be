@@ -28,6 +28,7 @@
 
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
 
 #include <assert.h>
 
@@ -234,8 +235,8 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
                                           TERAKAN_META_SHADER_POSITION_AND_LAYER_FROM_INDEX_VS);
    terakan_meta_config_draw_set_sq_pgm_ps(command_writer, TERAKAN_META_SHADER_COPY_IMAGE_PS);
 
-   int32_t constants[TERAKAN_META_COPY_IMAGE_CONSTS_COUNT] = {};
-   alignas(int32_t) char old_constants[sizeof(constants)];
+   uint32_t constants[TERAKAN_META_COPY_IMAGE_CONSTS_COUNT] = {};
+   alignas(uint32_t) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
 
@@ -262,9 +263,9 @@ terakan_vk_CmdCopyImage2(VkCommandBuffer const commandBuffer,
          .extent = {.width = extent_blocks.width, .height = extent_blocks.height}};
 
       constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_X] =
-         src_offset_blocks.x - dst_region_rect.offset.x;
+         util_cpu_to_le32((uint32_t)(src_offset_blocks.x - dst_region_rect.offset.x));
       constants[TERAKAN_META_COPY_IMAGE_CONST_SRC_MINUS_DST_OFFSET_Y] =
-         src_offset_blocks.y - dst_region_rect.offset.y;
+         util_cpu_to_le32((uint32_t)(src_offset_blocks.y - dst_region_rect.offset.y));
       terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
                                                             constants, false, true);
 

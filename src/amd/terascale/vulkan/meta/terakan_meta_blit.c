@@ -28,6 +28,7 @@
 
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
 #include "util/u_math.h"
 
 #include <assert.h>
@@ -485,6 +486,7 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
    /* Must not return without restoring the application sampler from now. */
 
    float constants[TERAKAN_META_BLIT_CONSTS_COUNT] = {};
+   uint32_t constants_le[TERAKAN_META_BLIT_CONSTS_COUNT];
    alignas(float) char old_constants[sizeof(constants)];
    struct terakan_meta_config_push_constants_state constants_state =
       terakan_meta_config_push_constants_state_init(sizeof(old_constants), old_constants);
@@ -625,8 +627,12 @@ terakan_vk_CmdBlitImage2(VkCommandBuffer const commandBuffer,
 
             constants[TERAKAN_META_BLIT_CONST_Z_OFFSET] =
                z_offset_src + z_offset_dest_add * constants[TERAKAN_META_BLIT_CONST_Z_SCALE];
-            terakan_meta_config_draw_update_kcache_push_constants(command_writer, &constants_state,
-                                                                  constants, true, true);
+            for (unsigned constant_index = 0;
+                 constant_index < TERAKAN_META_BLIT_CONSTS_COUNT; ++constant_index) {
+               constants_le[constant_index] = util_cpu_to_le32(fui(constants[constant_index]));
+            }
+            terakan_meta_config_draw_update_kcache_push_constants(
+               command_writer, &constants_state, constants_le, true, true);
 
             terakan_meta_draw_rect(command_writer, dst_region_rect, dst_descriptor_slices);
 
