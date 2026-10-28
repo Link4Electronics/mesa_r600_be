@@ -7,6 +7,7 @@
 
 #include <unistd.h>
 
+#include "util/u_endian.h"
 #include "util/u_memory.h"
 #include "util/u_video.h"
 
@@ -219,13 +220,15 @@ int rvid_get_video_param(struct pipe_screen *screen,
 	case PIPE_VIDEO_CAP_SUPPORTED:
 		switch (codec) {
 		case PIPE_VIDEO_FORMAT_MPEG12:
-			/* no support for MPEG2 on older hw */
+			/* no support for MPEG2 on older hw; the messages of
+			 * the other codecs are not converted on big-endian */
 			return profile != PIPE_VIDEO_PROFILE_MPEG1 &&
-				rscreen->family >= CHIP_PALM;
+				rscreen->family >= CHIP_PALM &&
+				!UTIL_ARCH_BIG_ENDIAN;
 		case PIPE_VIDEO_FORMAT_MPEG4_AVC:
 			return true;
 		case PIPE_VIDEO_FORMAT_VC1:
-			return true;
+			return !UTIL_ARCH_BIG_ENDIAN;
 		case PIPE_VIDEO_FORMAT_HEVC:
 			return false;
 		case PIPE_VIDEO_FORMAT_JPEG:

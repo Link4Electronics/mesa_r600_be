@@ -13,6 +13,8 @@
 
 #include "pipe/p_video_codec.h"
 
+#include "util/u_endian.h"
+#include "util/u_math.h"
 #include "util/u_memory.h"
 #include "util/u_video.h"
 #include "util/vl_zscan_data.h"
@@ -138,6 +140,52 @@ static void map_msg_fb_it_buf(struct ruvd_decoder *dec)
 		dec->it = (uint8_t *)(ptr + FB_BUFFER_OFFSET + dec->fb_size);
 }
 
+#if UTIL_ARCH_BIG_ENDIAN
+/*
+ * On big-endian hosts the VCPU reads its message and the first word of the
+ * feedback buffer as little-endian words: the memory interface's byte
+ * swapping applies to the ring and its indirect buffers only. 8-bit members
+ * stay where they are, 16-bit ones are swapped within their halves. Only the
+ * H.264 message is converted; the other codecs' layouts have not been
+ * converted.
+ */
+static void swap32_range(const void *start, const void *end)
+{
+	uint32_t *w;
+
+	for (w = (uint32_t *)start; w < (uint32_t *)end; w++)
+		*w = util_bswap32(*w);
+}
+
+static void swap16_range(const void *start, const void *end)
+{
+	uint16_t *h;
+
+	for (h = (uint16_t *)start; h < (uint16_t *)end; h++)
+		*h = util_bswap16(*h);
+}
+
+static void msg_to_le(struct ruvd_msg *msg, uint32_t *fb)
+{
+	uint32_t type = msg->msg_type;
+
+	swap32_range(&msg->size, &msg->body);
+	if (type != RUVD_MSG_DECODE) {
+		swap32_range(&msg->body.create, &msg->body.create + 1);
+	} else {
+		struct ruvd_h264 *h264 = &msg->body.decode.codec.h264;
+
+		swap32_range(&msg->body.decode.stream_type, &msg->body.decode.codec);
+		swap32_range(&h264->profile, &h264->chroma_format);
+		swap16_range(&h264->slice_group_change_rate_minus1, h264->scaling_list_4x4);
+		swap32_range(&h264->frame_num, h264->ref_frame_list);
+		swap32_range(&h264->mvc.numViews, h264->mvc.mvcElements);
+		swap16_range(h264->mvc.mvcElements, h264->mvc.mvcElements + 1);
+	}
+	*fb = util_bswap32(*fb);
+}
+#endif
+
 /* unmap and send a message command to the VCPU */
 static void send_msg_buf(struct ruvd_decoder *dec)
 {
@@ -149,6 +197,10 @@ static void send_msg_buf(struct ruvd_decoder *dec)
 
 	/* grab the current message buffer */
 	buf = &dec->msg_fb_it_buffers[dec->cur_buffer];
+
+#if UTIL_ARCH_BIG_ENDIAN
+	msg_to_le(dec->msg, dec->fb);
+#endif
 
 	/* unmap the buffer */
 	dec->ws->buffer_unmap(dec->ws, buf->res->buf);
@@ -945,6 +997,12 @@ struct pipe_video_codec *ruvd_create_decoder(struct pipe_context *context,
 		break;
 	}
 
+
+#if UTIL_ARCH_BIG_ENDIAN
+	/* Only the H.264 message is converted to little-endian (msg_to_le). */
+	if (u_reduce_video_profile(templ->profile) != PIPE_VIDEO_FORMAT_MPEG4_AVC)
+		return NULL;
+#endif
 
 	dec = CALLOC_STRUCT(ruvd_decoder);
 
