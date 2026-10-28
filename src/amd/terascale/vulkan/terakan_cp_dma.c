@@ -32,6 +32,7 @@
 #include "gallium/drivers/r600/evergreend.h"
 #include "gallium/drivers/r600/r600d_common.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -252,10 +253,11 @@ terakan_cp_dma_fill(struct terakan_gfx_command_writer * const command_writer,
          return;
       }
       *packet++ = PKT3(PKT3_CP_DMA, 5 - 1, 0);
-      /* TODO(Triang3l): On big-endian hosts, should the data be byte-swapped, or do INDIRECT_BUFFER
-       * swap and BUF_SWAP_32BIT cancel each other for CP DMA?
+      /* The CP writes the fill dword to memory as little-endian, and the INDIRECT_BUFFER
+       * BUF_SWAP_32BIT only affects the packet stream, so a host-order value must be converted
+       * explicitly (confirmed on big-endian hardware by `vkCmdFillBuffer`).
        */
-      *packet++ = data_dword;
+      *packet++ = util_cpu_to_le32(data_dword);
       command_writer->last_unsynced_cp_dma_sync_dword = packet;
       *packet++ = PKT3_CP_DMA_SRC_SEL(2);
       uint32_t const * const packet_dst = packet;

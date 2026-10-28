@@ -674,7 +674,7 @@ terakan_vk_CmdWriteTimestamp2(VkCommandBuffer const commandBuffer,
 }
 
 static uint64_t
-terakan_query_swap_counter(uint64_t const counter)
+terakan_query_swap_counter(uint64_t counter)
 {
 #if UTIL_ARCH_BIG_ENDIAN
    /* "Swap function used for data write" in INDIRECT_BUFFER packets is ENDIAN_8IN32. */

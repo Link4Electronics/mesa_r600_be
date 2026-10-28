@@ -413,11 +413,15 @@ terakan_vk_CmdClearColorImage(VkCommandBuffer const commandBuffer, VkImage const
              image_descriptor_create_info.view_format.format == TERASCALE_FORMAT_INDEX_8_8_8_8);
       for (unsigned byte_index = 0; byte_index < 4; ++byte_index) {
          constants_mapping[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE + byte_index] =
-            fui((float)clear_value[byte_index] / 255.0f);
+            util_cpu_to_le32(fui((float)clear_value[byte_index] / 255.0f));
       }
    } else {
-      memcpy(&constants_mapping[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE], clear_value,
-             sizeof(uint32_t) * 4);
+      for (unsigned dword_index = 0; dword_index < 4; ++dword_index) {
+         uint32_t dword;
+         memcpy(&dword, &clear_value[sizeof(uint32_t) * dword_index], sizeof(dword));
+         constants_mapping[TERAKAN_META_CLEAR_COLOR_CONST_CLEAR_VALUE + dword_index] =
+            util_cpu_to_le32(dword);
+      }
    }
 
    terakan_meta_config_draw_set_kcache_push_constant_buffer_ps(
