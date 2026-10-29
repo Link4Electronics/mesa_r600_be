@@ -187,15 +187,25 @@ terakan_vk_dispatch(VkCommandBuffer const commandBuffer, uint32_t const baseGrou
 
    terakan_gfx_command_writer_before_app_dispatch(command_writer);
 
+   /* `DISPATCH_DIRECT` dimensions are end coordinates, not counts: the hardware starts the
+    * workgroup ID at `VGT_COMPUTE_START_X/Y/Z` and dispatches workgroups while the ID is below
+    * the dimension. Add the base so exactly `groupCount` workgroups are launched and their IDs
+    * begin at the base. For an ordinary dispatch the base is zero, so the values are unchanged.
+    *
+    * This matches the documented `COMPUTE_DIM_X` behavior of the equivalent GCN registers
+    * ("if set to 0, or less than or equal to START_X, no work is dispatched"). It has not been
+    * validated on TeraScale yet; if the hardware treats the packet dimensions as counts instead,
+    * this will need a different approach.
+    */
    uint32_t * packet = terakan_gfx_command_writer_emit(
       command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DISPATCH, 5);
    if (unlikely(packet == NULL)) {
       return;
    }
    *packet++ = PKT3(PKT3_DISPATCH_DIRECT, 5 - 2, 0) | TERAKAN_PACKET3_COMPUTE;
-   *packet++ = groupCountX;
-   *packet++ = groupCountY;
-   *packet++ = groupCountZ;
+   *packet++ = baseGroupX + groupCountX;
+   *packet++ = baseGroupY + groupCountY;
+   *packet++ = baseGroupZ + groupCountZ;
    *packet++ = 1; /* `VGT_DISPATCH_INITIATOR = COMPUTE_SHADER_EN(true)` */
    terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
@@ -213,9 +223,10 @@ terakan_vk_CmdDispatchBase(VkCommandBuffer const commandBuffer, uint32_t const b
                            uint32_t const groupCountX, uint32_t const groupCountY,
                            uint32_t const groupCountZ)
 {
-   /* The base workgroup offset is applied through `VGT_COMPUTE_START`. It has not been validated on
-    * hardware yet; the START registers may not match Vulkan `vkCmdDispatchBase` semantics exactly,
-    * in which case the offset will need to be applied by the shader instead.
+   /* The base workgroup offset is applied through `VGT_COMPUTE_START` and the dispatch packet's
+    * end coordinates. This path has not been validated on TeraScale hardware yet; if the
+    * `DISPATCH_DIRECT` dimensions turn out to be counts rather than end coordinates, the offset
+    * will need to be applied by the shader instead.
     */
    terakan_vk_dispatch(commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY,
                        groupCountZ);
