@@ -43,7 +43,9 @@
 #include "gallium/drivers/r600/evergreend.h"
 #include "gallium/drivers/r600/r600_isa.h"
 #include "gallium/drivers/r600/sfn/sfn_nir.h"
+#include "git_sha1.h"
 #include "util/macros.h"
+#include "util/mesa-blake3.h"
 #include "util/u_math.h"
 #include "vk_alloc.h"
 #include "vk_device.h"
@@ -474,7 +476,26 @@ terakan_physical_device_get_capabilities(
                chip_info->is_r9xx ? '9' : '8');
    }
 
-   /* TODO(Triang3l): pipelineCacheUUID when pipeline cache is implemented. */
+   /* The application-visible identity of the driver build and of the device. Both must be nonzero
+    * and stable for a given build and device, otherwise pipeline caches and application-side
+    * device identity checks would treat every run as a different device. `deviceUUID` is provided
+    * by the platform layer.
+    */
+   char const driver_identity[] = "Terakan " PACKAGE_VERSION MESA_GIT_SHA1;
+   struct mesa_blake3 uuid_hasher;
+   blake3_hash uuid_hash;
+
+   _mesa_blake3_init(&uuid_hasher);
+   _mesa_blake3_update(&uuid_hasher, driver_identity, sizeof(driver_identity));
+   _mesa_blake3_final(&uuid_hasher, uuid_hash);
+   memcpy(properties_out->driverUUID, uuid_hash, VK_UUID_SIZE);
+
+   _mesa_blake3_init(&uuid_hasher);
+   _mesa_blake3_update(&uuid_hasher, driver_identity, sizeof(driver_identity));
+   _mesa_blake3_update(&uuid_hasher, &chip_info->pci_device_id,
+                       sizeof(chip_info->pci_device_id));
+   _mesa_blake3_final(&uuid_hasher, uuid_hash);
+   memcpy(properties_out->pipelineCacheUUID, uuid_hash, VK_UUID_SIZE);
 
    properties_out->maxImageDimension1D = TERAKAN_IMAGE_MAX_WIDTH_HEIGHT;
    properties_out->maxImageDimension2D = TERAKAN_IMAGE_MAX_WIDTH_HEIGHT;
@@ -557,7 +578,7 @@ terakan_physical_device_get_capabilities(
     * can be empty, but other drivers generally provide small numbers of bound sets, so expose a
     * finite amount assuming that every binding can be in its own set.
     */
-   properties_out->maxBoundDescriptorSets = properties_out->maxDescriptorSetSamplers +
+   uint32_t const max_per_set_descriptors = properties_out->maxDescriptorSetSamplers +
                                             properties_out->maxDescriptorSetUniformBuffers +
                                             properties_out->maxDescriptorSetStorageBuffers +
                                             properties_out->maxDescriptorSetSampledImages +
@@ -567,7 +588,7 @@ terakan_physical_device_get_capabilities(
     * runtime in favor of dynamic allocation.
     */
    properties_out->maxBoundDescriptorSets =
-      MIN2(properties_out->maxBoundDescriptorSets, MESA_VK_MAX_DESCRIPTOR_SETS);
+      MIN2(max_per_set_descriptors, MESA_VK_MAX_DESCRIPTOR_SETS);
 
    properties_out->maxVertexInputAttributes = TERAKAN_VK_STATE_MAX_VERTEX_ATTRIBUTES;
    properties_out->maxVertexInputBindings = TERAKAN_VK_STATE_MAX_VERTEX_BINDINGS;
@@ -695,19 +716,35 @@ terakan_physical_device_get_capabilities(
     */
    properties_out->nonCoherentAtomSize = 1;
 
+   /* Vulkan 1.1 core properties. */
+
+   /* The hardware clips against the frustum planes in addition to the user-defined ones. */
+   properties_out->pointClippingBehavior = VK_POINT_CLIPPING_BEHAVIOR_ALL_CLIP_PLANES;
+
+   /* Subgroup operations are not lowered yet, so the subgroup is reported as small as possible. A
+    * subgroup size of 1 makes `VK_SUBGROUP_FEATURE_BASIC_BIT` trivially correct, and still provides
+    * the compute stage in `subgroupSupportedStages` required given that compute queues are
+    * supported.
+    */
+   properties_out->subgroupSize = 1;
+   properties_out->subgroupSupportedStages = VK_SHADER_STAGE_COMPUTE_BIT;
+   properties_out->subgroupSupportedOperations = VK_SUBGROUP_FEATURE_BASIC_BIT;
+   properties_out->subgroupQuadOperationsInAllStages = VK_FALSE;
+
+   /* VK_KHR_maintenance3 (#169, Vulkan 1.1). Descriptor sets are emulated, so the limit is the
+    * number of descriptors of all types that a single set can hold.
+    */
+   properties_out->maxPerSetDescriptors = max_per_set_descriptors;
+   properties_out->maxMemoryAllocationSize = max_memory_allocation_size;
+
    /* VK_KHR_sampler_mirror_clamp_to_edge (#15, Vulkan 1.2). */
    extensions_out->KHR_sampler_mirror_clamp_to_edge = true;
    features_out->samplerMirrorClampToEdge = true;
 
-   /* VK_KHR_dynamic_rendering (#45, Vulkan 1.3). */
-   extensions_out->KHR_dynamic_rendering = true;
-   features_out->dynamicRendering = true;
-
-   /* VK_KHR_external_memory_capabilities (#72, Vulkan 1.1, instance). */
-   char const driver_uuid[] = "AMD-MESA-DRV";
-   static_assert(sizeof(driver_uuid) <= sizeof(properties_out->driverUUID),
-                 "Driver UUID must fit into the Vulkan UUID field.");
-   memcpy(properties_out->driverUUID, driver_uuid, sizeof(driver_uuid));
+   /* VK_KHR_dynamic_rendering (#45, Vulkan 1.3) is used internally by the common render pass
+    * implementation, but must not be advertised until VK_KHR_depth_stencil_resolve, which it
+    * depends on, is implemented.
+    */
 
    /* VK_KHR_external_memory (#73, Vulkan 1.1). */
    extensions_out->KHR_external_memory = true;
@@ -731,9 +768,8 @@ terakan_physical_device_get_capabilities(
    /* VK_KHR_bind_memory2 (#158, Vulkan 1.1). */
    extensions_out->KHR_bind_memory2 = true;
 
-   /* TODO(Triang3l) VK_KHR_maintenance3 (#169, Vulkan 1.1) when vkGetDescriptorSetLayoutSupport
-    * is implemented.
-    */
+   /* VK_KHR_maintenance3 (#169, Vulkan 1.1). */
+   extensions_out->KHR_maintenance3 = true;
 
    /* VK_KHR_timeline_semaphore (#208, Vulkan 1.2). */
    extensions_out->KHR_timeline_semaphore = true;
@@ -843,6 +879,11 @@ terakan_physical_device_get_capabilities(
 #ifdef TERAKAN_USE_WSI_PLATFORM
    extensions_out->KHR_swapchain = true;
    extensions_out->KHR_swapchain_mutable_format = true;
+   /* Required by VK_KHR_swapchain_mutable_format, and the only way for the application to declare
+    * the formats a mutable image can be viewed with. Promoted to Vulkan 1.2, so at Vulkan 1.1 it
+    * has to be advertised explicitly.
+    */
+   extensions_out->KHR_image_format_list = true;
 #endif
 }
 

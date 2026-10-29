@@ -219,7 +219,7 @@ icd_file_name = libname_prefix + 'vulkan_terascale.' + libname_suffix
 
 icd_command = [
   prog_python, '@INPUT0@',
-  '--api-version', '1.0',
+  '--api-version', '1.1',
   '--xml', '@INPUT1@',
   '--sizeof-pointer', sizeof_pointer,
   '--icd-lib-path', vulkan_icd_lib_path,
@@ -248,7 +248,7 @@ _dev_icd = custom_target(
   output : _dev_icdname,
   command : [
     prog_python, '@INPUT0@',
-    '--api-version', '1.0',
+    '--api-version', '1.1',
     '--xml', '@INPUT1@',
     '--sizeof-pointer', sizeof_pointer,
     '--icd-lib-path', meson.current_build_dir(),
