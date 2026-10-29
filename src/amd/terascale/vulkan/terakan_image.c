@@ -1037,6 +1037,16 @@ terakan_vk_GetImageMemoryRequirements2(VkDevice const deviceHandle,
 }
 
 VKAPI_ATTR void VKAPI_CALL
+terakan_vk_GetImageSparseMemoryRequirements2(
+   UNUSED VkDevice const device, UNUSED VkImageSparseMemoryRequirementsInfo2 const * const pInfo,
+   uint32_t * const pSparseMemoryRequirementCount,
+   UNUSED VkSparseImageMemoryRequirements2 * const pSparseMemoryRequirements)
+{
+   /* Sparse binding is not supported, so no image has any sparse memory requirements. */
+   *pSparseMemoryRequirementCount = 0;
+}
+
+VKAPI_ATTR void VKAPI_CALL
 terakan_vk_GetImageSubresourceLayout(UNUSED VkDevice const device, VkImage const imageHandle,
                                      VkImageSubresource const * pSubresource,
                                      VkSubresourceLayout * const pLayout)

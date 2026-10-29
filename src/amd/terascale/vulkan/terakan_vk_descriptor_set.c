@@ -37,6 +37,7 @@
 #include "util/macros.h"
 #include "util/u_endian.h"
 #include "vk_alloc.h"
+#include "vk_descriptor_update_template.h"
 #include "vk_log.h"
 
 #include <assert.h>
@@ -514,6 +515,68 @@ terakan_vk_UpdateDescriptorSets(VkDevice const device, uint32_t const descriptor
             src_next_samplers += samplers_to_update_for_binding;
             samplers_to_update_remaining -= samplers_to_update_for_binding;
          }
+      }
+   }
+}
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_UpdateDescriptorSetWithTemplate(
+   VkDevice const device, VkDescriptorSet const descriptorSet,
+   VkDescriptorUpdateTemplate const descriptorUpdateTemplate, void const * const pData)
+{
+   struct vk_descriptor_update_template const * const update_template =
+      vk_descriptor_update_template_from_handle(descriptorUpdateTemplate);
+   assert(update_template->type == VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET);
+   assert(descriptorSet != VK_NULL_HANDLE);
+
+   for (uint32_t entry_index = 0; entry_index < update_template->entry_count; ++entry_index) {
+      struct vk_descriptor_template_entry const * const entry =
+         &update_template->entries[entry_index];
+
+      /* Updating one descriptor at a time because the template stride is not required to be equal
+       * to the size of the descriptor data structure, so the application-provided array cannot
+       * necessarily be passed to `vkUpdateDescriptorSets` directly.
+       */
+      for (uint32_t array_element = 0; array_element < entry->array_count; ++array_element) {
+         uint8_t const * const element =
+            (uint8_t const *)pData + entry->offset + entry->stride * array_element;
+
+         VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = descriptorSet,
+            .dstBinding = entry->binding,
+            .dstArrayElement = entry->array_element + array_element,
+            .descriptorCount = 1,
+            .descriptorType = entry->type,
+         };
+
+         switch (entry->type) {
+         case VK_DESCRIPTOR_TYPE_SAMPLER:
+         case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+         case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+         case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+         case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            write.pImageInfo = (VkDescriptorImageInfo const *)element;
+            break;
+         case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+         case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+            write.pTexelBufferView = (VkBufferView const *)element;
+            break;
+         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+         case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+         case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+            write.pBufferInfo = (VkDescriptorBufferInfo const *)element;
+            break;
+         default:
+            /* Types not implemented by the driver, such as inline uniform blocks, are not
+             * expected here as the corresponding features are not exposed.
+             */
+            assert(!"Unsupported descriptor type");
+            continue;
+         }
+
+         terakan_vk_UpdateDescriptorSets(device, 1, &write, 0, NULL);
       }
    }
 }

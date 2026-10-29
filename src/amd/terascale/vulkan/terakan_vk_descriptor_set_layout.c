@@ -85,11 +85,16 @@ terakan_vk_descriptor_set_layout_shader_range_try_extend(
    return true;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL
-terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
-                                     VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
-                                     UNUSED VkAllocationCallbacks const * const pAllocator,
-                                     VkDescriptorSetLayout * const pSetLayout)
+/* Shared by `vkCreateDescriptorSetLayout` and `vkGetDescriptorSetLayoutSupport`, the latter probing
+ * the actual creation path so that the two cannot disagree about the hardware binding register
+ * space limits. Failure to fit within those limits is expected as a result of a support query, so
+ * it must not be reported as an application error in that case.
+ */
+static VkResult
+terakan_vk_descriptor_set_layout_create(
+   VkDevice const deviceHandle, VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
+   VkAllocationCallbacks const * const pAllocator, VkDescriptorSetLayout * const pSetLayout,
+   bool const quiet)
 {
    struct terakan_device * const device = terakan_device_from_handle(deviceHandle);
 
@@ -503,8 +508,80 @@ too_many_descriptors_destroy:
    vk_descriptor_set_layout_unref(&device->vk, &layout->vk);
 too_many_descriptors:
    vk_free2(&device->vk.alloc, pAllocator, sorted_create_info_bindings);
+   if (quiet) {
+      return VK_ERROR_VALIDATION_FAILED_EXT;
+   }
    return vk_errorf(
       device, VK_ERROR_VALIDATION_FAILED_EXT,
       "The application creates a descriptor set layout that is too large to fit into the hardware "
       "binding register spaces");
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+terakan_vk_CreateDescriptorSetLayout(VkDevice const deviceHandle,
+                                     VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
+                                     VkAllocationCallbacks const * const pAllocator,
+                                     VkDescriptorSetLayout * const pSetLayout)
+{
+   return terakan_vk_descriptor_set_layout_create(deviceHandle, pCreateInfo, pAllocator, pSetLayout,
+                                                  false);
+}
+
+/* Creation also enforces the hardware binding register space limits, which cannot be expressed
+ * through the exposed properties alone. Probing it guarantees that a layout reported as supported
+ * will actually be created.
+ */
+static bool
+terakan_vk_descriptor_set_layout_is_creatable(
+   VkDevice const deviceHandle, VkDescriptorSetLayoutCreateInfo const * const pCreateInfo)
+{
+   VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
+   if (terakan_vk_descriptor_set_layout_create(deviceHandle, pCreateInfo, NULL, &set_layout,
+                                               true) != VK_SUCCESS) {
+      return false;
+   }
+
+   struct terakan_vk_descriptor_set_layout * const layout =
+      terakan_vk_descriptor_set_layout_from_handle(set_layout);
+   vk_descriptor_set_layout_unref(&terakan_device_from_handle(deviceHandle)->vk, &layout->vk);
+   return true;
+}
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_GetDescriptorSetLayoutSupport(
+   VkDevice const deviceHandle, VkDescriptorSetLayoutCreateInfo const * const pCreateInfo,
+   VkDescriptorSetLayoutSupport * const pSupport)
+{
+   /* Descriptor indexing is not supported, so the number of descriptors in a variable-count binding
+    * is always 0.
+    */
+   VkDescriptorSetVariableDescriptorCountLayoutSupport * const variable_count_support =
+      vk_find_struct(pSupport->pNext, DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT);
+   if (variable_count_support != NULL) {
+      variable_count_support->maxVariableDescriptorCount = 0;
+   }
+
+   /* All descriptor set layout and binding flags are tied to features that are not exposed, such
+    * as descriptor indexing, push descriptors and update-after-bind pools.
+    */
+   bool supported = pCreateInfo->flags == 0;
+   if (supported) {
+      VkDescriptorSetLayoutBindingFlagsCreateInfo const * const binding_flags =
+         vk_find_struct_const(pCreateInfo->pNext, DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
+      if (binding_flags != NULL) {
+         for (uint32_t binding_index = 0; binding_index < binding_flags->bindingCount;
+              ++binding_index) {
+            if (binding_flags->pBindingFlags[binding_index] != 0) {
+               supported = false;
+               break;
+            }
+         }
+      }
+   }
+
+   if (supported) {
+      supported = terakan_vk_descriptor_set_layout_is_creatable(deviceHandle, pCreateInfo);
+   }
+
+   pSupport->supported = supported ? VK_TRUE : VK_FALSE;
 }

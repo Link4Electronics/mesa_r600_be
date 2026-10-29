@@ -170,14 +170,20 @@ terakan_vk_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const in
    terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
 
-VKAPI_ATTR void VKAPI_CALL
-terakan_vk_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const groupCountX,
-                       uint32_t const groupCountY, uint32_t const groupCountZ)
+/* Shared by `vkCmdDispatch` and `vkCmdDispatchBase`, the only difference between the two being
+ * the base workgroup offset fed to `VGT_COMPUTE_START`.
+ */
+static void
+terakan_vk_dispatch(VkCommandBuffer const commandBuffer, uint32_t const baseGroupX,
+                    uint32_t const baseGroupY, uint32_t const baseGroupZ,
+                    uint32_t const groupCountX, uint32_t const groupCountY,
+                    uint32_t const groupCountZ)
 {
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
 
-   terakan_app_config_compute_set_vgt_compute_start(&command_writer->app_config_compute, 0, 0, 0);
+   terakan_app_config_compute_set_vgt_compute_start(&command_writer->app_config_compute, baseGroupX,
+                                                    baseGroupY, baseGroupZ);
 
    terakan_gfx_command_writer_before_app_dispatch(command_writer);
 
@@ -192,4 +198,25 @@ terakan_vk_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const group
    *packet++ = groupCountZ;
    *packet++ = 1; /* `VGT_DISPATCH_INITIATOR = COMPUTE_SHADER_EN(true)` */
    terakan_gfx_command_writer_emit_done(command_writer, packet);
+}
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_CmdDispatch(VkCommandBuffer const commandBuffer, uint32_t const groupCountX,
+                       uint32_t const groupCountY, uint32_t const groupCountZ)
+{
+   terakan_vk_dispatch(commandBuffer, 0, 0, 0, groupCountX, groupCountY, groupCountZ);
+}
+
+VKAPI_ATTR void VKAPI_CALL
+terakan_vk_CmdDispatchBase(VkCommandBuffer const commandBuffer, uint32_t const baseGroupX,
+                           uint32_t const baseGroupY, uint32_t const baseGroupZ,
+                           uint32_t const groupCountX, uint32_t const groupCountY,
+                           uint32_t const groupCountZ)
+{
+   /* The base workgroup offset is applied through `VGT_COMPUTE_START`. It has not been validated on
+    * hardware yet; the START registers may not match Vulkan `vkCmdDispatchBase` semantics exactly,
+    * in which case the offset will need to be applied by the shader instead.
+    */
+   terakan_vk_dispatch(commandBuffer, baseGroupX, baseGroupY, baseGroupZ, groupCountX, groupCountY,
+                       groupCountZ);
 }
