@@ -383,7 +383,7 @@ sort numerically.
 | --- | --- | --- |
 | 1 | Vulkan 1.1 report and mandatory entry points | Landed in `01e07506a63`, `35344d9f9c9`, `547a8ce2390`; report and `vkcube` hardware-validated on G5/CAICOS |
 | 1.5 | `shaderDrawParameters` | Landed in `922d3cb2ec4`; hardware-validated on G5/CAICOS |
-| 3 | Subgroup shader lowering | Not started; `BASIC` is already reported |
+| 3 | Subgroup shader lowering | Landed in `618458017b6`; singleton IDs, `subgroupElect` and `LocalInvocationIndex` hardware-validated on G5/CAICOS; only `BASIC` is advertised |
 | 2 | `multiview` | Not started; do this last |
 
 ### Phase rules
@@ -588,15 +588,33 @@ Implementation:
 - `subgroupQuadOperationsInAllStages` stays false; quad operations are not
   advertised.
 
-Tests:
+Implementation landed as `nir/terakan_nir_lower_subgroups.c`, called from
+`terakan_shader.c` immediately after the system-value lowerings. It is the
+Shipa fork pass, extended with the intrinsics that pass missed:
 
-- A compute shader calling `subgroupElect()` and checking that exactly one
-  invocation takes the branch. With size 1 this is invocation 0.
-- For each expanded capability, add a dedicated probe; `dEQP-VK.subgroups.*`
-  has separate vote, ballot, shuffle, arithmetic and quad groups, and it
-  reports unsupported for capabilities that are not advertised.
-- Re-run the Phase 1 `vulkaninfo` property checks to ensure the subgroup fields
-  did not change.
+- `SubgroupId` and `LocalInvocationIndex` become the linear local invocation
+  index, computed from `LocalInvocationId` and the compile-time workgroup size.
+- `NumSubgroups` becomes the total invocation count of the workgroup.
+- The same singleton rules cover size, invocation ID, masks, elect, votes,
+  ballots, shuffles, reductions and scans. Quad operations are not lowered
+  because the capability is not advertised.
+
+`nir_load_workgroup_size()` is only used if the workgroup size is variable;
+Terakan does not populate the SFN buffer-info constants that this intrinsic
+reads, so fixed-size workgroups are computed from `nir->info.workgroup_size`.
+
+Hardware acceptance (validated 2026-11-05 on G5/CAICOS with local size 4x2):
+
+- `gl_SubgroupSize = 1`, `gl_SubgroupInvocationID = 0`.
+- `gl_SubgroupID` and `gl_LocalInvocationIndex` equal the linear local
+  invocation index 0..7; `gl_NumSubgroups = 8`.
+- `subgroupElect()` is true in every invocation, one elected invocation per
+  singleton subgroup.
+- The Phase 1 subgroup properties are unchanged (`subgroupSize = 1`,
+  compute stage, `BASIC` only).
+
+Tests for expanded capabilities are still pending; they are not advertised, so
+`dEQP-VK.subgroups.*` reports them as unsupported.
 
 ### Phase 2 — multiview (last)
 
