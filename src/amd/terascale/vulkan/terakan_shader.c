@@ -224,6 +224,11 @@ terakan_nir_from_spirv_pre_link(struct terakan_device * const device, size_t con
       NIR_PASS(_, nir, nir_lower_compute_system_values, &lower_compute_system_values_options);
    }
 
+   /* Lower subgroup operations to singleton semantics matching the reported subgroup size, before
+    * any SFN or ALU lowerings that would not understand them.
+    */
+   NIR_PASS(_, nir, terakan_nir_lower_subgroups);
+
    if (nir->info.stage != MESA_SHADER_COMPUTE) {
       if (nir->info.stage == MESA_SHADER_FRAGMENT) {
          /* Point coordinates are interpolated, convert them to a varying before the rest of the

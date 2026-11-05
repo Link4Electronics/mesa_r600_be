@@ -52,6 +52,7 @@ libterakan_files = files(
   'nir/terakan_nir_assign_io_intrin_driver_locations.c',
   'nir/terakan_nir_buffer.c',
   'nir/terakan_nir_lower_bindings.c',
+  'nir/terakan_nir_lower_subgroups.c',
   'terakan_app_config_compute.c',
   'terakan_app_config_compute.h',
   'terakan_app_config_draw.c',

@@ -48,6 +48,11 @@ nir_def * terakan_nir_load_raw_buffer_srv(nir_builder * builder, unsigned num_co
                                           unsigned srv_index_base, nir_def * srv_index,
                                           unsigned byte_address_base, nir_def * byte_address);
 
+/* Lowers all subgroup operations to singleton semantics, matching the reported subgroup size of
+ * 1. Must run before SFN compilation so it never sees subgroup intrinsics.
+ */
+bool terakan_nir_lower_subgroups(nir_shader * nir);
+
 /*
  * I/O driver location assignment, expecting I/O variable access lowered to load / store intrinsics.
  */
