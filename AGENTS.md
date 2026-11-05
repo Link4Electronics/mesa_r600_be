@@ -381,8 +381,8 @@ sort numerically.
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 1 | Vulkan 1.1 report and mandatory entry points | Landed in `01e07506a63`, `35344d9f9c9`, `547a8ce2390`; hardware validation pending |
-| 1.5 | `shaderDrawParameters` | Not started |
+| 1 | Vulkan 1.1 report and mandatory entry points | Landed in `01e07506a63`, `35344d9f9c9`, `547a8ce2390`; report and `vkcube` hardware-validated on G5/CAICOS |
+| 1.5 | `shaderDrawParameters` | Landed in `922d3cb2ec4`; hardware-validated on G5/CAICOS |
 | 3 | Subgroup shader lowering | Not started; `BASIC` is already reported |
 | 2 | `multiview` | Not started; do this last |
 
@@ -459,22 +459,22 @@ Reporting changes (`terakan_physical_device.c`, `terakan_instance.h`,
   internally, but it depends on `VK_KHR_depth_stencil_resolve`, which is not
   implemented.
 
-Hardware acceptance for Phase 1 (pending):
+Hardware acceptance for Phase 1 (report and presentation validated 2026-11-05):
 
 - `vulkaninfo --summary` shows `apiVersion = 1.1.363` and the CAICOS device.
-- Full `vulkaninfo` output shows `subgroupSize = 1`, compute in
-  `subgroupSupportedStages`, `maxPerSetDescriptors > 0`, `multiview = false`
-  and `shaderDrawParameters = false`.
+- `vulkaninfo --show-all` shows `subgroupSize = 1`, compute in
+  `subgroupSupportedStages`, `maxPerSetDescriptors = 1050`,
+  `multiview = false` and `shaderDrawParameters = true` after Phase 1.5.
 - `VK_KHR_maintenance3` and `VK_KHR_image_format_list` are in the extension
   list; `VK_KHR_dynamic_rendering` is not.
 - A compute probe dispatches with nonzero base workgroup offsets and writes
   `gl_WorkGroupID` / `gl_GlobalInvocationID` to an SSBO. Verify the base is
   applied exactly once (not zeroed, not added twice) and that exactly
-  `groupCount` workgroups run.
+  `groupCount` workgroups run. Still pending.
 - `vkUpdateDescriptorSetWithTemplate` and
   `vkGetDescriptorSetLayoutSupport` probes agree with the non-template path
-  and with `maxPerSetDescriptors`.
-- `vkcube` still presents.
+  and with `maxPerSetDescriptors`. Still pending.
+- `vkcube` still presents (validated, exit code 0).
 
 Known Phase 1 caveats:
 
