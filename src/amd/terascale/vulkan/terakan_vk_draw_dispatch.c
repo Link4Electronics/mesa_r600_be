@@ -94,6 +94,18 @@ terakan_vk_draw_set_vertex_instance_offsets(struct terakan_gfx_command_writer * 
    /* The instance offset is not needed by internal draws, modify `hw_config` directly. */
    terakan_hw_config_shared_sq_vtx_start_inst_loc(&command_writer->hw_config_shared,
                                                   instance_offset);
+
+   /* `BaseVertex`, `BaseInstance` and `DrawIndex` are exposed to shaders through driver push
+    * constants, using the bit patterns of the values passed to the draw command. For indexed
+    * draws, `vertex_offset` is already the signed `vertexOffset` bit pattern, so the shader sees
+    * the same value as the application specified.
+    */
+   terakan_push_constants_set_driver_base_vertex(&command_writer->push_constants_state,
+                                                 vertex_offset);
+   terakan_push_constants_set_driver_base_instance(&command_writer->push_constants_state,
+                                                   instance_offset);
+   /* Direct draws always have a draw index of 0. */
+   terakan_push_constants_set_driver_draw_id(&command_writer->push_constants_state, 0);
 }
 
 static void

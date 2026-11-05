@@ -731,6 +731,11 @@ terakan_physical_device_get_capabilities(
    properties_out->subgroupSupportedOperations = VK_SUBGROUP_FEATURE_BASIC_BIT;
    properties_out->subgroupQuadOperationsInAllStages = VK_FALSE;
 
+   /* Vulkan 1.1 core shader draw parameters. `BaseVertex`, `BaseInstance` and `DrawIndex` are
+    * provided through driver push constants.
+    */
+   features_out->shaderDrawParameters = true;
+
    /* VK_KHR_maintenance3 (#169, Vulkan 1.1). Descriptor sets are emulated, so the limit is the
     * number of descriptors of all types that a single set can hold.
     */
@@ -770,6 +775,9 @@ terakan_physical_device_get_capabilities(
 
    /* VK_KHR_maintenance3 (#169, Vulkan 1.1). */
    extensions_out->KHR_maintenance3 = true;
+
+   /* VK_KHR_shader_draw_parameters (#26, Vulkan 1.1). */
+   extensions_out->KHR_shader_draw_parameters = true;
 
    /* VK_KHR_timeline_semaphore (#208, Vulkan 1.2). */
    extensions_out->KHR_timeline_semaphore = true;

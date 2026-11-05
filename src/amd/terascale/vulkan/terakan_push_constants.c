@@ -29,6 +29,7 @@
 #include "compiler/shader_enums.h"
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/u_endian.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -113,7 +114,8 @@ terakan_push_constants_apply(struct terakan_gfx_command_writer * const command_w
                   1u,
             [2] = S_030008_BASE_ADDRESS_HI(state->allocation_.va_kcache_lines >>
                                            (32 - TERAKAN_KCACHE_HW_LINE_BYTES_LOG2)) |
-                  S_030008_STRIDE(1),
+                  S_030008_STRIDE(1) |
+                  S_030008_ENDIAN_SWAP(UTIL_ARCH_BIG_ENDIAN ? ENDIAN_8IN32 : ENDIAN_NONE),
             [3] = TERAKAN_SRV_BUFFER_WORD3_DST_SEL_IDENTITY,
             [7] = S_03001C_TYPE(V_03001C_SQ_TEX_VTX_VALID_BUFFER),
             [TERAKAN_SRV_BUFFER_PRIORITY_WORD] = TERAKAN_BO_PRIORITY_UNIFORM_BUFFER,

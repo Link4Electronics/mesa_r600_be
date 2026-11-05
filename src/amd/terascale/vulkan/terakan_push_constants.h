@@ -41,6 +41,8 @@ extern "C" {
 enum terakan_push_constants_driver_index {
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET,
 
+   TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_VERTEX,
+   TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_INSTANCE,
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID,
 
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_COUNT,
@@ -57,6 +59,8 @@ struct terakan_push_constants_driver {
     */
    uint32_t buffer_uav_alignment_offset[TERAKAN_COLOR_HW_RTV_AND_UAV_COUNT];
 
+   uint32_t base_vertex;
+   uint32_t base_instance;
    uint32_t draw_id;
 };
 
@@ -145,6 +149,36 @@ terakan_push_constants_set_driver_buffer_uav_alignment_offset(
    return terakan_push_constants_set_driver_u32_(
       state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BUFFER_UAV_ALIGNMENT_OFFSET,
       &state->driver_constants_.buffer_uav_alignment_offset[uav_index], value);
+}
+
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_base_vertex(struct terakan_push_constants_state * const state,
+                                              uint32_t const value)
+{
+   return terakan_push_constants_set_driver_u32_(
+      state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_VERTEX,
+      &state->driver_constants_.base_vertex, value);
+}
+
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_base_instance(struct terakan_push_constants_state * const state,
+                                                uint32_t const value)
+{
+   return terakan_push_constants_set_driver_u32_(
+      state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_INSTANCE,
+      &state->driver_constants_.base_instance, value);
+}
+
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_draw_id(struct terakan_push_constants_state * const state,
+                                          uint32_t const value)
+{
+   return terakan_push_constants_set_driver_u32_(
+      state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID, &state->driver_constants_.draw_id,
+      value);
 }
 
 void terakan_push_constants_set_app_constants(struct terakan_push_constants_state * state,
