@@ -384,7 +384,7 @@ sort numerically.
 | 1 | Vulkan 1.1 report and mandatory entry points | Landed in `01e07506a63`, `35344d9f9c9`, `547a8ce2390`; report and `vkcube` hardware-validated on G5/CAICOS |
 | 1.5 | `shaderDrawParameters` | Landed in `922d3cb2ec4`; hardware-validated on G5/CAICOS |
 | 3 | Subgroup shader lowering | Landed in `618458017b6`; singleton IDs, `subgroupElect` and `LocalInvocationIndex` hardware-validated on G5/CAICOS; only `BASIC` is advertised |
-| 2 | `multiview` | Not started; do this last |
+| 2 | `multiview` | Implemented; full multiview probe hardware-validated on G5/CAICOS (per-view draws, indexed draws, load clears and `vkCmdClearAttachments`, color and depth) |
 
 ### Phase rules
 
@@ -447,8 +447,9 @@ Reporting changes (`terakan_physical_device.c`, `terakan_instance.h`,
 - `pointClippingBehavior`, `subgroupSize`, `subgroupSupportedStages`,
   `subgroupSupportedOperations`, `maxPerSetDescriptors` and
   `maxMemoryAllocationSize` are filled. Subgroups report size 1, compute-stage
-  support and `VK_SUBGROUP_FEATURE_BASIC_BIT`; `multiview` and
-  `shaderDrawParameters` stay `VK_FALSE`.
+  support and `VK_SUBGROUP_FEATURE_BASIC_BIT`. At the end of Phase 1,
+  `multiview` and `shaderDrawParameters` were still `VK_FALSE`; Phase 1.5 and
+  Phase 2 enable them.
 - `driverUUID` and `pipelineCacheUUID` are BLAKE3 hashes of a driver identity
   string; the pipeline cache UUID also mixes in the PCI device ID.
 - `VK_KHR_maintenance3` is advertised (Vulkan 1.1 core, provides
@@ -468,28 +469,26 @@ Hardware acceptance for Phase 1 (report and presentation validated 2026-11-05):
 - `VK_KHR_maintenance3` and `VK_KHR_image_format_list` are in the extension
   list; `VK_KHR_dynamic_rendering` is not.
 - A compute probe dispatches with nonzero base workgroup offsets and writes
-  `gl_WorkGroupID` / `gl_GlobalInvocationID` to an SSBO. Verify the base is
-  applied exactly once (not zeroed, not added twice) and that exactly
-  `groupCount` workgroups run. Still pending.
-- `vkUpdateDescriptorSetWithTemplate` and
-  `vkGetDescriptorSetLayoutSupport` probes agree with the non-template path
-  and with `maxPerSetDescriptors`. Still pending.
+  `gl_WorkGroupID` / `gl_GlobalInvocationID` to an SSBO. Hardware-validated on
+  G5/CAICOS 2026-11-06: `vkCmdDispatch`, zero-base `vkCmdDispatchBase`,
+  `vkCmdDispatchBase(3,5,7)` with count `(2,2,1)`, and a single-workgroup
+  `vkCmdDispatchBase(1,2,3)` all produce exactly the expected rectangular set
+  of IDs, with the base applied exactly once.
+- A descriptor probe validates `vkGetDescriptorSetLayoutSupport` against actual
+  layout creation for a simple layout, the variable-descriptor-count pNext and
+  an oversized layout, and verifies a compute pipeline that uses a descriptor
+  set updated only through `vkUpdateDescriptorSetWithTemplate`, applied twice
+  with different buffers. Hardware-validated on G5/CAICOS 2026-11-06.
 - `vkcube` still presents (validated, exit code 0).
 
-Known Phase 1 caveats:
+Historical Phase 1 caveats, resolved by later phases:
 
-- `vkCmdDispatchBase` has not run on hardware. The fork's shader-side base
-  workgroup constant is also not a proven fallback: its
-  `dEQP-VK.compute.pipeline.device_group.dispatch_base` still fails, with the
-  GPU observing a zero or stale base. If the end-coordinate interpretation is
-  wrong on TeraScale, test the shader-constant alternative before porting it;
-  do not assume it works.
-- The `BASIC` subgroup advertisement has no shader lowering yet. Until Phase 3,
-  shaders using `GroupNonUniform` intrinsics will not compile correctly; see
-  below.
-- The fork's coverage notes report that CTS expects `multiview` for the
-  reported Vulkan 1.1 API level. `dEQP-VK.info.device_requirements` will
-  therefore fail until Phase 2; that is expected, not a Phase 1 regression.
+- The `BASIC` subgroup advertisement had no shader lowering until Phase 3, so
+  shaders using `GroupNonUniform` intrinsics did not compile correctly before
+  it.
+- The fork's coverage notes reported that CTS expects `multiview` for the
+  reported Vulkan 1.1 API level; `dEQP-VK.info.device_requirements` therefore
+  failed until Phase 2.
 
 ### Phase 1.5 — shaderDrawParameters
 
@@ -616,7 +615,7 @@ Hardware acceptance (validated 2026-11-05 on G5/CAICOS with local size 4x2):
 Tests for expanded capabilities are still pending; they are not advertised, so
 `dEQP-VK.subgroups.*` reports them as unsupported.
 
-### Phase 2 — multiview (last)
+### Phase 2 — multiview (implemented)
 
 This is the last hard requirement for a truthful Vulkan 1.1 claim. The Shipa
 fork's coverage notes report that CTS expects `multiview` for the reported API
@@ -672,6 +671,41 @@ Tests:
 Big-endian: per-view constants go through the same kcache path as Phase 1.5;
 verify them on the G5. Array-layer rendering uses the existing image
 descriptors, so do not add a separate descriptor path.
+
+Implementation:
+
+- `terakan_vk_CmdBeginRendering()` stores the `viewMask` and the full slice
+  ranges of the attachments; in multiview it no longer clips them to the
+  runtime's `layerCount = 1`. Sparse masks are iterated with `u_foreach_bit`.
+- `terakan_vk_CmdDraw()` and `terakan_vk_CmdDrawIndexed()` replay the draw once
+  per set view bit with the color/depth attachment slices and the new
+  `VIEW_INDEX` driver push constant set to the view index, then restore the
+  full slice ranges. Render-pass load clears and `vkCmdClearAttachments` use
+  the same per-view replay.
+- `nir_intrinsic_load_view_index` is lowered to a driver push-constant read;
+  the existing fragment `ViewIndex` forwarding covers the fragment stage.
+- `multiview = true`, `maxMultiviewViewCount = 6` and
+  `maxMultiviewInstanceIndex = 2^27 - 1`. The geometry and tessellation
+  multiview features stay false because those stages are not exposed.
+- Secondary command buffers use the existing enqueue emulation and were not
+  separately validated.
+
+Hardware acceptance (validated 2026-11-06 on G5/CAICOS):
+
+- The full `mv_probe` reports `RESULT: PASS: 0 failure(s)`.
+- Per-view `gl_ViewIndex` in the vertex and fragment stages produces distinct
+  color and depth values in both layers of a two-layer array attachment, for
+  `vkCmdDraw`, `vkCmdDrawIndexed`, render-pass load clears and
+  `vkCmdClearAttachments`.
+- Depth images are stored in the DB device byte order, and the meta
+  `vkCmdCopyImageToBuffer` path is a raw block copy. On ppc64, a host-visible
+  depth readback buffer therefore contains device-order (little-endian) words;
+  the probe byte-swaps them before interpreting the floats. The render target
+  contents themselves are correct.
+- The probe inserts an explicit attachment-write to transfer-read barrier after
+  `vkCmdEndRenderPass`. The test render pass declares no external subpass
+  dependencies, so without the barrier the copy may read stale texture-cache
+  data; this is application-side synchronization, not a driver replay issue.
 
 ## Style and commit guidelines
 
