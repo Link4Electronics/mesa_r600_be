@@ -28,6 +28,7 @@
 
 #include "gallium/drivers/r600/evergreend.h"
 #include "gallium/drivers/r600/r600d_common.h"
+#include "util/bitscan.h"
 #include "util/macros.h"
 #include "util/u_endian.h"
 #include "util/u_math.h"
@@ -116,6 +117,149 @@ terakan_vk_before_draw(struct terakan_gfx_command_writer * const command_writer)
    terakan_gfx_command_writer_before_app_draw(command_writer);
 }
 
+/* Forces the slice of the specified view in the color and depth / stencil descriptors currently
+ * bound for the render pass instance. The descriptors are modified through `app_config_draw` so that
+ * the hardware render target mapping derived from the shader is respected.
+ */
+static void
+terakan_vk_draw_set_attachment_view_slices(
+   struct terakan_gfx_command_writer * const command_writer, uint32_t const view_index)
+{
+   struct terakan_app_config_draw * const config = &command_writer->app_config_draw;
+
+   for (unsigned color_attachment_index = 0;
+        color_attachment_index < TERAKAN_VK_STATE_MAX_COLOR_ATTACHMENTS; ++color_attachment_index) {
+      struct terakan_app_config_draw_cb_color_rtv const * const color_rtv =
+         terakan_app_config_draw_get_cb_color_rtv(config, color_attachment_index);
+      if (color_rtv->bo == NULL) {
+         continue;
+      }
+      uint32_t const slices_base =
+         command_writer->multiview.color_rtv_slices[color_attachment_index].base;
+      uint32_t const slices_count =
+         command_writer->multiview.color_rtv_slices[color_attachment_index].count;
+      assert(slices_count != 0);
+      /* #MemoryIntegrity: Clamp to the attachment layer count in case of invalid usage. */
+      uint32_t const slice = slices_base + MIN2(view_index, slices_count - 1u);
+      struct terakan_color_descriptor color = color_rtv->color;
+      color.view = (color.view & (C_028C6C_SLICE_START & C_028C6C_SLICE_MAX)) |
+                   S_028C6C_SLICE_START(slice) | S_028C6C_SLICE_MAX(slice);
+      terakan_app_config_draw_set_cb_color_rtv(config, color_attachment_index, color_rtv->bo, &color,
+                                               &color_rtv->meta);
+   }
+
+   struct terakan_bo const * depth_stencil_bo;
+   struct terakan_depth_stencil_descriptor const * const depth_stencil =
+      terakan_app_config_draw_get_db_depth_stencil_buffer(config, &depth_stencil_bo);
+   if (depth_stencil_bo != NULL) {
+      uint32_t const depth_stencil_slice_count =
+         command_writer->multiview.depth_stencil_slice_count;
+      assert(depth_stencil_slice_count != 0);
+      uint32_t const slice =
+         command_writer->multiview.depth_stencil_slice_base +
+         MIN2(view_index, depth_stencil_slice_count - 1u);
+      struct terakan_depth_stencil_descriptor depth_stencil_view = *depth_stencil;
+      depth_stencil_view.view =
+         (depth_stencil_view.view & (C_028008_SLICE_START & C_028008_SLICE_MAX)) |
+         S_028008_SLICE_START(slice) | S_028008_SLICE_MAX(slice);
+      terakan_app_config_draw_set_db_depth_stencil_buffer(config, depth_stencil_bo,
+                                                          &depth_stencil_view);
+   }
+}
+
+/* Restores the full slice ranges of the render pass attachments after per-view replay, so clears
+ * and subsequent draws start from the whole attachment rather than from the last view.
+ */
+static void
+terakan_vk_draw_restore_attachment_slice_ranges(
+   struct terakan_gfx_command_writer * const command_writer)
+{
+   struct terakan_app_config_draw * const config = &command_writer->app_config_draw;
+
+   for (unsigned color_attachment_index = 0;
+        color_attachment_index < TERAKAN_VK_STATE_MAX_COLOR_ATTACHMENTS; ++color_attachment_index) {
+      struct terakan_app_config_draw_cb_color_rtv const * const color_rtv =
+         terakan_app_config_draw_get_cb_color_rtv(config, color_attachment_index);
+      if (color_rtv->bo == NULL) {
+         continue;
+      }
+      uint32_t const slices_base =
+         command_writer->multiview.color_rtv_slices[color_attachment_index].base;
+      uint32_t const slices_count =
+         command_writer->multiview.color_rtv_slices[color_attachment_index].count;
+      assert(slices_count != 0);
+      struct terakan_color_descriptor color = color_rtv->color;
+      color.view = (color.view & (C_028C6C_SLICE_START & C_028C6C_SLICE_MAX)) |
+                   S_028C6C_SLICE_START(slices_base) |
+                   S_028C6C_SLICE_MAX(slices_base + (slices_count - 1u));
+      terakan_app_config_draw_set_cb_color_rtv(config, color_attachment_index, color_rtv->bo, &color,
+                                               &color_rtv->meta);
+   }
+
+   struct terakan_bo const * depth_stencil_bo;
+   struct terakan_depth_stencil_descriptor const * const depth_stencil =
+      terakan_app_config_draw_get_db_depth_stencil_buffer(config, &depth_stencil_bo);
+   if (depth_stencil_bo != NULL) {
+      uint32_t const depth_stencil_slice_base =
+         command_writer->multiview.depth_stencil_slice_base;
+      uint32_t const depth_stencil_slice_count =
+         command_writer->multiview.depth_stencil_slice_count;
+      assert(depth_stencil_slice_count != 0);
+      struct terakan_depth_stencil_descriptor depth_stencil_view = *depth_stencil;
+      depth_stencil_view.view =
+         (depth_stencil_view.view & (C_028008_SLICE_START & C_028008_SLICE_MAX)) |
+         S_028008_SLICE_START(depth_stencil_slice_base) |
+         S_028008_SLICE_MAX(depth_stencil_slice_base + (depth_stencil_slice_count - 1u));
+      terakan_app_config_draw_set_db_depth_stencil_buffer(config, depth_stencil_bo,
+                                                          &depth_stencil_view);
+   }
+}
+
+/* Applies the draw state for one replay of a draw. In multiview, every set bit of the view mask is
+ * replayed with the attachment slices and the `ViewIndex` driver constant set to the view index.
+ */
+static void
+terakan_vk_before_view_draw(struct terakan_gfx_command_writer * const command_writer,
+                            uint32_t const view_index)
+{
+   terakan_push_constants_set_driver_view_index(&command_writer->push_constants_state, view_index);
+   terakan_vk_draw_set_attachment_view_slices(command_writer, view_index);
+   terakan_vk_before_draw(command_writer);
+}
+
+static bool
+terakan_vk_draw_emit_auto(struct terakan_gfx_command_writer * const command_writer,
+                          uint32_t const vertex_count)
+{
+   uint32_t * packet = terakan_gfx_command_writer_emit(
+      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW, 3);
+   if (unlikely(packet == NULL)) {
+      return false;
+   }
+   *packet++ = PKT3(PKT3_DRAW_INDEX_AUTO, 3 - 2, 0);
+   *packet++ = vertex_count;
+   *packet++ = S_0287F0_SOURCE_SELECT(V_0287F0_DI_SRC_SEL_AUTO_INDEX);
+   terakan_gfx_command_writer_emit_done(command_writer, packet);
+   return true;
+}
+
+static bool
+terakan_vk_draw_emit_indexed(struct terakan_gfx_command_writer * const command_writer,
+                             uint32_t const index_count, uint32_t const first_index)
+{
+   uint32_t * packet = terakan_gfx_command_writer_emit(
+      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW, 4);
+   if (unlikely(packet == NULL)) {
+      return false;
+   }
+   *packet++ = PKT3(EG_PKT3_DRAW_INDEX_OFFSET, 4 - 2, 0);
+   *packet++ = first_index;
+   *packet++ = index_count;
+   *packet++ = S_0287F0_SOURCE_SELECT(V_0287F0_DI_SRC_SEL_DMA);
+   terakan_gfx_command_writer_emit_done(command_writer, packet);
+   return true;
+}
+
 VKAPI_ATTR void VKAPI_CALL
 terakan_vk_CmdDraw(VkCommandBuffer const commandBuffer, uint32_t const vertexCount,
                    uint32_t const instanceCount, uint32_t const firstVertex,
@@ -135,17 +279,20 @@ terakan_vk_CmdDraw(VkCommandBuffer const commandBuffer, uint32_t const vertexCou
                                                                  false);
    terakan_vk_draw_set_vertex_instance_offsets(command_writer, firstVertex, firstInstance);
 
-   terakan_vk_before_draw(command_writer);
-
-   uint32_t * packet = terakan_gfx_command_writer_emit(
-      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW, 3);
-   if (unlikely(packet == NULL)) {
-      return;
+   uint32_t const view_mask = command_writer->multiview.view_mask;
+   if (unlikely(view_mask != 0)) {
+      u_foreach_bit (view_index, view_mask) {
+         terakan_vk_before_view_draw(command_writer, view_index);
+         if (!terakan_vk_draw_emit_auto(command_writer, vertexCount)) {
+            break;
+         }
+      }
+      terakan_vk_draw_restore_attachment_slice_ranges(command_writer);
+   } else {
+      terakan_push_constants_set_driver_view_index(&command_writer->push_constants_state, 0);
+      terakan_vk_before_draw(command_writer);
+      terakan_vk_draw_emit_auto(command_writer, vertexCount);
    }
-   *packet++ = PKT3(PKT3_DRAW_INDEX_AUTO, 3 - 2, 0);
-   *packet++ = vertexCount;
-   *packet++ = S_0287F0_SOURCE_SELECT(V_0287F0_DI_SRC_SEL_AUTO_INDEX);
-   terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
 
 VKAPI_ATTR void VKAPI_CALL
@@ -168,18 +315,20 @@ terakan_vk_CmdDrawIndexed(VkCommandBuffer const commandBuffer, uint32_t const in
    terakan_vk_draw_set_vertex_instance_offsets(command_writer, (uint32_t)vertexOffset,
                                                firstInstance);
 
-   terakan_vk_before_draw(command_writer);
-
-   uint32_t * packet = terakan_gfx_command_writer_emit(
-      command_writer, TERAKAN_GFX_COMMAND_WRITER_EMIT_CONTENTS_DRAW, 4);
-   if (unlikely(packet == NULL)) {
-      return;
+   uint32_t const view_mask = command_writer->multiview.view_mask;
+   if (unlikely(view_mask != 0)) {
+      u_foreach_bit (view_index, view_mask) {
+         terakan_vk_before_view_draw(command_writer, view_index);
+         if (!terakan_vk_draw_emit_indexed(command_writer, indexCount, firstIndex)) {
+            break;
+         }
+      }
+      terakan_vk_draw_restore_attachment_slice_ranges(command_writer);
+   } else {
+      terakan_push_constants_set_driver_view_index(&command_writer->push_constants_state, 0);
+      terakan_vk_before_draw(command_writer);
+      terakan_vk_draw_emit_indexed(command_writer, indexCount, firstIndex);
    }
-   *packet++ = PKT3(EG_PKT3_DRAW_INDEX_OFFSET, 4 - 2, 0);
-   *packet++ = firstIndex;
-   *packet++ = indexCount;
-   *packet++ = S_0287F0_SOURCE_SELECT(V_0287F0_DI_SRC_SEL_DMA);
-   terakan_gfx_command_writer_emit_done(command_writer, packet);
 }
 
 /* Shared by `vkCmdDispatch` and `vkCmdDispatchBase`, the only difference between the two being

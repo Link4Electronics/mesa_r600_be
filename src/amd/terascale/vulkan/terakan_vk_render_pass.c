@@ -34,6 +34,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 VKAPI_ATTR void VKAPI_CALL
 terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
@@ -52,8 +53,23 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
     */
    uint16_t render_area_upper_bound[2] = {TERAKAN_IMAGE_MAX_WIDTH_HEIGHT,
                                           TERAKAN_IMAGE_MAX_WIDTH_HEIGHT};
+   /* In multiview, the common runtime sets `layerCount` to 1 and specifies the views via
+    * `viewMask`. The attachment views cover all the views, so don't clip their layer ranges to one
+    * layer - the per-view slice is selected when replaying draws and clears instead.
+    */
+   uint32_t const view_mask = pRenderingInfo->viewMask;
+   bool const multiview = view_mask != 0;
    uint32_t layer_count_minus_1 =
-      CLAMP(pRenderingInfo->layerCount, (uint32_t)1, (uint32_t)TERAKAN_IMAGE_MAX_TARGET_SLICES) - 1;
+      multiview ? 0
+                : CLAMP(pRenderingInfo->layerCount, (uint32_t)1,
+                        (uint32_t)TERAKAN_IMAGE_MAX_TARGET_SLICES) -
+                     1;
+
+   command_writer->multiview.view_mask = view_mask;
+   memset(command_writer->multiview.color_rtv_slices, 0,
+          sizeof(command_writer->multiview.color_rtv_slices));
+   command_writer->multiview.depth_stencil_slice_base = 0;
+   command_writer->multiview.depth_stencil_slice_count = 0;
 
    uint8_t color_attachments_bound = 0b0;
    uint32_t const color_attachment_count =
@@ -79,9 +95,11 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
                                         G_028C78_WIDTH_MAX(color_attachment_view->color.dim) + 1u);
       render_area_upper_bound[1] = MIN2(render_area_upper_bound[1],
                                         G_028C78_HEIGHT_MAX(color_attachment_view->color.dim) + 1u);
-      layer_count_minus_1 =
-         MIN2(layer_count_minus_1, G_028C6C_SLICE_MAX(color_attachment_view->color.view) -
-                                      G_028C6C_SLICE_START(color_attachment_view->color.view));
+      if (!multiview) {
+         layer_count_minus_1 =
+            MIN2(layer_count_minus_1, G_028C6C_SLICE_MAX(color_attachment_view->color.view) -
+                                          G_028C6C_SLICE_START(color_attachment_view->color.view));
+      }
 
       color_attachments_bound |= BITFIELD_BIT(color_attachment_index);
    }
@@ -135,12 +153,19 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
 
          uint32_t const depth_stencil_layer_start =
             G_028008_SLICE_START(depth_stencil_attachment_descriptor.view);
-         layer_count_minus_1 =
-            MIN2(layer_count_minus_1, G_028008_SLICE_MAX(depth_stencil_attachment_descriptor.view) -
-                                         depth_stencil_layer_start);
-         depth_stencil_attachment_descriptor.view =
-            (depth_stencil_attachment_descriptor.view & C_028008_SLICE_MAX) |
-            S_028008_SLICE_MAX(depth_stencil_layer_start + layer_count_minus_1);
+         if (!multiview) {
+            layer_count_minus_1 =
+               MIN2(layer_count_minus_1,
+                    G_028008_SLICE_MAX(depth_stencil_attachment_descriptor.view) -
+                       depth_stencil_layer_start);
+            depth_stencil_attachment_descriptor.view =
+               (depth_stencil_attachment_descriptor.view & C_028008_SLICE_MAX) |
+               S_028008_SLICE_MAX(depth_stencil_layer_start + layer_count_minus_1);
+         }
+         command_writer->multiview.depth_stencil_slice_base = depth_stencil_layer_start;
+         command_writer->multiview.depth_stencil_slice_count =
+            G_028008_SLICE_MAX(depth_stencil_attachment_descriptor.view) -
+            depth_stencil_layer_start + 1u;
 
          terakan_app_config_draw_set_db_depth_stencil_buffer(
             config, depth_stencil_attachment_view->bo, &depth_stencil_attachment_descriptor);
@@ -176,10 +201,17 @@ terakan_vk_CmdBeginRendering(VkCommandBuffer const commandBuffer,
          terakan_vk_image_view_from_handle(color_attachment->imageView);
 
       struct terakan_color_descriptor color_attachment_descriptor = color_attachment_view->color;
-      color_attachment_descriptor.view =
-         (color_attachment_descriptor.view & C_028C6C_SLICE_MAX) |
-         S_028C6C_SLICE_MAX(G_028C6C_SLICE_START(color_attachment_descriptor.view) +
-                            layer_count_minus_1);
+      if (!multiview) {
+         color_attachment_descriptor.view =
+            (color_attachment_descriptor.view & C_028C6C_SLICE_MAX) |
+            S_028C6C_SLICE_MAX(G_028C6C_SLICE_START(color_attachment_descriptor.view) +
+                               layer_count_minus_1);
+      }
+      command_writer->multiview.color_rtv_slices[color_attachment_index].base =
+         (uint16_t)G_028C6C_SLICE_START(color_attachment_descriptor.view);
+      command_writer->multiview.color_rtv_slices[color_attachment_index].count =
+         (uint16_t)(G_028C6C_SLICE_MAX(color_attachment_descriptor.view) -
+                    G_028C6C_SLICE_START(color_attachment_descriptor.view) + 1u);
       color_attachment_descriptor.info &= C_028C70_RAT;
       terakan_app_config_draw_set_cb_color_rtv(
          config, color_attachment_index, color_attachment_view->bo, &color_attachment_descriptor,
@@ -224,8 +256,13 @@ terakan_vk_CmdEndRendering(UNUSED VkCommandBuffer const commandBuffer)
 {
    /* TODO(Triang3l): Resolve the attachments. */
 
-   struct terakan_app_config_draw * const config =
-      &terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx->app_config_draw;
+   struct terakan_gfx_command_writer * const command_writer =
+      terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
+   struct terakan_app_config_draw * const config = &command_writer->app_config_draw;
+
+   command_writer->multiview.view_mask = 0;
+   command_writer->multiview.depth_stencil_slice_count = 0;
+
    terakan_app_config_draw_set_pa_vport_render_area(config, (struct terakan_screen_rect){});
    terakan_app_config_draw_set_db_depth_stencil_buffer(config, NULL, NULL);
    for (unsigned color_attachment_index = 0;

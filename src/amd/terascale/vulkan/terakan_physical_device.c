@@ -426,6 +426,12 @@ terakan_physical_device_get_capabilities(
    /* TODO(Triang3l): largePoints. */
    /* TODO(Triang3l): alphaToOne. */
    features_out->multiViewport = true;
+   /* Multiview is implemented by replaying each draw and clear for every view in the view mask,
+    * with the render target slice and the `ViewIndex` driver push constant set to the view index.
+    * Geometry and tessellation shaders aren't exposed, so the corresponding multiview features
+    * remain false.
+    */
+   features_out->multiview = true;
    features_out->samplerAnisotropy = true;
    features_out->textureCompressionBC = true;
    features_out->occlusionQueryPrecise = true;
@@ -721,10 +727,17 @@ terakan_physical_device_get_capabilities(
    /* The hardware clips against the frustum planes in addition to the user-defined ones. */
    properties_out->pointClippingBehavior = VK_POINT_CLIPPING_BEHAVIOR_ALL_CLIP_PLANES;
 
-   /* Subgroup operations are not lowered yet, so the subgroup is reported as small as possible. A
-    * subgroup size of 1 makes `VK_SUBGROUP_FEATURE_BASIC_BIT` trivially correct, and still provides
-    * the compute stage in `subgroupSupportedStages` required given that compute queues are
-    * supported.
+   /* Multiview is replayed per view in software. The color and depth / stencil descriptors can
+    * address at least 32 slices (and the image layer limit is much higher), but a small view count
+    * keeps the number of replayed draws reasonable and matches other drivers.
+    */
+   properties_out->maxMultiviewViewCount = 6;
+   properties_out->maxMultiviewInstanceIndex = (1u << 27) - 1u;
+
+   /* The subgroup is reported as small as possible. A subgroup size of 1 makes
+    * `VK_SUBGROUP_FEATURE_BASIC_BIT` trivially correct, and still provides the compute stage in
+    * `subgroupSupportedStages` required given that compute queues are supported. The subgroup
+    * intrinsics are lowered to singleton semantics in `terakan_nir_lower_subgroups.c`.
     */
    properties_out->subgroupSize = 1;
    properties_out->subgroupSupportedStages = VK_SHADER_STAGE_COMPUTE_BIT;

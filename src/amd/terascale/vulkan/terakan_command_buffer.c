@@ -1165,6 +1165,12 @@ terakan_vk_BeginCommandBuffer(VkCommandBuffer const commandBuffer,
 
    gfx_command_writer->cb_target_mask_last_set_to_zero_in_indirect_buffer = false;
 
+   gfx_command_writer->multiview.view_mask = 0;
+   memset(gfx_command_writer->multiview.color_rtv_slices, 0,
+          sizeof(gfx_command_writer->multiview.color_rtv_slices));
+   gfx_command_writer->multiview.depth_stencil_slice_base = 0;
+   gfx_command_writer->multiview.depth_stencil_slice_count = 0;
+
    struct terakan_physical_device const * const physical_device =
       terakan_command_buffer_physical_device(command_buffer);
    terakan_hw_config_shared_reset(&gfx_command_writer->hw_config_shared,

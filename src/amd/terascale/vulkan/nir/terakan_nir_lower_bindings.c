@@ -1301,13 +1301,13 @@ terakan_nir_lower_bindings_instr_load_push_constant(
          intrinsic->src[0].ssa));
 }
 
-/* Replaces a `BaseVertex`, `BaseInstance` or `DrawIndex` load with a read of the corresponding
- * driver push constant. The value is stored in the application command buffer as a dword and is
- * read back on the GPU through the same push constant buffer SRV that serves application push
- * constants.
+/* Replaces a `BaseVertex`, `BaseInstance`, `DrawIndex` or `ViewIndex` load with a read of the
+ * corresponding driver push constant. The value is stored in the application command buffer as a
+ * dword and is read back on the GPU through the same push constant buffer SRV that serves
+ * application push constants.
  */
 static void
-terakan_nir_lower_bindings_instr_load_draw_parameter(
+terakan_nir_lower_bindings_instr_load_driver_push_constant(
    nir_builder * const builder, nir_intrinsic_instr * const intrinsic,
    enum terakan_push_constants_driver_index const driver_constant_index,
    unsigned const driver_constant_offset, struct terakan_nir_lower_bindings_state * const state)
@@ -1963,19 +1963,24 @@ terakan_nir_lower_bindings_instr(nir_builder * const builder, nir_instr * const 
          return true;
       case nir_intrinsic_load_first_vertex:
       case nir_intrinsic_load_base_vertex:
-         terakan_nir_lower_bindings_instr_load_draw_parameter(
+         terakan_nir_lower_bindings_instr_load_driver_push_constant(
             builder, intrinsic, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_VERTEX,
             offsetof(struct terakan_push_constants_driver, base_vertex), state);
          return true;
       case nir_intrinsic_load_base_instance:
-         terakan_nir_lower_bindings_instr_load_draw_parameter(
+         terakan_nir_lower_bindings_instr_load_driver_push_constant(
             builder, intrinsic, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_INSTANCE,
             offsetof(struct terakan_push_constants_driver, base_instance), state);
          return true;
       case nir_intrinsic_load_draw_id:
-         terakan_nir_lower_bindings_instr_load_draw_parameter(
+         terakan_nir_lower_bindings_instr_load_driver_push_constant(
             builder, intrinsic, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID,
             offsetof(struct terakan_push_constants_driver, draw_id), state);
+         return true;
+      case nir_intrinsic_load_view_index:
+         terakan_nir_lower_bindings_instr_load_driver_push_constant(
+            builder, intrinsic, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_VIEW_INDEX,
+            offsetof(struct terakan_push_constants_driver, view_index), state);
          return true;
       case nir_intrinsic_load_ubo:
          terakan_nir_lower_bindings_instr_load_ubo(builder, intrinsic, state);

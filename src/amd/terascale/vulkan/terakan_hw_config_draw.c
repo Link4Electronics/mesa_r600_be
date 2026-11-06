@@ -168,6 +168,7 @@ terakan_hw_config_draw_set_db_depth_stencil_buffer(
    if (old_depth_bound == new_depth_bound && old_stencil_bound == new_stencil_bound &&
        config->db_depth_stencil_buffer_.bo == bo &&
        config->db_depth_stencil_buffer_.descriptor.z_info == z_info &&
+       config->db_depth_stencil_buffer_.descriptor.view == descriptor->view &&
        config->db_depth_stencil_buffer_.descriptor.size == descriptor->size &&
        config->db_depth_stencil_buffer_.descriptor.slice == descriptor->slice &&
        (!new_depth_bound ||

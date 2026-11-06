@@ -44,6 +44,7 @@ enum terakan_push_constants_driver_index {
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_VERTEX,
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_BASE_INSTANCE,
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID,
+   TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_VIEW_INDEX,
 
    TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_COUNT,
 };
@@ -62,6 +63,7 @@ struct terakan_push_constants_driver {
    uint32_t base_vertex;
    uint32_t base_instance;
    uint32_t draw_id;
+   uint32_t view_index;
 };
 
 /* Aligned to vec4 to avoid placing vectors in different kcache lines more likely to be accessed in
@@ -179,6 +181,16 @@ terakan_push_constants_set_driver_draw_id(struct terakan_push_constants_state * 
    return terakan_push_constants_set_driver_u32_(
       state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_DRAW_ID, &state->driver_constants_.draw_id,
       value);
+}
+
+/* Returns whether the constant was modified. */
+static inline bool
+terakan_push_constants_set_driver_view_index(struct terakan_push_constants_state * const state,
+                                             uint32_t const value)
+{
+   return terakan_push_constants_set_driver_u32_(
+      state, TERAKAN_PUSH_CONSTANTS_DRIVER_INDEX_VIEW_INDEX,
+      &state->driver_constants_.view_index, value);
 }
 
 void terakan_push_constants_set_app_constants(struct terakan_push_constants_state * state,

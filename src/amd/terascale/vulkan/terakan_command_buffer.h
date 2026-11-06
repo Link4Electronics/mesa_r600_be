@@ -406,6 +406,28 @@ struct terakan_gfx_command_writer {
    /* Modifies `hw_config` and `push_constants_state`. */
    struct terakan_app_config_draw app_config_draw;
 
+   /* Multiview state of the current dynamic rendering instance, used for replaying draws and
+    * clears for each view, forcing the render target slice to the view index.
+    */
+   struct {
+      /* `VkRenderingInfo::viewMask` of the current rendering instance, or 0 if not using
+       * multiview.
+       */
+      uint32_t view_mask;
+
+      /* Slice ranges of the attachments in the current rendering instance, used for forcing the
+       * slice of each view. For color attachments, the slice is relative to the base of the 32-slice
+       * aligned window the color descriptor covers (matching `SLICE_START`/`SLICE_MAX` in the color
+       * descriptor). `count` is 0 if the attachment is not bound.
+       */
+      struct {
+         uint16_t base;
+         uint16_t count;
+      } color_rtv_slices[TERAKAN_COLOR_HW_RTV_COUNT];
+      uint16_t depth_stencil_slice_base;
+      uint16_t depth_stencil_slice_count;
+   } multiview;
+
    /* Modifies `hw_config` and `push_constants_state`. */
    struct terakan_app_config_compute app_config_compute;
 };

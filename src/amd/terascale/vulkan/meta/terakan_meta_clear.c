@@ -507,6 +507,8 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
    struct terakan_gfx_command_writer * const command_writer =
       terakan_command_buffer_from_handle(commandBuffer)->command_writer.gfx;
 
+   uint32_t const view_mask = command_writer->multiview.view_mask;
+
    VkClearDepthStencilValue depth_stencil_clear_value = {};
    VkImageAspectFlags depth_stencil_clear_aspects = 0;
 
@@ -615,26 +617,48 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
       uint32_t const depth_stencil_slice_count =
          G_028008_SLICE_MAX(depth_stencil_descriptor.view) - depth_stencil_slice_start + 1u;
 
-      for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
-         VkClearRect const * const rect = &pRects[rect_index];
-         if (unlikely(rect->baseArrayLayer >= depth_stencil_slice_count)) {
-            continue;
+      if (unlikely(view_mask != 0)) {
+         /* In multiview, valid usage restricts the clear rects to a single layer, and the clear is
+          * broadcast to every view. Replay the clear for each set view, forcing its slice.
+          */
+         u_foreach_bit (view_index, view_mask) {
+            if (unlikely(view_index >= depth_stencil_slice_count)) {
+               continue;
+            }
+            uint32_t const view_slice = depth_stencil_slice_start + view_index;
+            depth_stencil_descriptor.view =
+               (depth_stencil_descriptor.view & (C_028008_SLICE_START & C_028008_SLICE_MAX)) |
+               S_028008_SLICE_START(view_slice) | S_028008_SLICE_MAX(view_slice);
+            terakan_meta_config_draw_set_db_depth_stencil_buffer(command_writer, depth_stencil_bo,
+                                                                 &depth_stencil_descriptor);
+            for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
+               terakan_meta_draw_rect(
+                  command_writer,
+                  terakan_vk_rect_to_screen_rect(pRects[rect_index].rect, render_area), 1);
+            }
          }
-         uint32_t const rect_slice_count =
-            MIN2(rect->layerCount, depth_stencil_slice_count - rect->baseArrayLayer);
-         if (unlikely(rect_slice_count == 0)) {
-            continue;
+      } else {
+         for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
+            VkClearRect const * const rect = &pRects[rect_index];
+            if (unlikely(rect->baseArrayLayer >= depth_stencil_slice_count)) {
+               continue;
+            }
+            uint32_t const rect_slice_count =
+               MIN2(rect->layerCount, depth_stencil_slice_count - rect->baseArrayLayer);
+            if (unlikely(rect_slice_count == 0)) {
+               continue;
+            }
+            uint32_t const rect_slice_start = depth_stencil_slice_start + rect->baseArrayLayer;
+            depth_stencil_descriptor.view =
+               (depth_stencil_descriptor.view & (C_028008_SLICE_START & C_028008_SLICE_MAX)) |
+               S_028008_SLICE_START(rect_slice_start) |
+               S_028008_SLICE_MAX(rect_slice_start + (rect_slice_count - 1));
+            terakan_meta_config_draw_set_db_depth_stencil_buffer(command_writer, depth_stencil_bo,
+                                                                 &depth_stencil_descriptor);
+            terakan_meta_draw_rect(command_writer,
+                                   terakan_vk_rect_to_screen_rect(rect->rect, render_area),
+                                   rect_slice_count);
          }
-         uint32_t const rect_slice_start = depth_stencil_slice_start + rect->baseArrayLayer;
-         depth_stencil_descriptor.view =
-            (depth_stencil_descriptor.view & (C_028008_SLICE_START & C_028008_SLICE_MAX)) |
-            S_028008_SLICE_START(rect_slice_start) |
-            S_028008_SLICE_MAX(rect_slice_start + (rect_slice_count - 1));
-         terakan_meta_config_draw_set_db_depth_stencil_buffer(command_writer, depth_stencil_bo,
-                                                              &depth_stencil_descriptor);
-         terakan_meta_draw_rect(command_writer,
-                                terakan_vk_rect_to_screen_rect(rect->rect, render_area),
-                                rect_slice_count);
       }
    }
 
@@ -684,27 +708,51 @@ terakan_vk_CmdClearAttachments(VkCommandBuffer const commandBuffer, uint32_t con
 
          struct terakan_color_descriptor rect_rtv_color = render_pass_rtv->color;
 
-         for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
-            VkClearRect const * const rect = &pRects[rect_index];
-            if (unlikely(rect->baseArrayLayer >= render_pass_rtv_slice_count)) {
-               continue;
+         if (unlikely(view_mask != 0)) {
+            /* In multiview, valid usage restricts the clear rects to a single layer, and the clear
+             * is broadcast to every view. Replay the clear for each set view, forcing its slice.
+             */
+            u_foreach_bit (view_index, view_mask) {
+               if (unlikely(view_index >= render_pass_rtv_slice_count)) {
+                  continue;
+               }
+               uint32_t const view_slice = render_pass_rtv_slice_start + view_index;
+               rect_rtv_color.view =
+                  (rect_rtv_color.view & (C_028C6C_SLICE_START & C_028C6C_SLICE_MAX)) |
+                  S_028C6C_SLICE_START(view_slice) | S_028C6C_SLICE_MAX(view_slice);
+               terakan_meta_config_draw_set_cb_rtvs_and_db_shader_control(
+                  command_writer, 0xF, &render_pass_rtv->bo, &rect_rtv_color,
+                  &render_pass_rtv->meta, TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY);
+               for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
+                  terakan_meta_draw_rect(
+                     command_writer,
+                     terakan_vk_rect_to_screen_rect(pRects[rect_index].rect, render_area), 1);
+               }
             }
-            uint32_t const rect_slice_count =
-               MIN2(rect->layerCount, render_pass_rtv_slice_count - rect->baseArrayLayer);
-            if (unlikely(rect_slice_count == 0)) {
-               continue;
+         } else {
+            for (uint32_t rect_index = 0; rect_index < rectCount; ++rect_index) {
+               VkClearRect const * const rect = &pRects[rect_index];
+               if (unlikely(rect->baseArrayLayer >= render_pass_rtv_slice_count)) {
+                  continue;
+               }
+               uint32_t const rect_slice_count =
+                  MIN2(rect->layerCount, render_pass_rtv_slice_count - rect->baseArrayLayer);
+               if (unlikely(rect_slice_count == 0)) {
+                  continue;
+               }
+               uint32_t const rect_slice_start =
+                  render_pass_rtv_slice_start + rect->baseArrayLayer;
+               rect_rtv_color.view =
+                  (rect_rtv_color.view & (C_028C6C_SLICE_START & C_028C6C_SLICE_MAX)) |
+                  S_028C6C_SLICE_START(rect_slice_start) |
+                  S_028C6C_SLICE_MAX(rect_slice_start + (rect_slice_count - 1));
+               terakan_meta_config_draw_set_cb_rtvs_and_db_shader_control(
+                  command_writer, 0xF, &render_pass_rtv->bo, &rect_rtv_color,
+                  &render_pass_rtv->meta, TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY);
+               terakan_meta_draw_rect(command_writer,
+                                      terakan_vk_rect_to_screen_rect(rect->rect, render_area),
+                                      rect_slice_count);
             }
-            uint32_t const rect_slice_start = render_pass_rtv_slice_start + rect->baseArrayLayer;
-            rect_rtv_color.view =
-               (rect_rtv_color.view & (C_028C6C_SLICE_START & C_028C6C_SLICE_MAX)) |
-               S_028C6C_SLICE_START(rect_slice_start) |
-               S_028C6C_SLICE_MAX(rect_slice_start + (rect_slice_count - 1));
-            terakan_meta_config_draw_set_cb_rtvs_and_db_shader_control(
-               command_writer, 0xF, &render_pass_rtv->bo, &rect_rtv_color, &render_pass_rtv->meta,
-               TERAKAN_SHADER_DB_SHADER_CONTROL_IDENTITY);
-            terakan_meta_draw_rect(command_writer,
-                                   terakan_vk_rect_to_screen_rect(rect->rect, render_area),
-                                   rect_slice_count);
          }
       }
    }
